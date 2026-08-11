@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- guest photos are remote demo assets and QR images are client-generated data URLs. */
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import QRCode from "qrcode";
 import {
   ArrowLeft,
@@ -163,6 +163,7 @@ function formatEventDate(value: string) {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Europe/Riga",
   }).format(date);
 }
 
@@ -189,13 +190,17 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
   const [menuOpen, setMenuOpen] = useState(false);
   const [analytics, setAnalytics] = useState({ joined: 142, visible: 93, interests: 287, matches: 41, conversations: 29 });
   const [createdRooms, setCreatedRooms] = useState<Room[]>([DEFAULT_ROOM]);
+  const runtimeOrigin = useSyncExternalStore(
+    () => () => undefined,
+    () => window.location.origin,
+    () => process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com",
+  );
   const messageEndRef = useRef<HTMLDivElement>(null);
   const supabaseEnabled = isSupabaseConfigured();
 
   const roomUrl = useMemo(() => {
-    if (typeof window !== "undefined") return `${window.location.origin}/r/${room.slug}`;
-    return `${process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com"}/r/${room.slug}`;
-  }, [room.slug]);
+    return `${runtimeOrigin || "https://your-domain.com"}/r/${room.slug}`;
+  }, [room.slug, runtimeOrigin]);
 
   useEffect(() => {
     QRCode.toDataURL(roomUrl, {
