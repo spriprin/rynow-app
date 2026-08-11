@@ -1013,11 +1013,11 @@ function QuickJoinPage({ room, people, photo: preview, busy, error, onPhoto, onS
       </section>
       <form className="quick-form" onSubmit={onSubmit}>
         <div className="quick-form__heading"><span>JOIN IN ONE STEP</span><h2>Show who you are.</h2><p>One photo and your first name. That is all for now.</p></div>
-        <label className={`quick-photo ${preview ? "quick-photo--ready" : ""}`} aria-label="Add your profile photo">
+        <label className={`quick-photo ${preview ? "quick-photo--ready" : ""}`} aria-label="Choose a profile photo from your gallery or camera">
           <span style={preview ? { backgroundImage: `url(${preview})` } : undefined}>{preview ? <Check size={22} /> : <ImagePlus size={28} />}</span>
           <strong>{preview ? "Photo added" : "Add photo"}</strong>
-          <small>Take one now or choose from your phone</small>
-          <input className="file-input" type="file" accept="image/*" capture="user" onChange={onPhoto} required />
+          <small>Choose from gallery or take a new photo</small>
+          <input className="file-input" type="file" accept="image/*" onChange={onPhoto} required />
         </label>
         <label className="quick-name">Your first name<input name="displayName" minLength={2} maxLength={50} required autoComplete="given-name" placeholder="e.g. Maya" /></label>
         <label className="age-confirm"><input type="checkbox" required /><span><Check size={14} /></span><p>I am 18+ and agree to the community rules.</p></label>

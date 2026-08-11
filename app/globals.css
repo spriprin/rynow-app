@@ -623,17 +623,16 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
   .visibility-gate__people { margin-bottom: 22px; }
   .visibility-gate h2 { font-size: 30px; }
   .visibility-gate > p { margin-bottom: 22px; font-size: 12px; }
-  .people-grid { grid-template-columns: 1fr; gap: 12px; }
-  .person-card { border-radius: 16px; }
-  .person-card__photo { aspect-ratio: 1 / 1.04; padding: 16px; }
-  .person-card__photo > div { left: 16px; right: 16px; bottom: 14px; }
-  .person-card__photo h2 { margin: 0; font-size: 24px; }
+  .people-grid { display: block; column-count: 2; column-gap: 8px; }
+  .person-card { width: 100%; margin: 0 0 8px; border: 0; border-radius: 14px; background: transparent; break-inside: avoid; display: inline-block; vertical-align: top; }
+  .person-card__photo { aspect-ratio: 3 / 4; padding: 12px; border-radius: 14px; overflow: hidden; }
+  .person-card:nth-child(4n + 1) .person-card__photo { aspect-ratio: 1 / 1.06; }
+  .person-card:nth-child(4n + 3) .person-card__photo { aspect-ratio: 3 / 3.35; }
+  .person-card__photo > div { left: 12px; right: 12px; bottom: 11px; }
+  .person-card__photo h2 { margin: 0; font-size: 17px; }
   .person-card__photo p { display: none; }
-  .purpose-pill { top: 13px; left: 13px; padding: 7px 9px; }
-  .person-card__body { padding: 12px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
-  .person-card__body .chips { overflow: hidden; flex-wrap: nowrap; }
-  .person-card__body .chip:nth-child(n+4) { display: none; }
-  .interest-button { width: auto; min-height: 40px; margin: 0; padding: 0 15px; }
+  .purpose-pill { top: 9px; left: 9px; max-width: calc(100% - 18px); overflow: hidden; padding: 6px 8px; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+  .person-card__body { display: none; }
   .match-row { align-items: flex-start; }
   .match-row__person img { width: 58px; height: 58px; }
   .online-dot { left: 45px; }
