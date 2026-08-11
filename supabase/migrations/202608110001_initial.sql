@@ -296,8 +296,11 @@ language plpgsql
 set search_path = public
 as $$
 begin
-  if auth.uid() is null then raise exception 'Authentication required'; end if;
-  new.sender_id := auth.uid();
+  if auth.uid() is not null then
+    new.sender_id := auth.uid();
+  elsif current_user not in ('postgres', 'supabase_admin') then
+    raise exception 'Authentication required';
+  end if;
   return new;
 end;
 $$;
@@ -326,6 +329,31 @@ begin
   returning * into membership;
   return membership;
 end;
+$$;
+
+create or replace function public.get_public_room(p_slug text)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'id', room.id,
+    'slug', room.slug,
+    'name', room.name,
+    'event_name', room.event_name,
+    'venue_name', room.venue_name,
+    'city', room.city,
+    'description', room.description,
+    'starts_at', room.starts_at,
+    'ends_at', room.ends_at,
+    'cover_image', room.cover_image,
+    'status', room.status,
+    'participants', (select count(*) from public.room_members where room_id = room.id)
+  )
+  from public.rooms room
+  where room.slug = p_slug and room.status <> 'DRAFT';
 $$;
 
 create or replace function public.set_room_visibility(p_room_id uuid, p_visible boolean)
@@ -419,6 +447,7 @@ end;
 $$;
 
 grant execute on function public.join_room(text) to authenticated;
+grant execute on function public.get_public_room(text) to anon, authenticated;
 grant execute on function public.set_room_visibility(uuid, boolean) to authenticated;
 grant execute on function public.send_interest(uuid, uuid) to authenticated;
 grant execute on function public.room_analytics(uuid) to authenticated;
@@ -493,6 +522,10 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values ('profile-photos', 'profile-photos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
 on conflict (id) do nothing;
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('room-covers', 'room-covers', true, 8388608, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do nothing;
+
 create policy "profile_photos_public_read" on storage.objects for select
   to public using (bucket_id = 'profile-photos');
 create policy "profile_photos_insert_own_folder" on storage.objects for insert
@@ -501,5 +534,14 @@ create policy "profile_photos_update_own_folder" on storage.objects for update
   to authenticated using (bucket_id = 'profile-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 create policy "profile_photos_delete_own_folder" on storage.objects for delete
   to authenticated using (bucket_id = 'profile-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "room_covers_public_read" on storage.objects for select
+  to public using (bucket_id = 'room-covers');
+create policy "room_covers_insert_own_folder" on storage.objects for insert
+  to authenticated with check (bucket_id = 'room-covers' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "room_covers_update_own_folder" on storage.objects for update
+  to authenticated using (bucket_id = 'room-covers' and (storage.foldername(name))[1] = auth.uid()::text);
+create policy "room_covers_delete_own_folder" on storage.objects for delete
+  to authenticated using (bucket_id = 'room-covers' and (storage.foldername(name))[1] = auth.uid()::text);
 
 alter publication supabase_realtime add table public.messages;

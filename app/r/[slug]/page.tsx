@@ -1,5 +1,6 @@
 import { SocialRoomApp } from "../../components/SocialRoomApp";
 
-export default function RoomPage() {
-  return <SocialRoomApp initialView="room" />;
+export default async function RoomPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  return <SocialRoomApp initialView="room" roomSlug={slug} />;
 }

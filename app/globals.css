@@ -253,8 +253,9 @@ textarea { min-height: 100px; resize: vertical; }
 .onboarding > header { height: 82px; padding: 0 5vw; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
 .profile-form { width: min(720px, 90vw); margin: 60px auto; display: grid; gap: 30px; }
 .photo-picker { display: flex; align-items: center; gap: 18px; }
-.photo-placeholder { width: 82px; height: 82px; display: grid; place-items: center; border-radius: 50%; background: var(--ink); color: var(--lime); font-size: 28px; font-weight: 800; }
-.photo-picker button { border: 0; background: none; display: flex; gap: 7px; align-items: center; cursor: pointer; font-weight: 700; }
+.photo-placeholder { width: 82px; height: 82px; display: grid; place-items: center; border-radius: 50%; background: var(--ink) center / cover; color: var(--lime); font-size: 28px; font-weight: 800; }
+.photo-upload { border: 0; background: none; display: flex; flex-direction: row; gap: 7px; align-items: center; cursor: pointer; font-weight: 700; }
+.file-input { display: none; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 fieldset { margin: 0; padding: 0; border: 0; }
 legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
@@ -438,6 +439,7 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
 .cover-drop > div { flex: 1; display: flex; flex-direction: column; }
 .cover-drop strong { font-size: 12px; }
 .cover-drop span { margin-top: 4px; color: var(--muted); font-size: 9px; }
+.cover-drop label.button { flex-direction: row; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; }
 .room-info-hero { min-height: 400px; margin: -58px -36px 35px; padding: 72px; border-radius: 0 0 24px 24px; color: white; background-position: center; background-size: cover; display: flex; flex-direction: column; justify-content: flex-end; }
 .room-info-hero h1 { margin: 15px 0 10px; font-size: 58px; letter-spacing: -.06em; }

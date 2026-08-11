@@ -46,7 +46,7 @@ The migration creates:
 - `profiles`, `rooms`, `room_members`, `interests`, `matches`, `messages`, `blocks`, and `reports`;
 - foreign keys, chronological and discovery indexes, unique memberships/interests/matches, and safe cascades;
 - an 18+ database gate;
-- `profile-photos` Storage with owner-folder write policies;
+- `profile-photos` and `room-covers` Storage buckets with owner-folder write policies;
 - Realtime publication for `messages`;
 - RLS on every application table;
 - security-definer functions for join, visibility, analytics and interest → match.
@@ -82,7 +82,7 @@ pnpm build
 - Reports are recorded but there is no moderator console yet.
 - Email confirmation behavior depends on the chosen Supabase Auth settings.
 - Demo state resets on reload; production state is durable in Supabase.
-- Uploaded cover-image controls are represented in the MVP UI; profile-photo Storage policy and schema are ready, while production upload wiring should be completed before a public launch.
+- Demo profile photography uses external image URLs; a production launch should proxy or replace those seed assets.
 - Analytics are live counts, not a historical BI system.
 - There is no push notification, typing indicator, read-receipt UI, or offline message queue.
 

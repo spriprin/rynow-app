@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- guest photos are remote demo assets and QR images are client-generated data URLs. */
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent, type FormEvent } from "react";
 import QRCode from "qrcode";
 import {
   ArrowLeft,
@@ -55,7 +55,7 @@ const photo = (id: string) =>
 
 const PEOPLE: Person[] = [
   {
-    id: "noah",
+    id: "10000000-0000-4000-8000-000000000003",
     name: "Noah",
     age: 28,
     purpose: "Networking",
@@ -65,7 +65,7 @@ const PEOPLE: Person[] = [
     accent: "#d7ff54",
   },
   {
-    id: "sofia",
+    id: "10000000-0000-4000-8000-000000000004",
     name: "Sofia",
     age: 26,
     purpose: "Friends",
@@ -75,7 +75,7 @@ const PEOPLE: Person[] = [
     accent: "#ff8269",
   },
   {
-    id: "leo",
+    id: "10000000-0000-4000-8000-000000000005",
     name: "Leo",
     age: 30,
     purpose: "Just meeting people",
@@ -85,7 +85,7 @@ const PEOPLE: Person[] = [
     accent: "#7f8cff",
   },
   {
-    id: "amelia",
+    id: "10000000-0000-4000-8000-000000000006",
     name: "Amelia",
     age: 27,
     purpose: "Dating",
@@ -95,7 +95,7 @@ const PEOPLE: Person[] = [
     accent: "#f3b9ff",
   },
   {
-    id: "martin",
+    id: "10000000-0000-4000-8000-000000000007",
     name: "Martin",
     age: 31,
     purpose: "Networking",
@@ -105,7 +105,7 @@ const PEOPLE: Person[] = [
     accent: "#6de1c2",
   },
   {
-    id: "elena",
+    id: "10000000-0000-4000-8000-000000000008",
     name: "Elena",
     age: 29,
     purpose: "Friends",
@@ -117,7 +117,7 @@ const PEOPLE: Person[] = [
 ];
 
 const DEFAULT_ROOM: Room = {
-  id: "73c9eb59-73f3-4380-886f-208da6033f45",
+  id: "20000000-0000-4000-8000-000000000001",
   slug: "friday-social",
   name: "Friday Social Night",
   eventName: "Friday Social Night",
@@ -167,7 +167,30 @@ function formatEventDate(value: string) {
   }).format(date);
 }
 
-export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppView }) {
+function ageFromDate(dateOfBirth: string | null | undefined) {
+  if (!dateOfBirth) return 18;
+  const birth = new Date(`${dateOfBirth}T12:00:00Z`);
+  const today = new Date();
+  let age = today.getUTCFullYear() - birth.getUTCFullYear();
+  if (today.getUTCMonth() < birth.getUTCMonth() || (today.getUTCMonth() === birth.getUTCMonth() && today.getUTCDate() < birth.getUTCDate())) age -= 1;
+  return Math.max(age, 18);
+}
+
+function profileToPerson(profile: Record<string, unknown>): Person {
+  const purpose = PURPOSES.includes(profile.purpose as Purpose) ? profile.purpose as Purpose : "Just meeting people";
+  return {
+    id: String(profile.id),
+    name: String(profile.display_name || "Guest"),
+    age: ageFromDate(profile.date_of_birth as string | null),
+    purpose,
+    bio: String(profile.bio || "Open to meeting someone new."),
+    interests: Array.isArray(profile.interests) ? profile.interests.map(String) : [],
+    photo: String(profile.profile_photo || photo("photo-1535713875002-d1d0cf377fde")),
+    accent: "#d8ff52",
+  };
+}
+
+export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialView?: AppView; roomSlug?: string }) {
   const [view, setView] = useState<AppView>(initialView);
   const [previousView, setPreviousView] = useState<AppView>("landing");
   const [room, setRoom] = useState(DEFAULT_ROOM);
@@ -177,8 +200,14 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
   const [profileComplete, setProfileComplete] = useState(initialView !== "room" && initialView !== "landing");
   const [selectedPurpose, setSelectedPurpose] = useState<Purpose>("Just meeting people");
   const [selectedInterests, setSelectedInterests] = useState(["Music", "Travel", "Art"]);
+  const [people, setPeople] = useState<Person[]>(PEOPLE);
   const [sentInterests, setSentInterests] = useState<string[]>([]);
-  const [matchedPeople, setMatchedPeople] = useState<string[]>(["sofia", "leo"]);
+  const [matchedPeople, setMatchedPeople] = useState<string[]>([PEOPLE[1].id, PEOPLE[2].id]);
+  const [matchedProfiles, setMatchedProfiles] = useState<Person[]>(PEOPLE.slice(1, 3));
+  const [matchIds, setMatchIds] = useState<Record<string, string>>({
+    [PEOPLE[0].id]: "30000000-0000-4000-8000-000000000001",
+    [PEOPLE[1].id]: "30000000-0000-4000-8000-000000000002",
+  });
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [showMatch, setShowMatch] = useState<Person | null>(null);
   const [activeChat, setActiveChat] = useState<Person>(PEOPLE[0]);
@@ -187,6 +216,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
   const [toast, setToast] = useState("");
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(photo("photo-1531123897727-8f129e1688ce"));
   const [menuOpen, setMenuOpen] = useState(false);
   const [analytics, setAnalytics] = useState({ joined: 142, visible: 93, interests: 287, matches: 41, conversations: 29 });
   const [createdRooms, setCreatedRooms] = useState<Room[]>([DEFAULT_ROOM]);
@@ -196,6 +226,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
     () => process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com",
   );
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const organizerIntent = useRef(initialView === "organizer");
   const supabaseEnabled = isSupabaseConfigured();
 
   const roomUrl = useMemo(() => {
@@ -216,14 +247,131 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
   }, [messages, view]);
 
   useEffect(() => {
+    const client = getSupabaseBrowserClient();
+    if (!client || !roomSlug) return;
+    void client.rpc("get_public_room", { p_slug: roomSlug }).then(({ data }) => {
+      if (!data) return;
+      setRoom({
+        id: data.id,
+        slug: data.slug,
+        name: data.name,
+        eventName: data.event_name,
+        venue: data.venue_name,
+        city: data.city,
+        description: data.description,
+        startsAt: data.starts_at,
+        endsAt: data.ends_at,
+        status: data.status,
+        cover: data.cover_image || DEFAULT_ROOM.cover,
+      });
+      setAnalytics((current) => ({ ...current, joined: Number(data.participants || 0) }));
+    });
+  }, [roomSlug]);
+
+  useEffect(() => {
+    const client = getSupabaseBrowserClient();
+    if (!client || view !== "organizer") return;
+    void client.auth.getUser().then(async ({ data }) => {
+      if (!data.user) {
+        setAuthenticated(false);
+        setView("auth");
+        return;
+      }
+      setAuthenticated(true);
+      await client.from("profiles").update({ role: "ORGANIZER" }).eq("id", data.user.id);
+      const { data: rows } = await client.from("rooms").select("*").eq("organizer_id", data.user.id).order("created_at", { ascending: false });
+      if (!rows?.length) return;
+      const mappedRooms = rows.map((item) => ({
+        id: item.id,
+        slug: item.slug,
+        name: item.name,
+        eventName: item.event_name,
+        venue: item.venue_name,
+        city: item.city,
+        description: item.description,
+        startsAt: item.starts_at,
+        endsAt: item.ends_at,
+        status: item.status,
+        cover: item.cover_image || DEFAULT_ROOM.cover,
+      } satisfies Room));
+      setCreatedRooms(mappedRooms);
+      setRoom(mappedRooms[0]);
+      const { data: roomStats } = await client.rpc("room_analytics", { p_room_id: mappedRooms[0].id });
+      if (roomStats) setAnalytics({
+        joined: Number(roomStats.participants || 0),
+        visible: Number(roomStats.visible_users || 0),
+        interests: Number(roomStats.interests_sent || 0),
+        matches: Number(roomStats.matches_created || 0),
+        conversations: Number(roomStats.messages_started || 0),
+      });
+    });
+  }, [view]);
+
+  useEffect(() => {
+    const client = getSupabaseBrowserClient();
+    if (!client || view !== "discovery" || !visible) return;
+    void client.auth.getUser().then(async ({ data: userData }) => {
+      const { data: rows } = await client
+        .from("room_members")
+        .select("user_id, profiles!room_members_user_id_fkey(id, display_name, profile_photo, date_of_birth, bio, interests, purpose)")
+        .eq("room_id", room.id)
+        .eq("status", "ACTIVE")
+        .eq("is_visible", true)
+        .neq("user_id", userData.user?.id || "00000000-0000-0000-0000-000000000000");
+      if (!rows) return;
+      setPeople(rows.flatMap((row) => {
+        const relation = row.profiles as unknown;
+        const profile = Array.isArray(relation) ? relation[0] : relation;
+        return profile && typeof profile === "object" ? [profileToPerson(profile as Record<string, unknown>)] : [];
+      }));
+    });
+  }, [room.id, view, visible]);
+
+  useEffect(() => {
+    const client = getSupabaseBrowserClient();
+    if (!client || view !== "matches") return;
+    void client.auth.getUser().then(async ({ data: userData }) => {
+      if (!userData.user) return;
+      const { data: rows } = await client
+        .from("matches")
+        .select("id, user_a, user_b, profile_a:profiles!matches_user_a_fkey(id, display_name, profile_photo, date_of_birth, bio, interests, purpose), profile_b:profiles!matches_user_b_fkey(id, display_name, profile_photo, date_of_birth, bio, interests, purpose)")
+        .order("created_at", { ascending: false });
+      if (!rows) return;
+      const ids: Record<string, string> = {};
+      const profiles = rows.flatMap((match) => {
+        const relation = match.user_a === userData.user?.id ? match.profile_b : match.profile_a;
+        const profile = (Array.isArray(relation) ? relation[0] : relation) as unknown;
+        if (!profile || typeof profile !== "object") return [];
+        const person = profileToPerson(profile as Record<string, unknown>);
+        ids[person.id] = match.id;
+        return [person];
+      });
+      setMatchedProfiles(profiles);
+      setMatchedPeople(profiles.map((person) => person.id));
+      setMatchIds(ids);
+    });
+  }, [view]);
+
+  useEffect(() => {
     if (view !== "chat" || !supabaseEnabled) return;
     const client = getSupabaseBrowserClient();
     if (!client) return;
+    const matchId = matchIds[activeChat.id];
+    if (!matchId) return;
+    void Promise.all([client.auth.getUser(), client.from("messages").select("*").eq("match_id", matchId).order("created_at")]).then(([userResult, messageResult]) => {
+      if (!messageResult.data) return;
+      setMessages(messageResult.data.map((row) => ({
+        id: row.id,
+        sender: row.sender_id === userResult.data.user?.id ? "me" : "them",
+        content: row.content,
+        time: new Date(row.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      })) as ChatMessage[]);
+    });
     const channel = client
-      .channel(`messages:${activeChat.id}`)
+      .channel(`messages:${matchId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
+        { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` },
         (payload) => {
           const row = payload.new as { id: string; sender_id: string; content: string; created_at: string };
           client.auth.getUser().then(({ data }) => {
@@ -240,7 +388,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
       )
       .subscribe();
     return () => { void client.removeChannel(channel); };
-  }, [activeChat.id, supabaseEnabled, view]);
+  }, [activeChat.id, matchIds, supabaseEnabled, view]);
 
   function navigate(next: AppView) {
     setPreviousView(view);
@@ -303,6 +451,15 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
 
     setAuthenticated(true);
     setAuthBusy(false);
+    if (organizerIntent.current) {
+      if (client) {
+        const { data: userData } = await client.auth.getUser();
+        if (userData.user) await client.from("profiles").update({ role: "ORGANIZER" }).eq("id", userData.user.id);
+      }
+      setProfileComplete(true);
+      setView("organizer");
+      return;
+    }
     setPreviousView("room");
     setView("profile");
   }
@@ -312,13 +469,38 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
     if (client) {
       await client.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/r/${room.slug}` },
+        options: { redirectTo: organizerIntent.current ? `${window.location.origin}/organizer` : `${window.location.origin}/r/${room.slug}` },
       });
       return;
     }
     setAuthenticated(true);
-    setPreviousView("room");
-    setView("profile");
+    if (organizerIntent.current) {
+      setProfileComplete(true);
+      setView("organizer");
+    } else {
+      setPreviousView("room");
+      setView("profile");
+    }
+  }
+
+  async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) return flash("Photo must be smaller than 5 MB");
+    const localPreview = URL.createObjectURL(file);
+    setProfilePhoto(localPreview);
+    const client = getSupabaseBrowserClient();
+    if (!client) return flash("Photo updated for this demo session");
+    const { data: userData } = await client.auth.getUser();
+    if (!userData.user) return flash("Sign in before uploading a photo");
+    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `${userData.user.id}/avatar-${Date.now()}.${extension}`;
+    const { error } = await client.storage.from("profile-photos").upload(path, file, { upsert: true, contentType: file.type });
+    if (error) return flash(error.message);
+    const publicUrl = client.storage.from("profile-photos").getPublicUrl(path).data.publicUrl;
+    await client.from("profiles").update({ profile_photo: publicUrl }).eq("id", userData.user.id);
+    setProfilePhoto(publicUrl);
+    flash("Profile photo updated");
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -335,6 +517,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
           purpose: selectedPurpose,
           interests: selectedInterests,
           bio: String(form.get("bio") || ""),
+          profile_photo: profilePhoto,
         });
         if (error) return flash(error.message);
         await client.rpc("join_room", { p_slug: room.slug });
@@ -363,16 +546,19 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
     if (room.status !== "LIVE") return flash("This room is closed to new interests");
     if (sentInterests.includes(person.id)) return;
     const client = getSupabaseBrowserClient();
-    let isMatch = person.id === "noah";
+    let isMatch = person.id === PEOPLE[0].id;
     if (client) {
       const { data, error } = await client.rpc("send_interest", { p_room_id: room.id, p_receiver_id: person.id });
       if (error) return flash(error.message);
-      isMatch = Boolean((data as { matched?: boolean } | null)?.matched);
+      const result = data as { matched?: boolean; match_id?: string } | null;
+      isMatch = Boolean(result?.matched);
+      if (result?.match_id) setMatchIds((current) => ({ ...current, [person.id]: result.match_id as string }));
     }
     setSentInterests((current) => [...current, person.id]);
     setAnalytics((current) => ({ ...current, interests: current.interests + 1 }));
     if (isMatch) {
       setMatchedPeople((current) => [...new Set([...current, person.id])]);
+      setMatchedProfiles((current) => current.some((item) => item.id === person.id) ? current : [person, ...current]);
       setAnalytics((current) => ({ ...current, matches: current.matches + 1 }));
       window.setTimeout(() => setShowMatch(person), 350);
     } else {
@@ -388,7 +574,8 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
     if (!content) return;
     const client = getSupabaseBrowserClient();
     if (client) {
-      const matchId = activeChat.id;
+      const matchId = matchIds[activeChat.id];
+      if (!matchId) return flash("Match is still syncing — try again in a moment");
       const { error } = await client.from("messages").insert({ match_id: matchId, content });
       if (error) return flash(error.message);
     } else {
@@ -410,6 +597,25 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "") + `-${Math.random().toString(36).slice(2, 6)}`;
+    const client = getSupabaseBrowserClient();
+    const coverFile = data.get("coverImage");
+    let coverUrl = DEFAULT_ROOM.cover;
+    let organizerId: string | undefined;
+    if (client) {
+      const { data: userData } = await client.auth.getUser();
+      organizerId = userData.user?.id;
+      if (!organizerId) return flash("Sign in as an organizer first");
+      if (coverFile instanceof File && coverFile.size > 0) {
+        if (coverFile.size > 8 * 1024 * 1024) return flash("Cover image must be smaller than 8 MB");
+        const extension = coverFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `${organizerId}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await client.storage.from("room-covers").upload(path, coverFile, { contentType: coverFile.type });
+        if (uploadError) return flash(uploadError.message);
+        coverUrl = client.storage.from("room-covers").getPublicUrl(path).data.publicUrl;
+      }
+    } else if (coverFile instanceof File && coverFile.size > 0) {
+      coverUrl = URL.createObjectURL(coverFile);
+    }
     const nextRoom: Room = {
       id: crypto.randomUUID(),
       slug,
@@ -421,13 +627,11 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
       startsAt: String(data.get("startsAt")),
       endsAt: String(data.get("endsAt")),
       status: "UPCOMING",
-      cover: DEFAULT_ROOM.cover,
+      cover: coverUrl,
     };
-    const client = getSupabaseBrowserClient();
     if (client) {
-      const { data: userData } = await client.auth.getUser();
       const { data: inserted, error } = await client.from("rooms").insert({
-        organizer_id: userData.user?.id,
+        organizer_id: organizerId,
         name: nextRoom.name,
         event_name: nextRoom.eventName,
         venue_name: nextRoom.venue,
@@ -436,6 +640,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
         starts_at: nextRoom.startsAt,
         ends_at: nextRoom.endsAt,
         status: nextRoom.status,
+        cover_image: coverUrl,
       }).select().single();
       if (error) return flash(error.message);
       if (inserted) {
@@ -487,6 +692,8 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
       <OnboardingPage
         purpose={selectedPurpose}
         interests={selectedInterests}
+        photo={profilePhoto}
+        onPhoto={handlePhotoChange}
         onPurpose={setSelectedPurpose}
         onInterest={(interest) => setSelectedInterests((current) =>
           current.includes(interest) ? current.filter((item) => item !== interest) : [...current, interest].slice(-5),
@@ -539,7 +746,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
         {view === "discovery" && (
           <DiscoveryPage
             room={room}
-            people={PEOPLE}
+            people={people}
             visible={visible}
             sent={sentInterests}
             onToggle={toggleVisibility}
@@ -551,7 +758,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
         {view === "room" && joined && <RoomInfoPage room={room} qr={qrDataUrl} roomUrl={roomUrl} onCopy={copyRoomLink} />}
         {view === "matches" && (
           <MatchesPage
-            people={PEOPLE.filter((person) => matchedPeople.includes(person.id))}
+            people={matchedProfiles}
             room={room}
             onChat={(person) => { setActiveChat(person); navigate("chat"); }}
             onProfile={setSelectedPerson}
@@ -559,7 +766,7 @@ export function SocialRoomApp({ initialView = "landing" }: { initialView?: AppVi
         )}
         {view === "chat" && <ChatPage person={activeChat} messages={messages} onBack={() => navigate("matches")} onSend={sendMessage} endRef={messageEndRef} />}
         {view === "profile" && profileComplete && (
-          <ProfilePage visible={visible} interests={selectedInterests} purpose={selectedPurpose} onToggle={toggleVisibility} onPurpose={setSelectedPurpose} onInterest={(interest) => setSelectedInterests((current) => current.includes(interest) ? current.filter((item) => item !== interest) : [...current, interest])} />
+          <ProfilePage photo={profilePhoto} onPhoto={handlePhotoChange} visible={visible} interests={selectedInterests} purpose={selectedPurpose} onToggle={toggleVisibility} onPurpose={setSelectedPurpose} onInterest={(interest) => setSelectedInterests((current) => current.includes(interest) ? current.filter((item) => item !== interest) : [...current, interest])} />
         )}
         {view === "organizer" && (
           <OrganizerPage
@@ -715,13 +922,13 @@ function AuthPage({ room, busy, error, demo, onSubmit, onGoogle, onBack }: { roo
   );
 }
 
-function OnboardingPage({ purpose, interests, onPurpose, onInterest, onSubmit, onBack }: { purpose: Purpose; interests: string[]; onPurpose: (value: Purpose) => void; onInterest: (value: string) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onBack: () => void }) {
+function OnboardingPage({ purpose, interests, photo: profilePhoto, onPhoto, onPurpose, onInterest, onSubmit, onBack }: { purpose: Purpose; interests: string[]; photo: string; onPhoto: (event: ChangeEvent<HTMLInputElement>) => void; onPurpose: (value: Purpose) => void; onInterest: (value: string) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onBack: () => void }) {
   return (
     <main className="onboarding">
       <header><button className="brand brand--button" onClick={onBack}><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></button><span className="form-step">02 / 02</span></header>
       <form className="profile-form" onSubmit={onSubmit}>
         <div className="profile-form__heading"><span className="eyebrow">YOUR ROOM PROFILE</span><h1>A little about you.</h1><p>Keep it light — you can change everything later.</p></div>
-        <div className="photo-picker"><div className="photo-placeholder">M</div><button type="button"><ImagePlus size={17} />Add photo</button></div>
+        <div className="photo-picker"><div className="photo-placeholder" style={{ backgroundImage: `url(${profilePhoto})` }} /><label className="photo-upload"> <ImagePlus size={17} />Change photo<input className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={onPhoto} /></label></div>
         <div className="form-grid">
           <label>Display name<input name="displayName" defaultValue="Maya" minLength={2} maxLength={50} required /></label>
           <label>Date of birth<input name="dateOfBirth" type="date" defaultValue="1998-06-14" max="2008-08-11" required /></label>
@@ -783,10 +990,10 @@ function ChatPage({ person, messages, onBack, onSend, endRef }: { person: Person
   );
 }
 
-function ProfilePage({ visible, interests, purpose, onToggle, onPurpose, onInterest }: { visible: boolean; interests: string[]; purpose: Purpose; onToggle: () => void; onPurpose: (purpose: Purpose) => void; onInterest: (interest: string) => void }) {
+function ProfilePage({ photo: profilePhoto, onPhoto, visible, interests, purpose, onToggle, onPurpose, onInterest }: { photo: string; onPhoto: (event: ChangeEvent<HTMLInputElement>) => void; visible: boolean; interests: string[]; purpose: Purpose; onToggle: () => void; onPurpose: (purpose: Purpose) => void; onInterest: (interest: string) => void }) {
   return (
     <div className="page-content profile-page"><header className="page-heading"><div><span className="eyebrow">YOUR ACCOUNT</span><h1>Profile</h1><p>This profile travels with you between rooms.</p></div><button className="button button--ghost button--small">Save changes</button></header>
-      <div className="profile-layout"><section className="profile-preview"><div className="profile-preview__photo" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(8,8,8,.78)), url(${photo("photo-1531123897727-8f129e1688ce")})` }}><button className="icon-button"><ImagePlus size={18} /></button><div><h2>Maya, 28</h2><span>{purpose}</span></div></div><p>Creative strategist, live music person, always planning the next little adventure.</p><div className="chips chips--small">{interests.map((item) => <span className="chip" key={item}>{item}</span>)}</div></section>
+      <div className="profile-layout"><section className="profile-preview"><div className="profile-preview__photo" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(8,8,8,.78)), url(${profilePhoto})` }}><label className="icon-button" aria-label="Change profile photo"><ImagePlus size={18} /><input className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={onPhoto} /></label><div><h2>Maya, 28</h2><span>{purpose}</span></div></div><p>Creative strategist, live music person, always planning the next little adventure.</p><div className="chips chips--small">{interests.map((item) => <span className="chip" key={item}>{item}</span>)}</div></section>
         <section className="settings-card"><div className="setting-row setting-row--highlight"><div className="setting-icon"><Radio /></div><div><strong>Open to Meet</strong><p>Control your visibility in the current room.</p></div><label className="mini-switch" htmlFor="profile-visibility" aria-label="Open to Meet visibility"><input id="profile-visibility" type="checkbox" checked={visible} onChange={onToggle} /><i /></label></div><div className="settings-section"><h3>Your purpose</h3><div className="choice-grid">{PURPOSES.map((item) => <button className={`choice-card ${purpose === item ? "choice-card--active" : ""}`} onClick={() => onPurpose(item)} key={item}>{item}{purpose === item && <Check size={15} />}</button>)}</div></div><div className="settings-section"><h3>Interests</h3><div className="chips">{INTEREST_OPTIONS.map((item) => <button className={`chip ${interests.includes(item) ? "chip--active" : ""}`} onClick={() => onInterest(item)} key={item}>{item}</button>)}</div></div><div className="privacy-row"><ShieldCheck /><div><strong>Privacy by design</strong><p>No location tracking. You’re shown only in rooms you voluntarily join.</p></div></div></section></div>
     </div>
   );
@@ -808,7 +1015,7 @@ function OrganizerPage({ rooms, currentRoom, analytics, qr, roomUrl, onCreate, o
 function CreateRoomPage({ onSubmit, onCancel }: { onSubmit: (event: FormEvent<HTMLFormElement>) => void; onCancel: () => void }) {
   return (
     <div className="page-content create-page"><button className="back-link" onClick={onCancel}><ArrowLeft size={17} />Back to rooms</button><header className="page-heading"><div><span className="eyebrow">NEW SOCIAL ROOM</span><h1>Create a room</h1><p>Start with the essentials. You can edit everything later.</p></div></header>
-      <form className="create-form" onSubmit={onSubmit}><section><h2>Room details</h2><div className="form-grid"><label>Room name<input name="roomName" required placeholder="Test Party" /></label><label>Event name<input name="eventName" required placeholder="Summer launch party" /></label><label>Venue name<input name="venue" required placeholder="Lumen Club" /></label><label>City<input name="city" required placeholder="Riga" /></label></div><label>Description<textarea name="description" required placeholder="Tell guests what this room is for…" /></label></section><section><h2>Timing</h2><div className="form-grid"><label>Starts<input name="startsAt" type="datetime-local" defaultValue="2026-08-14T21:00" required /></label><label>Ends<input name="endsAt" type="datetime-local" defaultValue="2026-08-15T03:00" required /></label></div><div className="cover-drop"><ImagePlus /><div><strong>Add a cover image</strong><span>Optional · JPG, PNG or WEBP</span></div><button type="button" className="button button--ghost button--small">Choose image</button></div></section><div className="form-actions"><button type="button" className="button button--ghost" onClick={onCancel}>Cancel</button><button className="button button--lime">Create room & QR <ArrowRight size={18} /></button></div></form>
+      <form className="create-form" onSubmit={onSubmit}><section><h2>Room details</h2><div className="form-grid"><label>Room name<input name="roomName" required placeholder="Test Party" /></label><label>Event name<input name="eventName" required placeholder="Summer launch party" /></label><label>Venue name<input name="venue" required placeholder="Lumen Club" /></label><label>City<input name="city" required placeholder="Riga" /></label></div><label>Description<textarea name="description" required placeholder="Tell guests what this room is for…" /></label></section><section><h2>Timing</h2><div className="form-grid"><label>Starts<input name="startsAt" type="datetime-local" defaultValue="2026-08-14T21:00" required /></label><label>Ends<input name="endsAt" type="datetime-local" defaultValue="2026-08-15T03:00" required /></label></div><div className="cover-drop"><ImagePlus /><div><strong>Add a cover image</strong><span>Optional · JPG, PNG or WEBP</span></div><label className="button button--ghost button--small">Choose image<input className="file-input" name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" /></label></div></section><div className="form-actions"><button type="button" className="button button--ghost" onClick={onCancel}>Cancel</button><button className="button button--lime">Create room & QR <ArrowRight size={18} /></button></div></form>
     </div>
   );
 }
