@@ -217,6 +217,11 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   const [authError, setAuthError] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(photo("photo-1531123897727-8f129e1688ce"));
+  const [quickPhoto, setQuickPhoto] = useState("");
+  const [quickPhotoFile, setQuickPhotoFile] = useState<File | null>(null);
+  const [displayName, setDisplayName] = useState("Maya");
+  const [profileBio, setProfileBio] = useState("Creative strategist, live music person, always planning the next little adventure.");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [analytics, setAnalytics] = useState({ joined: 142, visible: 93, interests: 287, matches: 41, conversations: 29 });
   const [createdRooms, setCreatedRooms] = useState<Room[]>([DEFAULT_ROOM]);
@@ -503,31 +508,132 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
     flash("Profile photo updated");
   }
 
+  function handleQuickPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      setAuthError("Photo must be smaller than 5 MB");
+      return;
+    }
+    setAuthError("");
+    setQuickPhotoFile(file);
+    setQuickPhoto(URL.createObjectURL(file));
+  }
+
+  async function quickJoin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const name = String(form.get("displayName") || "").trim();
+    if (!quickPhotoFile || !quickPhoto) {
+      setAuthError("Add a photo so people know who they are meeting.");
+      return;
+    }
+    setAuthBusy(true);
+    setAuthError("");
+    const client = getSupabaseBrowserClient();
+    let savedPhoto = quickPhoto;
+
+    if (client) {
+      const { data: authData, error: signInError } = await client.auth.signInAnonymously({
+        options: { data: { display_name: name } },
+      });
+      if (signInError || !authData.user) {
+        setAuthError(signInError?.message || "Could not start your guest session.");
+        setAuthBusy(false);
+        return;
+      }
+      const extension = quickPhotoFile.name.split(".").pop()?.toLowerCase() || "jpg";
+      const path = `${authData.user.id}/avatar-${Date.now()}.${extension}`;
+      const { error: uploadError } = await client.storage
+        .from("profile-photos")
+        .upload(path, quickPhotoFile, { upsert: true, contentType: quickPhotoFile.type });
+      if (uploadError) {
+        setAuthError(uploadError.message);
+        setAuthBusy(false);
+        return;
+      }
+      savedPhoto = client.storage.from("profile-photos").getPublicUrl(path).data.publicUrl;
+      const { error: profileError } = await client.from("profiles").upsert({
+        id: authData.user.id,
+        display_name: name,
+        profile_photo: savedPhoto,
+        purpose: selectedPurpose,
+        interests: selectedInterests,
+      });
+      if (profileError) {
+        setAuthError(profileError.message);
+        setAuthBusy(false);
+        return;
+      }
+      const { error: joinError } = await client.rpc("join_room", { p_slug: room.slug });
+      if (joinError) {
+        setAuthError(joinError.message);
+        setAuthBusy(false);
+        return;
+      }
+    }
+
+    setDisplayName(name);
+    setProfilePhoto(savedPhoto);
+    setAuthenticated(true);
+    setProfileComplete(true);
+    setJoined(true);
+    setVisible(false);
+    setAuthBusy(false);
+    setAnalytics((current) => ({ ...current, joined: current.joined + 1 }));
+    navigate("discovery");
+  }
+
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const nextName = String(form.get("displayName") || "Guest");
+    const nextDateOfBirth = String(form.get("dateOfBirth") || "");
+    const nextBio = String(form.get("bio") || "");
     const client = getSupabaseBrowserClient();
     if (client) {
       const { data } = await client.auth.getUser();
       if (data.user) {
         const { error } = await client.from("profiles").upsert({
           id: data.user.id,
-          display_name: String(form.get("displayName") || "Guest"),
-          date_of_birth: String(form.get("dateOfBirth")),
+          display_name: nextName,
+          date_of_birth: nextDateOfBirth,
           purpose: selectedPurpose,
           interests: selectedInterests,
-          bio: String(form.get("bio") || ""),
+          bio: nextBio,
           profile_photo: profilePhoto,
         });
         if (error) return flash(error.message);
         await client.rpc("join_room", { p_slug: room.slug });
       }
     }
+    setDisplayName(nextName);
+    setDateOfBirth(nextDateOfBirth);
+    setProfileBio(nextBio);
     setProfileComplete(true);
     setJoined(true);
     setVisible(false);
     setAnalytics((current) => ({ ...current, joined: current.joined + 1 }));
     navigate("discovery");
+  }
+
+  async function saveProfileSettings() {
+    const client = getSupabaseBrowserClient();
+    if (client) {
+      const { data } = await client.auth.getUser();
+      if (data.user) {
+        const { error } = await client.from("profiles").update({
+          display_name: displayName.trim() || "Guest",
+          date_of_birth: dateOfBirth || null,
+          bio: profileBio,
+          purpose: selectedPurpose,
+          interests: selectedInterests,
+          profile_photo: profilePhoto,
+        }).eq("id", data.user.id);
+        if (error) return flash(error.message);
+      }
+    }
+    flash("Profile saved");
   }
 
   async function toggleVisibility() {
@@ -666,11 +772,21 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   }
 
   if (view === "landing") {
-    return <LandingPage onJoin={() => navigate("room")} onCreate={() => navigate("organizer")} />;
+    return (
+      <div className="responsive-entry">
+        <div className="entry-desktop"><LandingPage onJoin={() => navigate("room")} onCreate={() => navigate("organizer")} /></div>
+        <div className="entry-mobile"><MobileQuickJoin room={room} people={analytics.joined} photo={quickPhoto} busy={authBusy} error={authError} onPhoto={handleQuickPhoto} onSubmit={quickJoin} onOrganizer={() => navigate("organizer")} /></div>
+      </div>
+    );
   }
 
   if (view === "room" && !joined) {
-    return <PublicRoomPage room={room} people={analytics.joined} onJoin={startJoin} onBack={() => navigate("landing")} />;
+    return (
+      <div className="responsive-entry">
+        <div className="entry-desktop"><PublicRoomPage room={room} people={analytics.joined} onJoin={startJoin} onBack={() => navigate("landing")} /></div>
+        <div className="entry-mobile"><MobileQuickJoin room={room} people={analytics.joined} photo={quickPhoto} busy={authBusy} error={authError} onPhoto={handleQuickPhoto} onSubmit={quickJoin} onOrganizer={() => navigate("organizer")} /></div>
+      </div>
+    );
   }
 
   if (view === "auth") {
@@ -766,7 +882,7 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
         )}
         {view === "chat" && <ChatPage person={activeChat} messages={messages} onBack={() => navigate("matches")} onSend={sendMessage} endRef={messageEndRef} />}
         {view === "profile" && profileComplete && (
-          <ProfilePage photo={profilePhoto} onPhoto={handlePhotoChange} visible={visible} interests={selectedInterests} purpose={selectedPurpose} onToggle={toggleVisibility} onPurpose={setSelectedPurpose} onInterest={(interest) => setSelectedInterests((current) => current.includes(interest) ? current.filter((item) => item !== interest) : [...current, interest])} />
+          <ProfilePage name={displayName} bio={profileBio} dateOfBirth={dateOfBirth} photo={profilePhoto} onName={setDisplayName} onBio={setProfileBio} onDateOfBirth={setDateOfBirth} onPhoto={handlePhotoChange} visible={visible} interests={selectedInterests} purpose={selectedPurpose} onToggle={toggleVisibility} onPurpose={setSelectedPurpose} onInterest={(interest) => setSelectedInterests((current) => current.includes(interest) ? current.filter((item) => item !== interest) : [...current, interest])} onSave={saveProfileSettings} />
         )}
         {view === "organizer" && (
           <OrganizerPage
@@ -872,6 +988,36 @@ function LandingPage({ onJoin, onCreate }: { onJoin: () => void; onCreate: () =>
       </main>
       <footer><span className="brand">HERE<span className="brand-dot">.</span></span><p>See who’s here. Meet in real life.</p><span>© 2026 · Privacy first</span></footer>
     </div>
+  );
+}
+
+function MobileQuickJoin({ room, people, photo: preview, busy, error, onPhoto, onSubmit, onOrganizer }: { room: Room; people: number; photo: string; busy: boolean; error: string; onPhoto: (event: ChangeEvent<HTMLInputElement>) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onOrganizer: () => void }) {
+  return (
+    <main className="mobile-quick-join">
+      <section className="quick-room" style={{ backgroundImage: `linear-gradient(180deg, rgba(8,9,9,.12), rgba(8,9,9,.86)), url(${room.cover})` }}>
+        <header><span className="brand"><span className="brand-mark"><Radio size={16} /></span>HERE<span className="brand-dot">.</span></span><span className="quick-live"><i />LIVE</span></header>
+        <div className="quick-room__copy">
+          <span>{room.eventName}</span>
+          <h1>{room.venue}</h1>
+          <p><MapPin size={14} />{room.city}<b>·</b>{people} joined</p>
+        </div>
+      </section>
+      <form className="quick-form" onSubmit={onSubmit}>
+        <div className="quick-form__heading"><span>JOIN IN ONE STEP</span><h2>Show who you are.</h2><p>One photo and your first name. That is all for now.</p></div>
+        <label className={`quick-photo ${preview ? "quick-photo--ready" : ""}`} aria-label="Add your profile photo">
+          <span style={preview ? { backgroundImage: `url(${preview})` } : undefined}>{preview ? <Check size={22} /> : <ImagePlus size={28} />}</span>
+          <strong>{preview ? "Photo added" : "Add photo"}</strong>
+          <small>Take one now or choose from your phone</small>
+          <input className="file-input" type="file" accept="image/*" capture="user" onChange={onPhoto} required />
+        </label>
+        <label className="quick-name">Your first name<input name="displayName" minLength={2} maxLength={50} required autoComplete="given-name" placeholder="e.g. Maya" /></label>
+        <label className="age-confirm"><input type="checkbox" required /><span><Check size={14} /></span><p>I am 18+ and agree to the community rules.</p></label>
+        {error && <p className="form-error quick-error">{error}</p>}
+        <button className="button button--lime button--wide quick-submit" disabled={busy}>{busy ? "Joining…" : "Enter the room"}<ArrowRight size={18} /></button>
+        <p className="quick-privacy"><ShieldCheck size={15} />You stay hidden until you choose “Open to Meet”.</p>
+        <button className="quick-organizer" type="button" onClick={onOrganizer}>Organizing this event?</button>
+      </form>
+    </main>
   );
 }
 
@@ -990,11 +1136,11 @@ function ChatPage({ person, messages, onBack, onSend, endRef }: { person: Person
   );
 }
 
-function ProfilePage({ photo: profilePhoto, onPhoto, visible, interests, purpose, onToggle, onPurpose, onInterest }: { photo: string; onPhoto: (event: ChangeEvent<HTMLInputElement>) => void; visible: boolean; interests: string[]; purpose: Purpose; onToggle: () => void; onPurpose: (purpose: Purpose) => void; onInterest: (interest: string) => void }) {
+function ProfilePage({ name, bio, dateOfBirth, photo: profilePhoto, onName, onBio, onDateOfBirth, onPhoto, visible, interests, purpose, onToggle, onPurpose, onInterest, onSave }: { name: string; bio: string; dateOfBirth: string; photo: string; onName: (name: string) => void; onBio: (bio: string) => void; onDateOfBirth: (value: string) => void; onPhoto: (event: ChangeEvent<HTMLInputElement>) => void; visible: boolean; interests: string[]; purpose: Purpose; onToggle: () => void; onPurpose: (purpose: Purpose) => void; onInterest: (interest: string) => void; onSave: () => void }) {
   return (
-    <div className="page-content profile-page"><header className="page-heading"><div><span className="eyebrow">YOUR ACCOUNT</span><h1>Profile</h1><p>This profile travels with you between rooms.</p></div><button className="button button--ghost button--small">Save changes</button></header>
-      <div className="profile-layout"><section className="profile-preview"><div className="profile-preview__photo" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(8,8,8,.78)), url(${profilePhoto})` }}><label className="icon-button" aria-label="Change profile photo"><ImagePlus size={18} /><input className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={onPhoto} /></label><div><h2>Maya, 28</h2><span>{purpose}</span></div></div><p>Creative strategist, live music person, always planning the next little adventure.</p><div className="chips chips--small">{interests.map((item) => <span className="chip" key={item}>{item}</span>)}</div></section>
-        <section className="settings-card"><div className="setting-row setting-row--highlight"><div className="setting-icon"><Radio /></div><div><strong>Open to Meet</strong><p>Control your visibility in the current room.</p></div><label className="mini-switch" htmlFor="profile-visibility" aria-label="Open to Meet visibility"><input id="profile-visibility" type="checkbox" checked={visible} onChange={onToggle} /><i /></label></div><div className="settings-section"><h3>Your purpose</h3><div className="choice-grid">{PURPOSES.map((item) => <button className={`choice-card ${purpose === item ? "choice-card--active" : ""}`} onClick={() => onPurpose(item)} key={item}>{item}{purpose === item && <Check size={15} />}</button>)}</div></div><div className="settings-section"><h3>Interests</h3><div className="chips">{INTEREST_OPTIONS.map((item) => <button className={`chip ${interests.includes(item) ? "chip--active" : ""}`} onClick={() => onInterest(item)} key={item}>{item}</button>)}</div></div><div className="privacy-row"><ShieldCheck /><div><strong>Privacy by design</strong><p>No location tracking. You’re shown only in rooms you voluntarily join.</p></div></div></section></div>
+    <div className="page-content profile-page"><header className="page-heading"><div><span className="eyebrow">YOUR PROFILE</span><h1>Keep it simple.</h1><p>Only your photo and name are required. Everything else is optional.</p></div><button className="button button--lime button--small" onClick={onSave}>Save changes</button></header>
+      <div className="profile-layout"><section className="profile-preview"><div className="profile-preview__photo" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(8,8,8,.78)), url(${profilePhoto})` }}><label className="icon-button" aria-label="Change profile photo"><ImagePlus size={18} /><input className="file-input" type="file" accept="image/jpeg,image/png,image/webp" onChange={onPhoto} /></label><div><h2>{name || "Guest"}{dateOfBirth ? `, ${ageFromDate(dateOfBirth)}` : ""}</h2><span>{purpose}</span></div></div>{bio && <p>{bio}</p>}<div className="chips chips--small">{interests.map((item) => <span className="chip" key={item}>{item}</span>)}</div></section>
+        <section className="settings-card"><div className="setting-row setting-row--highlight"><div className="setting-icon"><Radio /></div><div><strong>Open to Meet</strong><p>Control your visibility in the current room.</p></div><label className="mini-switch" htmlFor="profile-visibility" aria-label="Open to Meet visibility"><input id="profile-visibility" type="checkbox" checked={visible} onChange={onToggle} /><i /></label></div><div className="settings-section settings-section--basics"><label>First name<input value={name} minLength={2} maxLength={50} onChange={(event) => onName(event.target.value)} /></label><label>About you <small>Optional</small><textarea value={bio} maxLength={280} onChange={(event) => onBio(event.target.value)} placeholder="One sentence is plenty…" /></label></div><details className="optional-settings"><summary><span><strong>Add more details</strong><small>Age, purpose and interests</small></span><ChevronRight size={18} /></summary><div className="optional-settings__body"><label>Date of birth <small>Optional and never shown</small><input type="date" value={dateOfBirth} max="2008-08-11" onChange={(event) => onDateOfBirth(event.target.value)} /></label><div><h3>Your purpose</h3><div className="choice-grid">{PURPOSES.map((item) => <button type="button" className={`choice-card ${purpose === item ? "choice-card--active" : ""}`} onClick={() => onPurpose(item)} key={item}>{item}{purpose === item && <Check size={15} />}</button>)}</div></div><div><h3>Interests</h3><div className="chips">{INTEREST_OPTIONS.map((item) => <button type="button" className={`chip ${interests.includes(item) ? "chip--active" : ""}`} onClick={() => onInterest(item)} key={item}>{item}</button>)}</div></div></div></details><div className="privacy-row"><ShieldCheck /><div><strong>Private by design</strong><p>No location tracking. You appear only in rooms you join.</p></div></div><div className="mobile-save"><button className="button button--lime button--wide" onClick={onSave}>Save changes</button></div></section></div>
     </div>
   );
 }

@@ -16,7 +16,7 @@ The repository contains two deliberately connected modes:
 | `/demo` | Signed-in guest experience |
 | `/organizer` | Organizer dashboard, room creation and QR export |
 
-The core flow is implemented end to end: **QR → room → authentication → short profile → opt-in discovery → interest → mutual match → realtime chat**. Organizer room closing stops discovery and new interests while matches and chats remain available.
+The core flow is implemented end to end. On phones it is intentionally shorter: **open room → photo + first name → opt-in discovery**. Purpose, interests, bio and date of birth are optional profile settings. Organizer room closing stops discovery and new interests while matches and chats remain available.
 
 ## Local setup
 
@@ -27,7 +27,7 @@ Requirements: Node.js 22.13+ and a Supabase project.
 3. Add your Supabase project URL and anonymous key.
 4. Apply `supabase/migrations/202608110001_initial.sql` in the Supabase SQL editor or with `supabase db push`.
 5. Optionally apply `supabase/seed.sql` for the demo organizer, 17 guest profiles, interests, matches and chats.
-6. Enable Google in Supabase Authentication → Providers and add `http://localhost:5173/**` as an allowed redirect URL.
+6. Enable Anonymous Sign-Ins in Supabase Authentication for the one-step mobile guest flow. Enable Google in Providers for the full desktop sign-in flow, and add `http://localhost:5173/**` as an allowed redirect URL.
 7. Run `pnpm dev` and open the printed local URL.
 
 Without step 2, the app intentionally starts in interactive demo mode. Any email and a 6+ character password continue through the demo onboarding.
