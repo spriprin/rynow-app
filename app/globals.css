@@ -300,6 +300,14 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
 .quick-privacy { margin: -5px 0 0; color: var(--muted); display: flex; justify-content: center; align-items: center; gap: 6px; text-align: center; font-size: 9px; }
 .quick-organizer { justify-self: center; border: 0; border-bottom: 1px solid var(--line); padding: 0 0 3px; background: none; color: var(--muted); cursor: pointer; font-size: 10px; }
 
+@media (min-width: 761px) {
+  .mobile-quick-join { display: grid; grid-template-columns: minmax(360px, 46%) 1fr; }
+  .quick-room { min-height: 100svh; padding: 38px 42px 48px; }
+  .quick-room__copy { max-width: 560px; }
+  .quick-form { width: min(520px, calc(100% - 64px)); margin: auto; padding: 54px 20px; border-radius: 0; align-content: center; }
+  .quick-form__heading h2 { font-size: 46px; }
+}
+
 /* Application shell */
 .app-frame { min-height: 100svh; background: var(--paper); }
 .side-nav { width: 230px; height: 100svh; padding: 28px 18px 22px; position: fixed; inset: 0 auto 0 0; z-index: 20; color: var(--white); background: var(--ink); display: flex; flex-direction: column; }

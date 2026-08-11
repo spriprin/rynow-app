@@ -30,7 +30,7 @@ Requirements: Node.js 22.13+ and a Supabase project.
 6. Enable Anonymous Sign-Ins in Supabase Authentication for the one-step mobile guest flow. Enable Google in Providers for the full desktop sign-in flow, and add `http://localhost:5173/**` as an allowed redirect URL.
 7. Run `pnpm dev` and open the printed local URL.
 
-Without step 2, the app intentionally starts in interactive demo mode. Any email and a 6+ character password continue through the demo onboarding.
+Without step 2, the app intentionally starts in interactive demo mode. Guests still enter with only a photo and first name; no email or password is requested.
 
 ### Demo Supabase accounts
 
@@ -53,9 +53,9 @@ The migration creates:
 
 Important: the client never supplies a trusted user identity. `auth.uid()` is used inside policies/functions, matches have no direct client insert policy, and duplicate pair creation is prevented by canonical ordering plus a database constraint.
 
-## Authentication and QR return flow
+## Guest and organizer access
 
-Supabase retains the session in the browser. The Google redirect is set to the original `/r/[slug]` room URL, so a scanned room is not lost across sign-in. Email/password stays in the same flow and proceeds directly into one-time profile creation. Apple can be added later as another Supabase provider without changing the data model.
+Guests use a lightweight anonymous Supabase session and enter with a photo and first name. Email, password and social login are not part of the guest flow. Organizer access remains separate and can use Google or email authentication to protect room management.
 
 ## Deployment to Vercel
 

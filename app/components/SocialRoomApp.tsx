@@ -231,7 +231,7 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
     () => process.env.NEXT_PUBLIC_APP_URL || "https://your-domain.com",
   );
   const messageEndRef = useRef<HTMLDivElement>(null);
-  const organizerIntent = useRef(initialView === "organizer");
+  const [organizerIntent, setOrganizerIntent] = useState(initialView === "organizer");
   const supabaseEnabled = isSupabaseConfigured();
 
   const roomUrl = useMemo(() => {
@@ -413,6 +413,7 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   }
 
   async function startJoin() {
+    setOrganizerIntent(false);
     if (!authenticated) {
       setPreviousView("room");
       setView("auth");
@@ -431,6 +432,11 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
     setJoined(true);
     setAnalytics((current) => ({ ...current, joined: current.joined + 1 }));
     navigate("discovery");
+  }
+
+  function openOrganizer() {
+    setOrganizerIntent(true);
+    navigate("organizer");
   }
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {
@@ -456,7 +462,7 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
 
     setAuthenticated(true);
     setAuthBusy(false);
-    if (organizerIntent.current) {
+    if (organizerIntent) {
       if (client) {
         const { data: userData } = await client.auth.getUser();
         if (userData.user) await client.from("profiles").update({ role: "ORGANIZER" }).eq("id", userData.user.id);
@@ -474,12 +480,12 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
     if (client) {
       await client.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: organizerIntent.current ? `${window.location.origin}/organizer` : `${window.location.origin}/r/${room.slug}` },
+        options: { redirectTo: organizerIntent ? `${window.location.origin}/organizer` : `${window.location.origin}/r/${room.slug}` },
       });
       return;
     }
     setAuthenticated(true);
-    if (organizerIntent.current) {
+    if (organizerIntent) {
       setProfileComplete(true);
       setView("organizer");
     } else {
@@ -774,8 +780,8 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   if (view === "landing") {
     return (
       <div className="responsive-entry">
-        <div className="entry-desktop"><LandingPage onJoin={() => navigate("room")} onCreate={() => navigate("organizer")} /></div>
-        <div className="entry-mobile"><MobileQuickJoin room={room} people={analytics.joined} photo={quickPhoto} busy={authBusy} error={authError} onPhoto={handleQuickPhoto} onSubmit={quickJoin} onOrganizer={() => navigate("organizer")} /></div>
+        <div className="entry-desktop"><LandingPage onJoin={() => navigate("room")} onCreate={openOrganizer} /></div>
+        <div className="entry-mobile"><QuickJoinPage room={room} people={analytics.joined} photo={quickPhoto} busy={authBusy} error={authError} onPhoto={handleQuickPhoto} onSubmit={quickJoin} onOrganizer={openOrganizer} /></div>
       </div>
     );
   }
@@ -784,14 +790,17 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
     return (
       <div className="responsive-entry">
         <div className="entry-desktop"><PublicRoomPage room={room} people={analytics.joined} onJoin={startJoin} onBack={() => navigate("landing")} /></div>
-        <div className="entry-mobile"><MobileQuickJoin room={room} people={analytics.joined} photo={quickPhoto} busy={authBusy} error={authError} onPhoto={handleQuickPhoto} onSubmit={quickJoin} onOrganizer={() => navigate("organizer")} /></div>
+        <div className="entry-mobile"><QuickJoinPage room={room} people={analytics.joined} photo={quickPhoto} busy={authBusy} error={authError} onPhoto={handleQuickPhoto} onSubmit={quickJoin} onOrganizer={openOrganizer} /></div>
       </div>
     );
   }
 
   if (view === "auth") {
+    if (!organizerIntent) {
+      return <QuickJoinPage room={room} people={analytics.joined} photo={quickPhoto} busy={authBusy} error={authError} onPhoto={handleQuickPhoto} onSubmit={quickJoin} onOrganizer={openOrganizer} />;
+    }
     return (
-      <AuthPage
+      <OrganizerAuthPage
         room={room}
         busy={authBusy}
         error={authError}
@@ -991,7 +1000,7 @@ function LandingPage({ onJoin, onCreate }: { onJoin: () => void; onCreate: () =>
   );
 }
 
-function MobileQuickJoin({ room, people, photo: preview, busy, error, onPhoto, onSubmit, onOrganizer }: { room: Room; people: number; photo: string; busy: boolean; error: string; onPhoto: (event: ChangeEvent<HTMLInputElement>) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onOrganizer: () => void }) {
+function QuickJoinPage({ room, people, photo: preview, busy, error, onPhoto, onSubmit, onOrganizer }: { room: Room; people: number; photo: string; busy: boolean; error: string; onPhoto: (event: ChangeEvent<HTMLInputElement>) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onOrganizer: () => void }) {
   return (
     <main className="mobile-quick-join">
       <section className="quick-room" style={{ backgroundImage: `linear-gradient(180deg, rgba(8,9,9,.12), rgba(8,9,9,.86)), url(${room.cover})` }}>
@@ -1039,29 +1048,29 @@ function PublicRoomPage({ room, people, onJoin, onBack }: { room: Room; people: 
   );
 }
 
-function AuthPage({ room, busy, error, demo, onSubmit, onGoogle, onBack }: { room: Room; busy: boolean; error: string; demo: boolean; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onGoogle: () => void; onBack: () => void }) {
+function OrganizerAuthPage({ room, busy, error, demo, onSubmit, onGoogle, onBack }: { room: Room; busy: boolean; error: string; demo: boolean; onSubmit: (event: FormEvent<HTMLFormElement>) => void; onGoogle: () => void; onBack: () => void }) {
   return (
     <main className="split-page">
       <section className="split-page__visual" style={{ backgroundImage: `linear-gradient(180deg, transparent, rgba(10,10,10,.8)), url(${room.cover})` }}>
         <button className="brand brand--button" onClick={onBack}><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></button>
-        <div><span className="eyebrow"><span className="live-pulse" /> YOUR ROOM IS WAITING</span><h2>{room.eventName}</h2><p>{room.venue} · {room.city}</p></div>
+        <div><span className="eyebrow"><span className="live-pulse" /> ORGANIZER SPACE</span><h2>{room.eventName}</h2><p>{room.venue} · {room.city}</p></div>
       </section>
       <section className="auth-panel">
         <div className="form-wrap">
-          <button className="back-link" onClick={onBack}><ArrowLeft size={17} /> Back to room</button>
-          <span className="form-step">01 / 02</span>
-          <h1>Come on in.</h1>
-          <p>Sign in once. Your profile follows you to every room.</p>
-          {demo && <div className="demo-note"><Zap size={16} /><span><strong>Demo mode</strong> — any email and password will work.</span></div>}
-          <button className="button button--google" onClick={onGoogle}><span className="google-g">G</span> Continue with Google</button>
-          <div className="divider"><span>or use email</span></div>
+          <button className="back-link" onClick={onBack}><ArrowLeft size={17} /> Back</button>
+          <span className="form-step">FOR ORGANIZERS</span>
+          <h1>Organizer access.</h1>
+          <p>Sign in to create rooms, download QR codes and view activity.</p>
+          {demo && <div className="demo-note"><Zap size={16} /><span><strong>Demo access</strong> is enabled for this organizer space.</span></div>}
+          <button className="button button--google" onClick={onGoogle}><span className="google-g">G</span> Sign in with Google</button>
+          <div className="divider"><span>or organizer email</span></div>
           <form onSubmit={onSubmit} className="stack-form">
             <label>Email<input name="email" type="email" defaultValue={demo ? "maya@example.com" : ""} required placeholder="you@example.com" /></label>
             <label>Password<input name="password" type="password" defaultValue={demo ? "demo-password" : ""} minLength={6} required placeholder="At least 6 characters" /></label>
             {error && <p className="form-error">{error}</p>}
-            <button className="button button--lime button--wide" disabled={busy}>{busy ? "Signing in…" : "Continue"}<ArrowRight size={18} /></button>
+            <button className="button button--lime button--wide" disabled={busy}>{busy ? "Signing in…" : "Open organizer space"}<ArrowRight size={18} /></button>
           </form>
-          <p className="legal-copy">By continuing, you confirm you’re 18+ and accept the Terms and Privacy Policy.</p>
+          <p className="legal-copy">Organizer accounts are separate from guest profiles.</p>
         </div>
       </section>
     </main>
