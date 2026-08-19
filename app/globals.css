@@ -638,7 +638,8 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
 .foundation-qr-card h2 { margin: 10px 0 6px; font-size: 25px; }
 .foundation-qr-card > p { margin: 0; color: rgba(16,17,17,.62); font-size: 11px; }
 .foundation-qr-card .qr-image { width: 220px; height: 220px; }
-.foundation-qr-card code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; text-align: center; font-size: 9px; }
+.foundation-join-link { overflow-wrap: anywhere; display: block; color: rgba(16,17,17,.72); text-align: center; font-size: 10px; line-height: 1.45; text-decoration: underline; text-underline-offset: 3px; }
+.foundation-join-link:hover { color: var(--ink); }
 .foundation-qr-stats { margin-top: 18px; padding-top: 17px; border-top: 1px solid rgba(16,17,17,.15); display: flex; align-items: center; gap: 9px; }
 .foundation-qr-stats span { display: flex; flex-direction: column; font-size: 9px; }
 .foundation-qr-stats strong { font-size: 15px; }
@@ -664,6 +665,15 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
   .foundation-avatar-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .foundation-organizer-grid { grid-template-columns: 1fr; }
   .foundation-qr-card { position: static; max-width: 430px; }
+}
+
+.demo-mode-banner { position: fixed; right: 18px; bottom: 18px; z-index: 80; max-width: min(470px, calc(100vw - 36px)); padding: 12px 14px; border: 1px solid rgba(216,255,82,.38); border-radius: 14px; display: flex; align-items: center; gap: 14px; color: rgba(255,255,255,.76); background: rgba(16,17,17,.94); box-shadow: 0 16px 44px rgba(0,0,0,.3); backdrop-filter: blur(12px); font-size: 11px; line-height: 1.4; }
+.demo-mode-banner strong { color: var(--lime); }
+.demo-mode-banner a { flex: 0 0 auto; padding: 9px 12px; border-radius: 999px; color: var(--ink); background: var(--lime); font-weight: 800; }
+
+@media (max-width: 620px) {
+  .demo-mode-banner { left: 12px; right: 12px; bottom: 12px; max-width: none; align-items: stretch; flex-direction: column; gap: 9px; }
+  .demo-mode-banner a { text-align: center; }
 }
 
 @media (max-width: 760px) {

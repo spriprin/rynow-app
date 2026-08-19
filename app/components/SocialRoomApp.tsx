@@ -241,14 +241,14 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   const supabaseEnabled = false;
 
   const roomUrl = useMemo(() => {
-    return `${runtimeOrigin || "https://your-domain.com"}/r/${room.slug}`;
-  }, [room.slug, runtimeOrigin]);
+    return `${(runtimeOrigin || "https://here-social-room.spriprin.chatgpt.site").replace(/\/+$/, "")}/demo`;
+  }, [runtimeOrigin]);
 
   useEffect(() => {
     QRCode.toDataURL(roomUrl, {
       width: 720,
-      margin: 2,
-      color: { dark: "#101111", light: "#f7f4ec" },
+      margin: 4,
+      color: { dark: "#000000", light: "#ffffff" },
       errorCorrectionLevel: "H",
     }).then(setQrDataUrl).catch(() => setQrDataUrl(""));
   }, [roomUrl]);
@@ -441,8 +441,7 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   }
 
   function openOrganizer() {
-    setOrganizerIntent(true);
-    navigate("organizer");
+    window.location.assign("/organizer");
   }
 
   async function handleAuth(event: FormEvent<HTMLFormElement>) {

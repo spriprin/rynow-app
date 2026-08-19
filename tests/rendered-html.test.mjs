@@ -29,9 +29,10 @@ test("server-renders the product landing page", async () => {
 });
 
 test("keeps real QR and organizer routes separate from demo data", async () => {
-  const [roomResponse, organizerResponse] = await Promise.all([
+  const [roomResponse, organizerResponse, demoResponse] = await Promise.all([
     render("/r/friday-social"),
     render("/organizer"),
+    render("/demo"),
   ]);
   assert.equal(roomResponse.status, 200);
   assert.equal(organizerResponse.status, 200);
@@ -41,6 +42,9 @@ test("keeps real QR and organizer routes separate from demo data", async () => {
   const organizerHtml = await organizerResponse.text();
   assert.match(organizerHtml, /Opening organizer space/i);
   assert.doesNotMatch(organizerHtml, /142|287|Friday Social Night/i);
+  const demoHtml = await demoResponse.text();
+  assert.match(demoHtml, /Product demo/);
+  assert.match(demoHtml, /Create a real Room &amp; QR/);
 });
 
 test("Sprint 1 migration enforces the foundation trust boundaries", async () => {
@@ -78,4 +82,7 @@ test("client bundle source never references a service role key", async () => {
   assert.doesNotMatch(files.join("\n"), /service[_-]?role/i);
   assert.match(files[0], /signInAnonymously\(\)/);
   assert.match(files[0], /join_room_by_code/);
+  assert.match(files[1], /NEXT_PUBLIC_APP_URL/);
+  assert.match(files[1], /margin: 4/);
+  assert.match(files[1], /Open join link/);
 });
