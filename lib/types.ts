@@ -59,3 +59,54 @@ export interface RoomWallPerson {
   displayName: string;
   avatarUrl: string;
 }
+
+export type DropItemAction = "passed" | "interested" | null;
+
+export interface RoomDropState {
+  drop_id: string | null;
+  sequence_number: number | null;
+  scheduled_at: string | null;
+  effective_open_at: string | null;
+  drop_size: number | null;
+  min_unlock_count: number | null;
+  interest_budget: number | null;
+  assigned_count: number;
+  remaining_count: number;
+  interests_used: number;
+  eligible_count: number;
+  active_candidate_count: number;
+  next_scheduled_at: string | null;
+  server_now: string;
+}
+
+export interface DropItem {
+  id: string;
+  position: number;
+  firstSeenAt: string | null;
+  action: DropItemAction;
+  candidateId: string;
+  displayName: string;
+  avatarPath: string;
+  avatarUrl: string;
+}
+
+export interface IncomingInterest {
+  interestId: string;
+  fromUserId: string;
+  displayName: string;
+  avatarPath: string;
+  avatarUrl: string;
+  createdAt: string;
+}
+
+export interface OrganizerDrop {
+  id: string;
+  room_id: string;
+  sequence_number: number;
+  scheduled_at: string;
+  opened_at: string | null;
+  drop_size: number;
+  min_unlock_count: number;
+  interest_budget: number;
+  created_at: string;
+}

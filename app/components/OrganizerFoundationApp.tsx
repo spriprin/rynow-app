@@ -1,11 +1,11 @@
 "use client";
 /* eslint-disable @next/next/no-img-element -- QR codes are generated data URLs. */
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import QRCode from "qrcode";
-import { ArrowLeft, ArrowRight, CalendarDays, Check, Download, Link2, LockKeyhole, LogOut, MapPin, Plus, QrCode, Radio, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, Download, Link2, LockKeyhole, LogOut, MapPin, Plus, QrCode, Radio, ShieldCheck, Trash2, Users } from "lucide-react";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
-import type { FoundationRoom } from "@/lib/types";
+import type { FoundationRoom, OrganizerDrop } from "@/lib/types";
 
 type OrganizerScreen = "loading" | "configuration" | "auth" | "rooms" | "create";
 type OrganizerRoom = FoundationRoom & { joinedCount: number };
@@ -168,9 +168,76 @@ export function OrganizerFoundationApp() {
 
   if (screen === "create") return <main className="foundation-organizer"><header className="foundation-organizer__top"><span className="brand"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></span></header><section className="foundation-create"><button className="back-link" onClick={() => { setError(""); setScreen("rooms"); }}><ArrowLeft size={17} />Back to Rooms</button><span className="eyebrow">SPRINT 1</span><h1>Create a Room.</h1><p>Only the event essentials. A unique join code and QR are generated automatically.</p><form onSubmit={createRoom}><label>Room name<input name="name" required minLength={2} maxLength={100} placeholder="HERE Test Party" /></label><div className="form-grid"><label>Venue name<input name="venueName" placeholder="Lumen Club" /></label><label>City<input name="city" placeholder="Riga" /></label></div><div className="form-grid"><label>Starts<input name="startsAt" type="datetime-local" required defaultValue={localDateTime(1)} /></label><label>Ends<input name="endsAt" type="datetime-local" required defaultValue={localDateTime(5)} /></label></div>{error && <p className="form-error">{error}</p>}<button className="button button--lime" disabled={busy}>{busy ? "Creating…" : "Create Room & QR"}<ArrowRight size={18} /></button></form></section></main>;
 
-  return <main className="foundation-organizer"><header className="foundation-organizer__top"><span className="brand"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></span><div><button className="button button--lime button--small" onClick={() => setScreen("create")}><Plus size={17} />Create Room</button><button className="icon-button" onClick={signOut} aria-label="Sign out"><LogOut size={18} /></button></div></header><section className="foundation-organizer__heading"><div><span className="eyebrow">REAL ROOMS</span><h1>Organizer space</h1><p>Persistent Rooms, real join links and aggregate participant counts.</p></div></section>{rooms.length === 0 ? <section className="foundation-no-rooms"><QrCode /><h2>No Rooms yet.</h2><p>Create the first real event Room. No demo Room will be added automatically.</p><button className="button button--lime" onClick={() => setScreen("create")}><Plus size={18} />Create Room</button></section> : <div className="foundation-organizer-grid"><section className="foundation-room-list">{rooms.map((room) => <button key={room.id} className={`foundation-room-row ${selectedRoom?.id === room.id ? "active" : ""}`} onClick={() => setSelectedId(room.id)}><span className={`status-badge status-badge--${room.status}`}><i />{room.status}</span><div><h2>{room.name}</h2><p><MapPin size={14} />{[room.venue_name, room.city].filter(Boolean).join(", ") || "Venue not set"}</p><p><CalendarDays size={14} />{eventDate(room.starts_at)}</p></div><strong><Users size={17} />{room.joinedCount} joined</strong></button>)}</section>{selectedRoom && <aside className="foundation-qr-card"><span className="eyebrow">ROOM ACCESS</span><h2>{selectedRoom.name}</h2><p>{selectedRoom.status === "closed" ? "This Room has ended." : "Scan to join this exact Room."}</p><div className="qr-image">{qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${selectedRoom.name}`} /> : <QrCode size={160} />}</div><a className="foundation-join-link" href={joinUrl} target="_blank" rel="noreferrer">{joinUrl}</a><div className="qr-actions"><a className="button button--dark" href={qrDataUrl} download={`${selectedRoom.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-qr.png`}><Download size={17} />Download PNG</a><a className="button button--ghost" href={joinUrl} target="_blank" rel="noreferrer"><ArrowRight size={17} />Open join link</a><button className="button button--ghost" onClick={copyLink}><Link2 size={17} />Copy link</button></div><div className="foundation-qr-stats"><Users /><span><strong>{selectedRoom.joinedCount}</strong> real participants</span></div>{selectedRoom.status !== "closed" && <button className="foundation-close-room" onClick={closeRoom}>Close Room</button>}</aside>}</div>}{error && <p className="foundation-global-error form-error">{error}</p>}{toast && <div className="toast"><Check size={17} />{toast}</div>}</main>;
+  return <main className="foundation-organizer"><header className="foundation-organizer__top"><span className="brand"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></span><div><button className="button button--lime button--small" onClick={() => setScreen("create")}><Plus size={17} />Create Room</button><button className="icon-button" onClick={signOut} aria-label="Sign out"><LogOut size={18} /></button></div></header><section className="foundation-organizer__heading"><div><span className="eyebrow">REAL ROOMS</span><h1>Organizer space</h1><p>Persistent Rooms, real join links and aggregate participant counts.</p></div></section>{rooms.length === 0 ? <section className="foundation-no-rooms"><QrCode /><h2>No Rooms yet.</h2><p>Create the first real event Room. No demo Room will be added automatically.</p><button className="button button--lime" onClick={() => setScreen("create")}><Plus size={18} />Create Room</button></section> : <div className="foundation-organizer-grid"><section className="foundation-room-list">{rooms.map((room) => <button key={room.id} className={`foundation-room-row ${selectedRoom?.id === room.id ? "active" : ""}`} onClick={() => setSelectedId(room.id)}><span className={`status-badge status-badge--${room.status}`}><i />{room.status}</span><div><h2>{room.name}</h2><p><MapPin size={14} />{[room.venue_name, room.city].filter(Boolean).join(", ") || "Venue not set"}</p><p><CalendarDays size={14} />{eventDate(room.starts_at)}</p></div><strong><Users size={17} />{room.joinedCount} joined</strong></button>)}</section>{selectedRoom && <div className="foundation-organizer-sidebar"><aside className="foundation-qr-card"><span className="eyebrow">ROOM ACCESS</span><h2>{selectedRoom.name}</h2><p>{selectedRoom.status === "closed" ? "This Room has ended." : "Scan to join this exact Room."}</p><div className="qr-image">{qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${selectedRoom.name}`} /> : <QrCode size={160} />}</div><a className="foundation-join-link" href={joinUrl} target="_blank" rel="noreferrer">{joinUrl}</a><div className="qr-actions"><a className="button button--dark" href={qrDataUrl} download={`${selectedRoom.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-qr.png`}><Download size={17} />Download PNG</a><a className="button button--ghost" href={joinUrl} target="_blank" rel="noreferrer"><ArrowRight size={17} />Open join link</a><button className="button button--ghost" onClick={copyLink}><Link2 size={17} />Copy link</button></div><div className="foundation-qr-stats"><Users /><span><strong>{selectedRoom.joinedCount}</strong> real participants</span></div>{selectedRoom.status !== "closed" && <button className="foundation-close-room" onClick={closeRoom}>Close Room</button>}</aside><OrganizerDropControls room={selectedRoom} /></div>}</div>}{error && <p className="foundation-global-error form-error">{error}</p>}{toast && <div className="toast"><Check size={17} />{toast}</div>}</main>;
 }
 
 function OrganizerState({ title, copy }: { title: string; copy: string }) {
   return <main className="foundation-state"><span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span><div className="foundation-state__icon"><LockKeyhole /></div><h1>{title}</h1><p>{copy}</p></main>;
+}
+
+function OrganizerDropControls({ room }: { room: OrganizerRoom }) {
+  const [drops, setDrops] = useState<OrganizerDrop[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  const loadDrops = useCallback(async () => {
+    const client = getSupabaseBrowserClient();
+    if (!client) return;
+    const { data, error: loadError } = await client.from("drops").select("id, room_id, sequence_number, scheduled_at, opened_at, drop_size, min_unlock_count, interest_budget, created_at").eq("room_id", room.id).order("sequence_number");
+    if (loadError) throw loadError;
+    setDrops((data || []) as OrganizerDrop[]);
+  }, [room.id]);
+
+  useEffect(() => {
+    const loadTimer = window.setTimeout(() => { void loadDrops().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load Drops")); }, 0);
+    const clockTimer = window.setInterval(() => setNowMs(Date.now()), 30000);
+    return () => { window.clearTimeout(loadTimer); window.clearInterval(clockTimer); };
+  }, [loadDrops]);
+
+  async function addDrop(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    setBusy(true); setError("");
+    try {
+      const form = new FormData(formElement);
+      const client = getSupabaseBrowserClient();
+      if (!client) throw new Error("Supabase is not configured");
+      const { error: createError } = await client.rpc("create_room_drop", {
+        p_room_id: room.id,
+        p_scheduled_at: new Date(String(form.get("scheduledAt"))).toISOString(),
+        p_drop_size: Number(form.get("dropSize")),
+        p_min_unlock_count: Number(form.get("minUnlockCount")),
+        p_interest_budget: Number(form.get("interestBudget")),
+      });
+      if (createError) throw createError;
+      await loadDrops();
+      formElement.reset();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not add Drop"); }
+    finally { setBusy(false); }
+  }
+
+  async function openNow(dropId: string) {
+    setBusy(true); setError("");
+    try {
+      const client = getSupabaseBrowserClient();
+      const { error: openError } = await client!.rpc("open_drop_now", { p_drop_id: dropId });
+      if (openError) throw openError;
+      await loadDrops();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not open Drop"); }
+    finally { setBusy(false); }
+  }
+
+  async function removeDrop(dropId: string) {
+    setBusy(true); setError("");
+    try {
+      const client = getSupabaseBrowserClient();
+      const { error: deleteError } = await client!.rpc("delete_future_drop", { p_drop_id: dropId });
+      if (deleteError) throw deleteError;
+      await loadDrops();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Drop"); }
+    finally { setBusy(false); }
+  }
+
+  return <section className="organizer-drops"><div className="organizer-drops__heading"><div><span className="eyebrow">DROPS</span><h2>Drop schedule</h2></div><Clock3 /></div>{drops.length ? <div className="organizer-drop-list">{drops.map((drop) => { const future = !drop.opened_at && new Date(drop.scheduled_at).getTime() > nowMs; return <article key={drop.id}><div><strong>Drop {drop.sequence_number}</strong><span>{drop.opened_at ? "Live now" : eventDate(drop.scheduled_at)}</span><small>{drop.drop_size} people · unlock at {drop.min_unlock_count} · {drop.interest_budget} Interests</small></div>{room.status !== "closed" && <div><button type="button" onClick={() => openNow(drop.id)} disabled={busy || Boolean(drop.opened_at)}>Open Now</button>{future && <button type="button" className="drop-delete" onClick={() => removeDrop(drop.id)} disabled={busy} aria-label={`Delete Drop ${drop.sequence_number}`}><Trash2 size={15} /></button>}</div>}</article>; })}</div> : <p>No Drops scheduled yet.</p>}{room.status !== "closed" && <form className="organizer-drop-form" onSubmit={addDrop}><label>Drop time<input name="scheduledAt" type="datetime-local" required defaultValue={localDateTime(1)} /></label><div className="organizer-drop-numbers"><label>Size<input name="dropSize" type="number" min="1" max="20" defaultValue="10" required /></label><label>Unlock<input name="minUnlockCount" type="number" min="1" max="20" defaultValue="6" required /></label><label>Interests<input name="interestBudget" type="number" min="0" max="20" defaultValue="3" required /></label></div><button className="button button--dark button--wide" disabled={busy}><Plus size={16} />Add Drop</button></form>}{error && <p className="form-error">{error}</p>}<small className="organizer-drops__privacy"><ShieldCheck size={13} />Organizers never see individual Interests.</small></section>;
 }

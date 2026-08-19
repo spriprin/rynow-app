@@ -73,6 +73,31 @@ test("Sprint 1 migration enforces the foundation trust boundaries", async () => 
   assert.doesNotMatch(migration, /using\s*\(\s*true\s*\)/i);
 });
 
+test("Sprint 2 is additive, server-generated and popularity-neutral", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/202608190002_sprint2_drops_interests.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /create table public\.drops/i);
+  assert.match(migration, /create table public\.drop_items/i);
+  assert.match(migration, /create table public\.interests/i);
+  assert.match(migration, /unique \(room_id, from_user_id, to_user_id\)/i);
+  assert.match(migration, /create or replace function public\.claim_your_drop\(p_drop_id uuid\)/i);
+  assert.match(migration, /current_user_id uuid := auth\.uid\(\)/i);
+  assert.match(migration, /first_seen_at = coalesce\(first_seen_at, clock_timestamp\(\)\)/i);
+  assert.match(migration, /pending_count/i);
+  assert.match(migration, /create or replace function public\.send_interest\(p_drop_item_id uuid\)/i);
+  assert.match(migration, /used_budget >= allowed_budget/i);
+  assert.match(migration, /create or replace function public\.interested_in_you\(p_room_id uuid\)/i);
+  assert.match(migration, /drop_items and interests intentionally have no direct table policies/i);
+  assert.doesNotMatch(migration, /create table public\.(matches|messages)/i);
+
+  const rankingBlock = migration.match(/with candidate_exposure as \([\s\S]*?\), ranked as \([\s\S]*?\)\n {4}select/i)?.[0] || "";
+  assert.match(rankingBlock, /delivered_count/);
+  assert.match(rankingBlock, /pending_count/);
+  assert.doesNotMatch(rankingBlock, /interests|interest_budget|popularity/i);
+});
+
 test("client bundle source never references a service role key", async () => {
   const files = await Promise.all([
     "../app/components/RoomJoinApp.tsx",
@@ -85,4 +110,8 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[1], /NEXT_PUBLIC_APP_URL/);
   assert.match(files[1], /margin: 4/);
   assert.match(files[1], /Open join link/);
+  assert.match(files[0], /room_drop_state/);
+  assert.match(files[0], /claim_your_drop/);
+  assert.match(files[0], /mark_drop_item_seen/);
+  assert.match(files[0], /Interested in You/i);
 });
