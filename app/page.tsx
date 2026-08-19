@@ -1,5 +1,5 @@
-import { SocialRoomApp } from "./components/SocialRoomApp";
+import { MarketingLanding } from "./components/SocialRoomApp";
 
 export default function Home() {
-  return <SocialRoomApp initialView="landing" />;
+  return <MarketingLanding />;
 }

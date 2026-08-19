@@ -10,11 +10,13 @@
     "build": "vinext build",
     "start": "vinext start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/rendered-html.test.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:acceptance": "node --test tests/supabase-acceptance.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
+    "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.31.0",

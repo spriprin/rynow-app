@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent, type FormEvent } from "react";
 import QRCode from "qrcode";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   ArrowLeft,
   ArrowRight,
@@ -36,8 +37,13 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { ChatMessage, Person, Purpose, Room, RoomStatus } from "@/lib/types";
+
+// Legacy design demo: production data is handled only by RoomJoinApp and
+// OrganizerFoundationApp. This component must never contact the real backend.
+function getSupabaseBrowserClient(): SupabaseClient | null {
+  return null;
+}
 
 export type AppView =
   | "landing"
@@ -232,7 +238,7 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   );
   const messageEndRef = useRef<HTMLDivElement>(null);
   const [organizerIntent, setOrganizerIntent] = useState(initialView === "organizer");
-  const supabaseEnabled = isSupabaseConfigured();
+  const supabaseEnabled = false;
 
   const roomUrl = useMemo(() => {
     return `${runtimeOrigin || "https://your-domain.com"}/r/${room.slug}`;
@@ -942,7 +948,11 @@ export function SocialRoomApp({ initialView = "landing", roomSlug }: { initialVi
   );
 }
 
-function LandingPage({ onJoin, onCreate }: { onJoin: () => void; onCreate: () => void }) {
+export function MarketingLanding() {
+  return <LandingPage joinLabel="View product demo" onJoin={() => { window.location.href = "/demo"; }} onCreate={() => { window.location.href = "/organizer"; }} />;
+}
+
+function LandingPage({ onJoin, onCreate, joinLabel = "Join live room" }: { onJoin: () => void; onCreate: () => void; joinLabel?: string }) {
   return (
     <div className="landing">
       <header className="landing-nav">
@@ -958,7 +968,7 @@ function LandingPage({ onJoin, onCreate }: { onJoin: () => void; onCreate: () =>
             <h1>Meet the people<br />who are already <em>here.</em></h1>
             <p>Join a live social room for your event, venue or party. No GPS. No endless feed. Just the people sharing this moment.</p>
             <div className="button-row">
-              <button className="button button--lime" onClick={onJoin}>Join live room <ArrowRight size={18} /></button>
+              <button className="button button--lime" onClick={onJoin}>{joinLabel} <ArrowRight size={18} /></button>
               <button className="button button--ghost" onClick={onCreate}>Create a room</button>
             </div>
             <div className="trust-line"><ShieldCheck size={17} /><span>Opt-in visibility</span><span>·</span><span>18+ only</span><span>·</span><span>No location tracking</span></div>

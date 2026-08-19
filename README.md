@@ -1,99 +1,104 @@
-# HERE — IRL social discovery MVP
+# HERE — Sprint 1 Real Foundation
 
-HERE turns a physical event or venue into a temporary digital room. Guests scan a QR, opt into visibility, privately express interest, match only when interest is mutual, and can then chat in realtime.
+HERE is a mobile-first social discovery web app for physical events. Sprint 1 implements only the durable foundation:
 
-The repository contains two deliberately connected modes:
-
-- **Production mode:** Supabase Auth, PostgreSQL, Row Level Security, Storage and Realtime. Enabled when the public Supabase environment variables are present.
-- **Demo mode:** a complete interactive product walkthrough with realistic data when no Supabase keys are configured. It lets reviewers test the experience immediately; it is not used as production persistence.
+**Organizer creates a real Room → QR opens `/r/{join_code}` → guest receives a persistent anonymous session → creates a minimal profile → joins the Room → real participants survive refresh and remain isolated by Room.**
 
 ## Product routes
 
-| Route | Purpose |
+| Route | Current behavior |
 | --- | --- |
-| `/` | Public landing page |
-| `/r/friday-social` | QR destination and join flow |
-| `/demo` | Signed-in guest experience |
-| `/organizer` | Organizer dashboard, room creation and QR export |
+| `/` | Marketing landing page with a link to the isolated demo |
+| `/r/{join_code}` | Real Supabase Room flow; never falls back to fake people |
+| `/organizer` | Minimal protected organizer flow for real Rooms and QR codes |
+| `/demo` | Legacy interactive mock experience, explicitly isolated from production routes |
 
-The core flow is implemented end to end. On phones it is intentionally shorter: **open room → photo + first name → opt-in discovery**. Purpose, interests, bio and date of birth are optional profile settings. Organizer room closing stops discovery and new interests while matches and chats remain available.
+Sprint 1 does **not** implement Drops, Fair Exposure, Interests, Matches, Chat, payments, Premium, recommendations, or social login.
 
-## Local setup
+## Stack
 
-Requirements: Node.js 22.13+ and a Supabase project.
-
-1. Install dependencies with `pnpm install` (or `npm install`).
-2. Copy `.env.example` to `.env.local`.
-3. Add your Supabase project URL and anonymous key.
-4. Apply `supabase/migrations/202608110001_initial.sql` in the Supabase SQL editor or with `supabase db push`.
-5. Optionally apply `supabase/seed.sql` for the demo organizer, 17 guest profiles, interests, matches and chats.
-6. Enable Anonymous Sign-Ins in Supabase Authentication for the one-step mobile guest flow. Enable Google in Providers for the full desktop sign-in flow, and add `http://localhost:5173/**` as an allowed redirect URL.
-7. Run `pnpm dev` and open the printed local URL.
-
-Without step 2, the app intentionally starts in interactive demo mode. Guests still enter with only a photo and first name; no email or password is requested.
-
-### Demo Supabase accounts
-
-- Organizer: `organizer@here.demo` / `demo-password`
-- Guest: `maya@here.demo` / `demo-password`
-
-The seed also adds `noah@here.demo`, `sofia@here.demo` and the other visible profiles with the same password.
+- Vinext/Next.js-compatible App Router, React 19 and TypeScript;
+- `@supabase/supabase-js` and `@supabase/ssr`;
+- Supabase Auth anonymous users for guests;
+- PostgreSQL with RLS for profiles, Rooms and memberships;
+- private Supabase Storage bucket for avatars;
+- QR generation with `qrcode`.
 
 ## Supabase setup
 
-The migration creates:
-
-- `profiles`, `rooms`, `room_members`, `interests`, `matches`, `messages`, `blocks`, and `reports`;
-- foreign keys, chronological and discovery indexes, unique memberships/interests/matches, and safe cascades;
-- an 18+ database gate;
-- `profile-photos` and `room-covers` Storage buckets with owner-folder write policies;
-- Realtime publication for `messages`;
-- RLS on every application table;
-- security-definer functions for join, visibility, analytics and interest → match.
-
-Important: the client never supplies a trusted user identity. `auth.uid()` is used inside policies/functions, matches have no direct client insert policy, and duplicate pair creation is prevented by canonical ordering plus a database constraint.
-
-## Guest and organizer access
-
-Guests use a lightweight anonymous Supabase session and enter with a photo and first name. Email, password and social login are not part of the guest flow. Organizer access remains separate and can use Google or email authentication to protect room management.
-
-## Deployment to Vercel
-
-1. Import this directory into Vercel.
-2. Set the framework preset to Next.js and use the repository’s build command.
-3. Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `NEXT_PUBLIC_APP_URL` in Vercel project settings.
-4. Add the production domain and `https://your-domain.com/**` to Supabase Auth redirect URLs.
-5. Deploy, then create a room and test its downloaded QR on another phone.
-
-No service-role key belongs in the browser or Vercel public environment variables.
-
-## Quality checks
-
-Run:
+1. Create a Supabase project.
+2. Apply `supabase/migrations/202608110001_initial.sql` to a fresh project.
+3. In Supabase Authentication settings, enable **Allow anonymous sign-ins**.
+4. Create one permanent email/password Auth user for organizer development access. There is no organizer signup in the app.
+5. Copy `.env.example` to `.env.local` and set:
 
 ```text
-pnpm lint
-pnpm typecheck
-pnpm build
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-## MVP limitations
+Never place a service-role key in this project or any browser environment variable.
 
-- Reports are recorded but there is no moderator console yet.
-- Email confirmation behavior depends on the chosen Supabase Auth settings.
-- Demo state resets on reload; production state is durable in Supabase.
-- Demo profile photography uses external image URLs; a production launch should proxy or replace those seed assets.
-- Analytics are live counts, not a historical BI system.
-- There is no push notification, typing indicator, read-receipt UI, or offline message queue.
+## Guest flow
 
-## Recommended V2
+The public join code is a server-generated 24-character cryptographic token. Opening `/r/{join_code}` resolves only the safe Room fields through an RPC. A closed Room stops before Auth and displays `This Room has ended.`
 
-- Moderator review queue and venue-level ban lists.
-- Apple sign-in, verified organizer accounts and team roles.
-- Push notifications and optional “where to meet” prompts.
-- Rate limits, abuse heuristics and content moderation.
-- Safer segmented age cohorts if audiences below 21 are introduced.
-- Room templates, organizer teams, branded posters and scheduled lifecycle changes.
-- Privacy-preserving recommendation ranking based on declared intent—not location tracking.
+For an open Room:
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for boundaries, trust decisions and the acceptance flow.
+1. the browser restores its Supabase cookie session or calls `signInAnonymously()` once;
+2. an existing profile is reused;
+3. a new guest completes exactly three onboarding screens: photo, first name, and 18+ confirmation;
+4. the photo is uploaded to the private `avatars/{user_id}/...` folder and only its path is stored in PostgreSQL;
+5. `join_room_by_code` creates or reactivates the `(room_id, user_id)` membership and updates `last_seen_at`;
+6. the Room screen reads only real memberships and minimal shared profile fields.
+
+The Room Wall shows a maximum of 12 participant thumbnails. It has no Interest, Match, Drop or Chat controls.
+
+## Organizer flow
+
+`/organizer` accepts only a pre-created permanent Supabase Auth account. Anonymous JWTs are rejected by the Room insert/update policies. The organizer can:
+
+- create a Room with name, venue, city, start and end time;
+- receive its real `/r/{join_code}` link and QR;
+- download the QR PNG or copy the link;
+- see only aggregate joined count;
+- close the Room.
+
+The organizer does not receive direct access to individual memberships, private user interaction data, or future chats.
+
+## RLS summary
+
+- `profiles`: direct reads/inserts/updates are limited to the owner; active Room members receive only `id`, `display_name` and `avatar_path` through the narrow Room Wall RPC;
+- `rooms`: owner read/update; participants read only after membership; public QR resolution is a narrow safe-fields RPC;
+- `room_members`: direct inserts are not granted; the authenticated user joins only through the idempotent security-definer RPC; members can read memberships only in Rooms they belong to and update only their own presence columns;
+- `storage.objects`: avatar reads are limited to the owner or active co-members; writes must target the authenticated user’s own folder.
+
+No private user table contains `using (true)` policies.
+
+## Development
+
+```text
+pnpm install
+pnpm dev
+pnpm typecheck
+pnpm lint
+pnpm build
+pnpm test
+```
+
+The regular test command runs render/security contract tests. Full A–G integration tests require a configured disposable Supabase project:
+
+```text
+HERE_TEST_SUPABASE_URL=...
+HERE_TEST_SUPABASE_PUBLISHABLE_KEY=...
+HERE_TEST_ORGANIZER_EMAIL=...
+HERE_TEST_ORGANIZER_PASSWORD=...
+pnpm test:acceptance
+```
+
+## Current boundary
+
+The repository intentionally contains no production seed users or fake Rooms. The legacy mock people, Interests, Matches and Chat remain accessible only on `/demo` for design reference. They are not queried or inserted by the real QR and organizer routes.
+
+See `docs/ARCHITECTURE.md` for the trust boundaries and future compatibility notes.

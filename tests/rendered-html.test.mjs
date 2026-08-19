@@ -23,34 +23,59 @@ test("server-renders the product landing page", async () => {
   const html = await response.text();
   assert.match(html, /Meet the people/);
   assert.match(html, /who are already/);
-  assert.match(html, /Join live room/);
+  assert.match(html, /View product demo/);
   assert.match(html, /Turn your event into/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
-test("keeps the QR destination and organizer dashboard renderable", async () => {
+test("keeps real QR and organizer routes separate from demo data", async () => {
   const [roomResponse, organizerResponse] = await Promise.all([
     render("/r/friday-social"),
     render("/organizer"),
   ]);
   assert.equal(roomResponse.status, 200);
   assert.equal(organizerResponse.status, 200);
-  assert.match(await roomResponse.text(), /Join room/i);
+  const roomHtml = await roomResponse.text();
+  assert.match(roomHtml, /Opening Room/i);
+  assert.doesNotMatch(roomHtml, /Noah|Sofia|93 visible/i);
   const organizerHtml = await organizerResponse.text();
-  assert.match(organizerHtml, /My rooms/);
-  assert.match(organizerHtml, /Your QR is ready/);
+  assert.match(organizerHtml, /Opening organizer space/i);
+  assert.doesNotMatch(organizerHtml, /142|287|Friday Social Night/i);
 });
 
-test("database migration enforces the core trust boundaries", async () => {
+test("Sprint 1 migration enforces the foundation trust boundaries", async () => {
   const migration = await readFile(
     new URL("../supabase/migrations/202608110001_initial.sql", import.meta.url),
     "utf8",
   );
-  assert.match(migration, /alter table public\.messages enable row level security/i);
-  assert.match(migration, /create or replace function public\.send_interest/i);
-  assert.match(migration, /new\.sender_id := auth\.uid\(\)/i);
-  assert.match(migration, /unique \(room_id, user_a, user_b\)/i);
-  assert.match(migration, /room\.status = 'LIVE'/i);
-  assert.match(migration, /alter publication supabase_realtime add table public\.messages/i);
-  assert.doesNotMatch(migration, /create policy [^\n]*matches[^\n]* for insert/i);
+  assert.match(migration, /create table public\.profiles/i);
+  assert.match(migration, /create table public\.rooms/i);
+  assert.match(migration, /create table public\.room_members/i);
+  assert.match(migration, /primary key \(room_id, user_id\)/i);
+  assert.match(migration, /extensions\.gen_random_bytes\(12\)/i);
+  assert.match(migration, /function public\.rooms_set_join_code\(\)[\s\S]*security definer/i);
+  assert.match(migration, /alter column join_code drop default/i);
+  assert.match(migration, /signInAnonymously|anonymous/gi);
+  assert.match(migration, /create or replace function public\.join_room_by_code/i);
+  assert.match(migration, /create or replace function public\.room_wall_profiles/i);
+  assert.match(migration, /create policy "profiles_read_self"/i);
+  assert.match(migration, /on conflict \(room_id, user_id\) do update/i);
+  assert.match(migration, /target_room\.status = 'closed'/i);
+  assert.match(migration, /profiles_update_self/i);
+  assert.match(migration, /memberships_update_self/i);
+  assert.match(migration, /rooms_update_owner/i);
+  assert.match(migration, /'avatars'[\s\S]*false,[\s\S]*5242880/i);
+  assert.doesNotMatch(migration, /create table public\.(interests|matches|messages)/i);
+  assert.doesNotMatch(migration, /using\s*\(\s*true\s*\)/i);
+});
+
+test("client bundle source never references a service role key", async () => {
+  const files = await Promise.all([
+    "../app/components/RoomJoinApp.tsx",
+    "../app/components/OrganizerFoundationApp.tsx",
+    "../lib/supabase/client.ts",
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  assert.doesNotMatch(files.join("\n"), /service[_-]?role/i);
+  assert.match(files[0], /signInAnonymously\(\)/);
+  assert.match(files[0], /join_room_by_code/);
 });
