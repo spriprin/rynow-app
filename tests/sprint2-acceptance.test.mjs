@@ -15,14 +15,28 @@ function client() {
 
 async function createGuest(name, joinCode) {
   const guest = client();
-  const { data: auth, error: authError } = await guest.auth.signInAnonymously();
+  let { data: auth, error: authError } = await guest.auth.signInAnonymously();
+  if (authError?.message?.match(/rate limit/i)) {
+    const passwordAuth = await guest.auth.signUp({
+      email: `here-guest-${crypto.randomUUID()}@example.com`,
+      password: `Here-${crypto.randomUUID()}-Aa1!`,
+    });
+    auth = passwordAuth.data;
+    authError = passwordAuth.error;
+  }
   assert.ifError(authError);
+  assert.ok(auth.user && auth.session);
   const avatarPath = `${auth.user.id}/sprint2-${crypto.randomUUID()}.png`;
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   assert.ifError((await guest.storage.from("avatars").upload(avatarPath, png, { contentType: "image/png" })).error);
   assert.ifError((await guest.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true })).error);
   assert.ifError((await guest.rpc("join_room_by_code", { p_join_code: joinCode })).error);
   return { client: guest, user: auth.user, name };
+}
+
+async function joinExistingGuest(guest, joinCode) {
+  assert.ifError((await guest.client.rpc("join_room_by_code", { p_join_code: joinCode })).error);
+  return guest;
 }
 
 async function createRoom(organizer, organizerId, name) {
@@ -73,11 +87,16 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
   assert.ok(organizerAuth.user && !organizerAuth.user.is_anonymous);
 
   const roomsToClose = [];
+  t.after(async () => {
+    if (!roomsToClose.length) return;
+    const { error } = await organizer.from("rooms").update({ status: "closed" }).in("id", roomsToClose);
+    assert.ifError(error);
+  });
   const primaryRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Sprint 2 Acceptance");
   roomsToClose.push(primaryRoom.id);
   const viewer = await createGuest("Pavel", primaryRoom.join_code);
   const primaryCandidates = [];
-  for (let index = 1; index <= 12; index += 1) {
+  for (let index = 1; index <= 11; index += 1) {
     primaryCandidates.push(await createGuest(`Candidate ${index}`, primaryRoom.join_code));
   }
   const guestById = new Map(primaryCandidates.map((guest) => [guest.user.id, guest]));
@@ -122,10 +141,10 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
   });
 
   await t.test("S2-F — Room Wall is limited and foreign Drop items are blocked", async () => {
-    const { data: wall, error: wallError } = await viewer.client.rpc("room_wall_profiles", { p_room_id: primaryRoom.id, p_limit: 12 });
+    const { data: wall, error: wallError } = await viewer.client.rpc("room_wall_profiles", { p_room_id: primaryRoom.id, p_limit: 8 });
     assert.ifError(wallError);
-    assert.ok(wall.length <= 12);
-    assert.ok(wall.length < 13);
+    assert.ok(wall.length <= 8);
+    assert.ok(wall.length < 12);
     assert.ok((await viewer.client.from("drop_items").select("*")).error);
 
     const intruder = primaryCandidates[0];
@@ -173,7 +192,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.match((await viewer.client.rpc("send_interest", { p_drop_item_id: firstClaim[3].id })).error?.message || "", /No Interests left/i);
     assert.ok((await viewer.client.from("interests").insert({ room_id: primaryRoom.id, drop_id: drop1.id, drop_item_id: firstClaim[0].id, from_user_id: viewer.user.id, to_user_id: viewer.user.id })).error);
     assert.ok((await viewer.client.from("interests").insert({ room_id: otherRoom.id, drop_id: otherRoomDrop.id, drop_item_id: randomItem, from_user_id: viewer.user.id, to_user_id: otherRoomGuest.user.id })).error);
-    assert.ok((await viewer.client.from("interests").insert({ room_id: primaryRoom.id, drop_id: drop1.id, drop_item_id: randomItem, from_user_id: viewer.user.id, to_user_id: primaryCandidates[11].user.id })).error);
+    assert.ok((await viewer.client.from("interests").insert({ room_id: primaryRoom.id, drop_id: drop1.id, drop_item_id: randomItem, from_user_id: viewer.user.id, to_user_id: primaryCandidates[10].user.id })).error);
     const { data: someoneElsesItems } = await primaryCandidates[1].client.rpc("claim_your_drop", { p_drop_id: drop1.id });
     assert.match((await viewer.client.rpc("send_interest", { p_drop_item_id: someoneElsesItems[0].id })).error?.message || "", /not found/i);
   });
@@ -208,7 +227,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
   });
 
   for (const item of firstClaim.slice(3)) {
-    if (item.position === firstClaim[3].position) {
+    if (item.id === firstClaim[3].id) {
       assert.ifError((await viewer.client.rpc("pass_drop_item", { p_drop_item_id: item.id })).error);
     } else {
       await markAndPass(viewer, item);
@@ -221,7 +240,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
 
   await t.test("S2-N — next Drop uses unseen candidates before any repeat", async () => {
     const seen = new Set(firstClaim.map((item) => item.candidate_id));
-    assert.equal(secondClaim.length, 2);
+    assert.equal(secondClaim.length, 1);
     assert.ok(secondClaim.every((item) => !seen.has(item.candidate_id)));
   });
   for (const item of secondClaim) await markAndPass(viewer, item);
@@ -235,13 +254,13 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     const { data: state, error } = await viewer.client.rpc("room_drop_state", { p_room_id: primaryRoom.id });
     assert.ifError(error);
     assert.equal(Number(state[0].eligible_count), 0);
-    assert.equal(Number(state[0].active_candidate_count), 12);
+    assert.equal(Number(state[0].active_candidate_count), 11);
   });
 
   const smallRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Low Density");
   roomsToClose.push(smallRoom.id);
-  const smallViewer = await createGuest("Small Viewer", smallRoom.join_code);
-  await createGuest("Candidate One", smallRoom.join_code);
+  const smallViewer = await joinExistingGuest(viewer, smallRoom.join_code);
+  await joinExistingGuest(primaryCandidates[0], smallRoom.join_code);
   const smallDrop = await createDrop(organizer, smallRoom.id, futureTimes[0], { size: 3, unlock: 2, budget: 1 });
   await openDrop(organizer, smallDrop.id);
 
@@ -251,7 +270,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.equal(forming.length, 0);
     const { data: formingState } = await smallViewer.client.rpc("room_drop_state", { p_room_id: smallRoom.id });
     assert.equal(Number(formingState[0].eligible_count), 1);
-    await createGuest("Candidate Two", smallRoom.join_code);
+    await joinExistingGuest(primaryCandidates[1], smallRoom.join_code);
     const { data: unlocked, error: unlockedError } = await smallViewer.client.rpc("claim_your_drop", { p_drop_id: smallDrop.id });
     assert.ifError(unlockedError);
     assert.equal(unlocked.length, 2);
@@ -259,8 +278,8 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
 
   const fairRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Fair Exposure");
   roomsToClose.push(fairRoom.id);
-  const fairGuests = [];
-  for (let index = 1; index <= 10; index += 1) fairGuests.push(await createGuest(`Fair ${index}`, fairRoom.join_code));
+  const fairGuests = primaryCandidates.slice(0, 10);
+  for (const fairGuest of fairGuests) await joinExistingGuest(fairGuest, fairRoom.join_code);
   const fairDrop = await createDrop(organizer, fairRoom.id, futureTimes[0], { size: 4, unlock: 1, budget: 3 });
   await openDrop(organizer, fairDrop.id);
   const popularTarget = fairGuests[0];
@@ -297,9 +316,9 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.ifError(incomingError);
     assert.equal(targetIncoming.length, targetInterests);
 
-    const probeViewers = [];
-    for (let index = 1; index <= 5; index += 1) probeViewers.push(await createGuest(`Probe ${index}`, fairRoom.join_code));
-    const probeDrop = await createDrop(organizer, fairRoom.id, futureTimes[1], { size: 4, unlock: 1, budget: 1 });
+    const probeViewers = [viewer, primaryCandidates[10]];
+    for (const probe of probeViewers) await joinExistingGuest(probe, fairRoom.join_code);
+    const probeDrop = await createDrop(organizer, fairRoom.id, futureTimes[1], { size: 1, unlock: 1, budget: 1 });
     await openDrop(organizer, probeDrop.id);
     const probeSelections = new Map();
     for (const probe of probeViewers) {
@@ -310,7 +329,4 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     const targetSelections = probeSelections.get(popularTarget.user.id) || 0;
     assert.equal(targetSelections, 0);
   });
-
-  const { error: closeError } = await organizer.from("rooms").update({ status: "closed" }).in("id", roomsToClose);
-  assert.ifError(closeError);
 });

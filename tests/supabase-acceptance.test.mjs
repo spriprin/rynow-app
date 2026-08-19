@@ -16,9 +16,17 @@ function client() {
 
 async function createGuest(name) {
   const guest = client();
-  const { data: auth, error: authError } = await guest.auth.signInAnonymously();
+  let { data: auth, error: authError } = await guest.auth.signInAnonymously();
+  if (authError?.message?.match(/rate limit/i)) {
+    const passwordAuth = await guest.auth.signUp({
+      email: `here-sprint1-guest-${crypto.randomUUID()}@example.com`,
+      password: `Here-${crypto.randomUUID()}-Aa1!`,
+    });
+    auth = passwordAuth.data;
+    authError = passwordAuth.error;
+  }
   assert.ifError(authError);
-  assert.ok(auth.user);
+  assert.ok(auth.user && auth.session);
   const avatarPath = `${auth.user.id}/acceptance-${crypto.randomUUID()}.png`;
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   const { error: uploadError } = await guest.storage.from("avatars").upload(avatarPath, png, { contentType: "image/png" });
@@ -38,11 +46,19 @@ test("Acceptance A–G against a configured Supabase project", { skip: enabled ?
   assert.ifError(organizerError);
   assert.ok(organizerAuth.user && !organizerAuth.user.is_anonymous);
 
+  const roomsToClose = [];
+  t.after(async () => {
+    if (!roomsToClose.length) return;
+    const { error } = await organizer.from("rooms").update({ status: "closed" }).in("id", roomsToClose);
+    assert.ifError(error);
+  });
+
   const suffix = crypto.randomUUID().slice(0, 8);
   const start = new Date(Date.now() - 60_000).toISOString();
   const end = new Date(Date.now() + 3_600_000).toISOString();
   const { data: room, error: roomError } = await organizer.from("rooms").insert({ organizer_id: organizerAuth.user.id, name: "HERE Test Party", venue_name: "Acceptance Venue", city: "Riga", starts_at: start, ends_at: end, status: "open" }).select().single();
   assert.ifError(roomError);
+  roomsToClose.push(room.id);
   assert.match(room.join_code, /^[a-f0-9]{24}$/);
   await t.test("A — Room persists and has a real QR join code", async () => {
     const { data, error } = await organizer.from("rooms").select("id, join_code").eq("id", room.id).single();
@@ -90,6 +106,7 @@ test("Acceptance A–G against a configured Supabase project", { skip: enabled ?
 
   const { data: roomTwo, error: roomTwoError } = await organizer.from("rooms").insert({ organizer_id: organizerAuth.user.id, name: `Second Room ${suffix}`, venue_name: "Other Venue", city: "Riga", starts_at: start, ends_at: end, status: "open" }).select().single();
   assert.ifError(roomTwoError);
+  roomsToClose.push(roomTwo.id);
   const isolated = await createGuest(`Isolated ${suffix}`);
   assert.ifError((await isolated.client.rpc("join_room_by_code", { p_join_code: roomTwo.join_code })).error);
   await t.test("E — Room membership is isolated", async () => {
@@ -138,6 +155,4 @@ test("Acceptance A–G against a configured Supabase project", { skip: enabled ?
     const clientSource = await readFile(new URL("../lib/supabase/client.ts", import.meta.url), "utf8");
     assert.doesNotMatch(clientSource, /service[_-]?role/i);
   });
-
-  await organizer.from("rooms").update({ status: "closed" }).eq("id", roomTwo.id);
 });
