@@ -64,7 +64,7 @@ test("Sprint 2 live acceptance — Drops, Fair Exposure and Interests", { skip: 
     assert.ok(firstClaim.every((item) => item.first_seen_at === null));
     const { data: repeated, error } = await viewer.client.rpc("claim_your_drop", { p_drop_id: drop.id });
     assert.ifError(error);
-    assert.deepEqual(repeated.map((item) => [item.id, item.candidate_id, item.position]), firstClaim.map((item) => [item.id, item.candidate_id, item.position]));
+    assert.deepEqual(repeated.map((item) => [item.id, item.candidate_id, item.item_position]), firstClaim.map((item) => [item.id, item.candidate_id, item.item_position]));
   });
 
   const firstItem = firstClaim[0];

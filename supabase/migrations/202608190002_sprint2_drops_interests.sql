@@ -1,7 +1,7 @@
 -- HERE Sprint 2: Drops, persistent Your Drop assignments, Fair Exposure and visible Interests.
 -- Additive migration only. Sprint 1 foundation tables and policies remain unchanged.
 
-create table public.drops (
+create table if not exists public.drops (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null references public.rooms(id) on delete cascade,
   sequence_number integer not null,
@@ -22,7 +22,7 @@ create table public.drops (
   )
 );
 
-create table public.drop_items (
+create table if not exists public.drop_items (
   id uuid primary key default gen_random_uuid(),
   drop_id uuid not null,
   room_id uuid not null,
@@ -54,7 +54,7 @@ create table public.drop_items (
     unique (id, drop_id, room_id, viewer_id, candidate_id)
 );
 
-create table public.interests (
+create table if not exists public.interests (
   id uuid primary key default gen_random_uuid(),
   room_id uuid not null,
   drop_id uuid not null,
@@ -71,18 +71,18 @@ create table public.interests (
   constraint interests_one_pair_per_room unique (room_id, from_user_id, to_user_id)
 );
 
-create index drops_room_schedule_idx
+create index if not exists drops_room_schedule_idx
   on public.drops (room_id, scheduled_at, sequence_number);
-create index drop_items_viewer_progress_idx
+create index if not exists drop_items_viewer_progress_idx
   on public.drop_items (room_id, viewer_id, drop_id, action, position);
-create index drop_items_candidate_exposure_idx
+create index if not exists drop_items_candidate_exposure_idx
   on public.drop_items (room_id, candidate_id, first_seen_at);
-create index drop_items_pending_idx
+create index if not exists drop_items_pending_idx
   on public.drop_items (drop_id, candidate_id)
   where first_seen_at is null;
-create index interests_recipient_room_idx
+create index if not exists interests_recipient_room_idx
   on public.interests (to_user_id, room_id, created_at desc);
-create index interests_sender_drop_idx
+create index if not exists interests_sender_drop_idx
   on public.interests (from_user_id, drop_id);
 
 create or replace function public.require_room_organizer(p_room_id uuid)
@@ -326,7 +326,7 @@ $$;
 create or replace function public.claim_your_drop(p_drop_id uuid)
 returns table (
   id uuid,
-  position integer,
+  item_position integer,
   first_seen_at timestamptz,
   action text,
   candidate_id uuid,
@@ -438,7 +438,7 @@ begin
   end if;
 
   return query
-  select di.id, di.position, di.first_seen_at, di.action,
+  select di.id, di.position as item_position, di.first_seen_at, di.action,
          di.candidate_id, p.display_name, p.avatar_path
   from public.drop_items di
   join public.profiles p on p.id = di.candidate_id
@@ -597,6 +597,7 @@ alter table public.drops enable row level security;
 alter table public.drop_items enable row level security;
 alter table public.interests enable row level security;
 
+drop policy if exists "drops_read_owner_or_member" on public.drops;
 create policy "drops_read_owner_or_member"
 on public.drops for select
 to authenticated

@@ -9,7 +9,7 @@ import type { DropItem, DropItemAction, FoundationProfile, FoundationRoom, Incom
 type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "onboarding" | "ready" | "room" | "error";
 type OnboardingStep = 1 | 2 | 3;
 type RoomWallRpcRow = { id: string; display_name: string; avatar_path: string; joined_at: string };
-type DropItemRpcRow = { id: string; position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
+type DropItemRpcRow = { id: string; item_position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
 type IncomingInterestRpcRow = { interest_id: string; from_user_id: string; display_name: string; avatar_path: string; created_at: string };
 
 function initialScreenFor(room: FoundationRoom | null | undefined): Screen {
@@ -90,7 +90,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     if (itemsError) throw itemsError;
     const rows = (data || []) as DropItemRpcRow[];
     const urls = await signedUrlMap(rows.map((item) => item.avatar_path));
-    const items = rows.map((item) => ({ id: item.id, position: Number(item.position), firstSeenAt: item.first_seen_at, action: item.action, candidateId: item.candidate_id, displayName: item.display_name, avatarPath: item.avatar_path, avatarUrl: urls.get(item.avatar_path) || "" } satisfies DropItem));
+    const items = rows.map((item) => ({ id: item.id, position: Number(item.item_position), firstSeenAt: item.first_seen_at, action: item.action, candidateId: item.candidate_id, displayName: item.display_name, avatarPath: item.avatar_path, avatarUrl: urls.get(item.avatar_path) || "" } satisfies DropItem));
     setDropItems(items);
     return items;
   }, []);

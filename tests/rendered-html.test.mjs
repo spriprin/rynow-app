@@ -78,11 +78,12 @@ test("Sprint 2 is additive, server-generated and popularity-neutral", async () =
     new URL("../supabase/migrations/202608190002_sprint2_drops_interests.sql", import.meta.url),
     "utf8",
   );
-  assert.match(migration, /create table public\.drops/i);
-  assert.match(migration, /create table public\.drop_items/i);
-  assert.match(migration, /create table public\.interests/i);
+  assert.match(migration, /create table(?: if not exists)? public\.drops/i);
+  assert.match(migration, /create table(?: if not exists)? public\.drop_items/i);
+  assert.match(migration, /create table(?: if not exists)? public\.interests/i);
   assert.match(migration, /unique \(room_id, from_user_id, to_user_id\)/i);
   assert.match(migration, /create or replace function public\.claim_your_drop\(p_drop_id uuid\)/i);
+  assert.match(migration, /returns table \([\s\S]*?item_position integer/i);
   assert.match(migration, /current_user_id uuid := auth\.uid\(\)/i);
   assert.match(migration, /first_seen_at = coalesce\(first_seen_at, clock_timestamp\(\)\)/i);
   assert.match(migration, /pending_count/i);
