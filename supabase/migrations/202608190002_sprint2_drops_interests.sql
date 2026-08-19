@@ -578,19 +578,52 @@ returns table (
   avatar_path text,
   created_at timestamptz
 )
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  if not public.is_room_member(p_room_id, auth.uid()) then
+    raise exception 'Room access required';
+  end if;
+
+  return query
   select i.id, i.from_user_id, p.display_name, p.avatar_path, i.created_at
   from public.interests i
   join public.profiles p on p.id = i.from_user_id
   where i.room_id = p_room_id
     and i.to_user_id = auth.uid()
-    and public.is_room_member(p_room_id, auth.uid())
   order by i.created_at desc
   limit 50;
+end;
+$$;
+
+create or replace function public.sent_interests(p_room_id uuid)
+returns table (
+  interest_id uuid,
+  to_user_id uuid,
+  created_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  if not public.is_room_member(p_room_id, auth.uid()) then
+    raise exception 'Room access required';
+  end if;
+
+  return query
+  select i.id, i.to_user_id, i.created_at
+  from public.interests i
+  where i.room_id = p_room_id
+    and i.from_user_id = auth.uid()
+  order by i.created_at desc;
+end;
 $$;
 
 alter table public.drops enable row level security;
@@ -610,8 +643,9 @@ using (
 );
 
 -- drop_items and interests intentionally have no direct table policies.
--- Their narrow SECURITY DEFINER RPCs expose only the authenticated viewer's
--- assigned cards or the authenticated recipient's incoming Interests.
+-- Narrow SECURITY DEFINER RPCs expose only the authenticated viewer's assigned
+-- cards, the authenticated recipient's incoming Interests, or the sender's own
+-- sent Interest records. Candidates cannot inspect who received their profile.
 revoke all on public.drops from anon, authenticated;
 revoke all on public.drop_items from anon, authenticated;
 revoke all on public.interests from anon, authenticated;
@@ -627,6 +661,7 @@ revoke all on function public.mark_drop_item_seen(uuid) from public;
 revoke all on function public.pass_drop_item(uuid) from public;
 revoke all on function public.send_interest(uuid) from public;
 revoke all on function public.interested_in_you(uuid) from public;
+revoke all on function public.sent_interests(uuid) from public;
 
 grant execute on function public.create_room_drop(uuid, timestamptz, integer, integer, integer) to authenticated;
 grant execute on function public.delete_future_drop(uuid) to authenticated;
@@ -637,3 +672,4 @@ grant execute on function public.mark_drop_item_seen(uuid) to authenticated;
 grant execute on function public.pass_drop_item(uuid) to authenticated;
 grant execute on function public.send_interest(uuid) to authenticated;
 grant execute on function public.interested_in_you(uuid) to authenticated;
+grant execute on function public.sent_interests(uuid) to authenticated;

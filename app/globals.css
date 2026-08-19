@@ -632,15 +632,23 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
 .drop-complete > svg { width: 48px; height: 48px; margin-bottom: 20px; padding: 12px; border-radius: 50%; background: var(--lime); }
 .drop-complete h2 { margin: 10px 0 6px; font-size: 40px; letter-spacing: -.05em; }
 .drop-complete p { margin: 0 0 22px; color: var(--muted); }
-.interested-in-you { padding: 28px; border: 1px solid rgba(216,255,82,.24); background: rgba(216,255,82,.07); }
-.interested-in-you__heading { display: flex; align-items: center; gap: 13px; }
-.interested-in-you__heading > svg { color: var(--lime); }
-.interested-in-you__heading .eyebrow { color: var(--lime); }
-.interested-in-you__heading h2 { margin: 5px 0 0; font-size: 26px; letter-spacing: -.04em; }
+.interested-in-you { padding: 10px 28px 26px; border: 1px solid rgba(216,255,82,.24); background: rgba(216,255,82,.07); }
+.interested-in-you__toggle { width: 100%; min-height: 68px; padding: 0; border: 0; color: white; background: transparent; display: flex; align-items: center; justify-content: space-between; text-align: left; }
+.interested-in-you__toggle > span { display: flex; align-items: center; gap: 11px; }
+.interested-in-you__toggle > span:first-child svg { color: var(--lime); }
+.interested-in-you__toggle > span:last-child { min-width: 54px; justify-content: flex-end; color: var(--lime); font-size: 22px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.interested-in-you__toggle[aria-expanded="true"] > span:last-child svg { transform: rotate(90deg); }
+.interested-in-you__empty { margin: 4px 0 6px; color: rgba(255,255,255,.5); font-size: 12px; }
 .incoming-interest-list { margin-top: 22px; display: flex; gap: 14px; overflow-x: auto; }
-.incoming-interest-list article { min-width: 86px; display: grid; gap: 8px; justify-items: center; }
-.incoming-interest-list img, .incoming-interest-list article > span { width: 76px; height: 76px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; color: var(--ink); background: var(--lime); font-size: 24px; font-weight: 800; }
+.incoming-interest-list button { min-width: 86px; padding: 0; border: 0; color: white; background: transparent; display: grid; gap: 8px; justify-items: center; }
+.incoming-interest-list img, .incoming-interest-list button > span { width: 76px; height: 76px; border: 2px solid transparent; border-radius: 50%; object-fit: cover; display: grid; place-items: center; color: var(--ink); background: var(--lime); font-size: 24px; font-weight: 800; }
+.incoming-interest-list button:hover img, .incoming-interest-list button:focus-visible img, .incoming-interest-list button:hover > span, .incoming-interest-list button:focus-visible > span { border-color: var(--lime); }
 .incoming-interest-list strong { max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.incoming-profile { position: relative; margin-top: 24px; padding: 18px; border-radius: 18px; color: var(--ink); background: var(--paper); display: grid; grid-template-columns: 118px 1fr auto; align-items: center; gap: 20px; }
+.incoming-profile > img, .incoming-profile > span { width: 118px; height: 142px; border-radius: 14px; object-fit: cover; display: grid; place-items: center; background: var(--lime); font-size: 42px; font-weight: 850; }
+.incoming-profile .eyebrow { color: #79883c; }
+.incoming-profile h2 { margin: 7px 0 5px; font-size: 34px; letter-spacing: -.05em; }
+.incoming-profile p { margin: 0; color: var(--muted); font-size: 12px; }
 
 .organizer-auth { min-height: 100svh; display: grid; grid-template-columns: 1fr 1fr; }
 .organizer-auth > section { padding: 46px 7vw; color: white; background: radial-gradient(circle at 25% 25%, rgba(216,255,82,.18), transparent 31%), var(--ink); display: flex; flex-direction: column; justify-content: center; }
@@ -874,8 +882,10 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
   .drop-profile-card__copy { padding: 24px 20px 15px; }
   .drop-profile-card__copy h2 { font-size: 46px; }
   .drop-profile-card__actions { padding: 12px 20px 20px; grid-template-columns: 1fr 1.25fr; }
-  .interested-in-you { padding: 20px 16px; }
-  .interested-in-you__heading h2 { font-size: 22px; }
+  .interested-in-you { padding: 8px 16px 20px; }
+  .incoming-profile { grid-template-columns: 88px 1fr; gap: 14px; }
+  .incoming-profile > img, .incoming-profile > span { width: 88px; height: 108px; }
+  .incoming-profile > .icon-button { position: absolute; top: 10px; right: 10px; }
   .organizer-auth { grid-template-columns: 1fr; }
   .organizer-auth > section { min-height: 38svh; padding: 24px 20px 30px; }
   .organizer-auth > section > .brand { position: static; }

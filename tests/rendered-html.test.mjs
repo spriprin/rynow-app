@@ -90,6 +90,8 @@ test("Sprint 2 is additive, server-generated and popularity-neutral", async () =
   assert.match(migration, /create or replace function public\.send_interest\(p_drop_item_id uuid\)/i);
   assert.match(migration, /used_budget >= allowed_budget/i);
   assert.match(migration, /create or replace function public\.interested_in_you\(p_room_id uuid\)/i);
+  assert.match(migration, /create or replace function public\.sent_interests\(p_room_id uuid\)/i);
+  assert.match(migration, /i\.from_user_id = auth\.uid\(\)/i);
   assert.match(migration, /drop_items and interests intentionally have no direct table policies/i);
   assert.doesNotMatch(migration, /create table public\.(matches|messages)/i);
 
@@ -115,4 +117,6 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[0], /claim_your_drop/);
   assert.match(files[0], /mark_drop_item_seen/);
   assert.match(files[0], /Interested in You/i);
+  assert.match(files[0], /new Date\(target\)\.getTime\(\) > nowMs/);
+  assert.match(files[0], /aria-expanded=\{incomingOpen\}/);
 });

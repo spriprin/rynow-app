@@ -56,6 +56,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [dropState, setDropState] = useState<RoomDropState | null>(null);
   const [dropItems, setDropItems] = useState<DropItem[]>([]);
   const [incomingInterests, setIncomingInterests] = useState<IncomingInterest[]>([]);
+  const [incomingOpen, setIncomingOpen] = useState(false);
+  const [selectedIncoming, setSelectedIncoming] = useState<IncomingInterest | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [step, setStep] = useState<OnboardingStep>(1);
@@ -68,6 +70,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [dropError, setDropError] = useState("");
   const bootstrapStarted = useRef(false);
   const markingSeen = useRef(new Set<string>());
+  const zeroRequeryFor = useRef("");
 
   const loadWall = useCallback(async (roomId: string) => {
     const client = getSupabaseBrowserClient();
@@ -177,6 +180,14 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    const target = dropState?.next_scheduled_at;
+    if (screen !== "room" || !room || !target || new Date(target).getTime() > nowMs) return;
+    if (zeroRequeryFor.current === target) return;
+    zeroRequeryFor.current = target;
+    void loadDiscovery(room.id).catch(() => undefined);
+  }, [dropState?.next_scheduled_at, loadDiscovery, nowMs, room, screen]);
+
   const activeItem = useMemo(() => dropItems.find((item) => item.action === null) || null, [dropItems]);
   const interestsLeft = Math.max(0, Number(dropState?.interest_budget || 0) - Number(dropState?.interests_used || 0));
 
@@ -285,7 +296,107 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     const isClaimable = hasCurrentDrop && Number(dropState?.assigned_count || 0) === 0 && !isForming;
     const isComplete = hasCurrentDrop && Number(dropState?.assigned_count || 0) > 0 && Number(dropState?.remaining_count || 0) === 0;
 
-    return <main className="foundation-room-screen"><header><span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span><span className="foundation-live"><i />ROOM OPEN</span></header><section className="foundation-room-heading"><span className="eyebrow">HERE TONIGHT</span><h1>{joinedCount} people here</h1><p>{room.name} · {room.venue_name || room.city || "Tonight"}</p></section><section className="foundation-wall" aria-label="Room activity"><div className="foundation-wall__heading"><div><Users /><span>Room Wall</span></div><small>Real people · not a catalogue</small></div>{wall.length ? <div className="foundation-avatar-cloud" aria-label={`${wall.length} recent Room participants`}>{wall.map((person) => person.avatarUrl ? <img key={person.id} src={person.avatarUrl} alt="" /> : <span key={person.id}>{person.displayName.slice(0, 1)}</span>)}</div> : <div className="foundation-empty-wall"><Users /><strong>You’re first here.</strong><p>Other guests will appear after joining this exact Room.</p></div>}</section>{dropOpen && dropItems.length ? <section className="your-drop"><button className="back-link" onClick={() => setDropOpen(false)}><ArrowLeft size={17} />Room Wall</button><div className="your-drop__top"><span className="eyebrow">YOUR DROP</span><span>{activeItem ? `${activeItem.position} / ${dropItems.length}` : "Complete"}</span></div>{activeItem ? <article className="drop-profile-card"><div className="drop-profile-card__photo">{activeItem.avatarUrl ? <img src={activeItem.avatarUrl} alt="" /> : <span>{activeItem.displayName.slice(0, 1)}</span>}</div><div className="drop-profile-card__copy"><span>Same place. Right now.</span><h2>{activeItem.displayName}</h2><p>{interestsLeft} {interestsLeft === 1 ? "Interest" : "Interests"} left</p></div><div className="drop-profile-card__actions"><button className="button button--ghost" disabled={busy || !activeItem.firstSeenAt} onClick={() => actOnItem("passed")}>Next <ArrowRight size={17} /></button><button className="button button--lime" disabled={busy || !activeItem.firstSeenAt || interestsLeft === 0} onClick={() => actOnItem("interested")}><Sparkles size={17} />Interested</button></div></article> : <div className="drop-complete"><Check /><span className="eyebrow">DROP COMPLETE</span><h2>You’ve seen this Drop.</h2><p>New people may appear in the next one.</p><button className="button button--dark" onClick={() => setDropOpen(false)}>Back to Room</button></div>}{dropError && <p className="form-error">{dropError}</p>}</section> : <section className={`drop-status ${isClaimable ? "drop-status--live" : ""}`}><div>{isClaimable ? <Sparkles /> : <Clock3 />}</div>{isClaimable ? <><span className="eyebrow">DROP LIVE</span><h2>Your Drop is ready.</h2><p>A limited selection, balanced for fair opportunity.</p><button className="button button--dark" disabled={busy} onClick={openYourDrop}>Open Your Drop <ArrowRight size={18} /></button></> : Number(dropState?.assigned_count || 0) > 0 && !isComplete ? <><span className="eyebrow">YOUR DROP</span><h2>Continue where you left off.</h2><p>Your people and their order stay the same after refresh.</p><button className="button button--dark" onClick={() => setDropOpen(true)}>Continue Your Drop <ArrowRight size={18} /></button></> : isComplete ? <><span className="eyebrow">DROP COMPLETE</span><h2>You’ve seen this Drop.</h2><p>Stay in the Room for the next one.</p></> : hasSeenEveryone ? <><span className="eyebrow">CURRENTLY CAUGHT UP</span><h2>You’ve seen everyone currently available.</h2><p>New people may appear in the next Drop.</p></> : isForming ? <><span className="eyebrow">DROP LIVE</span><h2>Your Drop is forming.</h2><p>People are joining now.</p></> : dropState?.next_scheduled_at ? <><span className="eyebrow">NEXT DROP</span><h2 className="drop-countdown">{formatCountdown(dropState.next_scheduled_at, nowMs)}</h2><p>Stay present. Everyone’s Drop opens together.</p></> : <><span className="eyebrow">DROPS</span><h2>The next Drop will appear here.</h2><p>Keep an eye on the Room Wall.</p></>}{dropError && <p className="form-error">{dropError}</p>}</section>}{incomingInterests.length > 0 && <section className="interested-in-you"><div className="interested-in-you__heading"><Sparkles /><div><span className="eyebrow">INTERESTED IN YOU</span><h2>They noticed you here.</h2></div></div><div className="incoming-interest-list">{incomingInterests.map((person) => <article key={person.interestId}>{person.avatarUrl ? <img src={person.avatarUrl} alt="" /> : <span>{person.displayName.slice(0, 1)}</span>}<strong>{person.displayName}</strong></article>)}</div></section>}<p className="foundation-room-note"><ShieldCheck size={15} />If you can see the Room, the Room can see you.</p></main>;
+    return (
+      <main className="foundation-room-screen">
+        <header>
+          <span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span>
+          <span className="foundation-live"><i />ROOM OPEN</span>
+        </header>
+
+        <section className="foundation-room-heading">
+          <span className="eyebrow">HERE TONIGHT</span>
+          <h1>{joinedCount} people here</h1>
+          <p>{room.name} · {room.venue_name || room.city || "Tonight"}</p>
+        </section>
+
+        <section className="foundation-wall" aria-label="Room activity">
+          <div className="foundation-wall__heading">
+            <div><Users /><span>Room Wall</span></div>
+            <small>Real people · not a catalogue</small>
+          </div>
+          {wall.length ? (
+            <div className="foundation-avatar-cloud" aria-label={`${wall.length} recent Room participants`}>
+              {wall.map((person) => person.avatarUrl
+                ? <img key={person.id} src={person.avatarUrl} alt="" />
+                : <span key={person.id}>{person.displayName.slice(0, 1)}</span>)}
+            </div>
+          ) : (
+            <div className="foundation-empty-wall"><Users /><strong>You’re first here.</strong><p>Other guests will appear after joining this exact Room.</p></div>
+          )}
+        </section>
+
+        {dropOpen && dropItems.length ? (
+          <section className="your-drop">
+            <button className="back-link" onClick={() => setDropOpen(false)}><ArrowLeft size={17} />Room Wall</button>
+            <div className="your-drop__top"><span className="eyebrow">YOUR DROP</span><span>{activeItem ? `${activeItem.position} / ${dropItems.length}` : "Complete"}</span></div>
+            {activeItem ? (
+              <article className="drop-profile-card">
+                <div className="drop-profile-card__photo">{activeItem.avatarUrl ? <img src={activeItem.avatarUrl} alt="" /> : <span>{activeItem.displayName.slice(0, 1)}</span>}</div>
+                <div className="drop-profile-card__copy"><span>Same place. Right now.</span><h2>{activeItem.displayName}</h2><p>{interestsLeft} {interestsLeft === 1 ? "Interest" : "Interests"} left</p></div>
+                <div className="drop-profile-card__actions">
+                  <button className="button button--ghost" disabled={busy || !activeItem.firstSeenAt} onClick={() => actOnItem("passed")}>Next <ArrowRight size={17} /></button>
+                  <button className="button button--lime" disabled={busy || !activeItem.firstSeenAt || interestsLeft === 0} onClick={() => actOnItem("interested")}><Sparkles size={17} />Interested</button>
+                </div>
+              </article>
+            ) : (
+              <div className="drop-complete">
+                <Check />
+                <span className="eyebrow">THAT’S YOUR DROP</span>
+                <h2>You’ve seen this Drop.</h2>
+                {dropState?.next_scheduled_at ? <p>Next Drop · <strong>{formatCountdown(dropState.next_scheduled_at, nowMs)}</strong><br />New people are joining tonight.</p> : <p>New people may appear in the next one.</p>}
+                <button className="button button--dark" onClick={() => setDropOpen(false)}>Back to Room</button>
+              </div>
+            )}
+            {dropError && <p className="form-error">{dropError}</p>}
+          </section>
+        ) : (
+          <section className={`drop-status ${isClaimable ? "drop-status--live" : ""}`}>
+            <div>{isClaimable ? <Sparkles /> : <Clock3 />}</div>
+            {isClaimable ? <><span className="eyebrow">DROP LIVE</span><h2>Your Drop is ready.</h2><p>A limited selection, balanced for fair opportunity.</p><button className="button button--dark" disabled={busy} onClick={openYourDrop}>Open Your Drop <ArrowRight size={18} /></button></>
+              : Number(dropState?.assigned_count || 0) > 0 && !isComplete ? <><span className="eyebrow">YOUR DROP</span><h2>Continue where you left off.</h2><p>Your people and their order stay the same after refresh.</p><button className="button button--dark" onClick={() => setDropOpen(true)}>Continue Your Drop <ArrowRight size={18} /></button></>
+                : isComplete ? <><span className="eyebrow">THAT’S YOUR DROP</span><h2>You’ve seen this Drop.</h2>{dropState?.next_scheduled_at ? <p>Next Drop · <strong>{formatCountdown(dropState.next_scheduled_at, nowMs)}</strong><br />New people are joining tonight.</p> : <p>New people may appear in the next one.</p>}</>
+                  : hasSeenEveryone ? <><span className="eyebrow">CURRENTLY CAUGHT UP</span><h2>You’ve seen everyone currently available.</h2><p>New people may appear in the next Drop.</p></>
+                    : isForming ? <><span className="eyebrow">DROP LIVE</span><h2>Your Drop is forming.</h2><p>People are joining now.</p></>
+                      : dropState?.next_scheduled_at ? <><span className="eyebrow">NEXT DROP</span><h2 className="drop-countdown">{formatCountdown(dropState.next_scheduled_at, nowMs)}</h2><p>Stay present. Everyone’s Drop opens together.</p></>
+                        : <><span className="eyebrow">DROPS</span><h2>The next Drop will appear here.</h2><p>Keep an eye on the Room Wall.</p></>}
+            {dropError && <p className="form-error">{dropError}</p>}
+          </section>
+        )}
+
+        <section className="interested-in-you">
+          <button
+            className="interested-in-you__toggle"
+            type="button"
+            aria-expanded={incomingOpen}
+            onClick={() => { setIncomingOpen((current) => !current); setSelectedIncoming(null); }}
+          >
+            <span><Sparkles /><strong>Interested in You</strong></span>
+            <span>{incomingInterests.length}<ArrowRight size={18} /></span>
+          </button>
+          {incomingOpen && (
+            incomingInterests.length ? (
+              <div className="incoming-interest-list" aria-label="People interested in you">
+                {incomingInterests.map((person) => (
+                  <button type="button" key={person.interestId} onClick={() => setSelectedIncoming(person)} aria-label={`View ${person.displayName}'s profile`}>
+                    {person.avatarUrl ? <img src={person.avatarUrl} alt="" /> : <span>{person.displayName.slice(0, 1)}</span>}
+                    <strong>{person.displayName}</strong>
+                  </button>
+                ))}
+              </div>
+            ) : <p className="interested-in-you__empty">No incoming Interests yet.</p>
+          )}
+          {incomingOpen && selectedIncoming && (
+            <article className="incoming-profile">
+              {selectedIncoming.avatarUrl ? <img src={selectedIncoming.avatarUrl} alt="" /> : <span>{selectedIncoming.displayName.slice(0, 1)}</span>}
+              <div><span className="eyebrow">SAME PLACE. RIGHT NOW.</span><h2>{selectedIncoming.displayName}</h2><p>They sent you an Interest in this Room.</p></div>
+              <button type="button" className="icon-button" onClick={() => setSelectedIncoming(null)} aria-label="Close profile"><ArrowLeft size={18} /></button>
+            </article>
+          )}
+        </section>
+
+        <p className="foundation-room-note"><ShieldCheck size={15} />If you can see the Room, the Room can see you.</p>
+      </main>
+    );
   }
 
   return null;
