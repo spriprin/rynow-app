@@ -120,3 +120,35 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[0], /new Date\(target\)\.getTime\(\) > nowMs/);
   assert.match(files[0], /aria-expanded=\{incomingOpen\}/);
 });
+
+test("Sprint 3 creates one secure social loop without popularity ranking", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/202608200003_sprint3_matches_chat_safety.sql", import.meta.url),
+    "utf8",
+  );
+  const roomSource = await readFile(new URL("../app/components/RoomJoinApp.tsx", import.meta.url), "utf8");
+
+  for (const table of ["matches", "messages", "blocks", "reports"]) {
+    assert.match(migration, new RegExp(`create table if not exists public\\.${table}`, "i"));
+    assert.match(migration, new RegExp(`alter table public\\.${table} enable row level security`, "i"));
+  }
+  assert.match(migration, /matches_room_pair_unique unique \(room_id, user_a_id, user_b_id\)/i);
+  assert.match(migration, /create or replace function public\.respond_to_interest\(p_interest_id uuid, p_interested boolean\)/i);
+  assert.match(migration, /i\.id = p_interest_id and i\.to_user_id = current_user_id/i);
+  assert.match(migration, /on conflict \(room_id, user_a_id, user_b_id\) do nothing/i);
+  assert.match(migration, /create or replace function public\.send_match_message\(p_match_id uuid, p_body text\)/i);
+  assert.match(migration, /create or replace function public\.block_user\(p_blocked_id uuid\)/i);
+  assert.match(migration, /create or replace function public\.submit_report/i);
+  assert.match(migration, /not public\.is_pair_blocked\(current_user_id, rm\.user_id\)/i);
+  const rankingBlock = migration.match(/with candidate_exposure as \([\s\S]*?\), ranked as \([\s\S]*?\)\n {4}select/i)?.[0] || "";
+  assert.doesNotMatch(rankingBlock, /matches|messages|interests|popularity/i);
+  assert.match(migration, /alter publication supabase_realtime add table public\.messages/i);
+  assert.match(migration, /rooms_insert_permanent_organizer[\s\S]*is_anonymous[\s\S]*auth\.jwt\(\)[\s\S]*email/i);
+
+  assert.match(roomSource, /Interested Too/);
+  assert.match(roomSource, /Not for me/);
+  assert.match(roomSource, /IT’S MUTUAL/);
+  assert.match(roomSource, /send_match_message/);
+  assert.match(roomSource, /postgres_changes/);
+  assert.match(roomSource, /Report and Block/);
+});

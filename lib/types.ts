@@ -99,6 +99,27 @@ export interface IncomingInterest {
   createdAt: string;
 }
 
+export interface RoomMatch {
+  id: string;
+  otherUserId: string;
+  displayName: string;
+  avatarPath: string;
+  avatarUrl: string;
+  matchedAt: string;
+  lastMessageAt: string | null;
+  lastMessageBody: string | null;
+  unreadCount: number;
+}
+
+export interface MatchMessage {
+  id: string;
+  matchId: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
 export interface OrganizerDrop {
   id: string;
   room_id: string;
