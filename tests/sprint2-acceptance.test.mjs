@@ -83,8 +83,9 @@ test("Sprint 2 live acceptance — Drops, Fair Exposure and Interests", { skip: 
     const { data: incoming, error } = await recipient.client.rpc("interested_in_you", { p_room_id: room.id });
     assert.ifError(error);
     assert.ok(incoming.some((item) => item.from_user_id === viewer.user.id && item.display_name === "Viewer"));
-    const { error: organizerPrivateError } = await organizer.rpc("interested_in_you", { p_room_id: room.id });
-    assert.ok(organizerPrivateError);
+    const { data: organizerPrivateRows, error: organizerPrivateError } = await organizer.rpc("interested_in_you", { p_room_id: room.id });
+    assert.ifError(organizerPrivateError);
+    assert.deepEqual(organizerPrivateRows, []);
   });
 
   assert.ifError((await viewer.client.rpc("mark_drop_item_seen", { p_drop_item_id: secondItem.id })).error);
