@@ -33,7 +33,7 @@ async function createGuest(name) {
   assert.ifError(uploadError);
   const { error: profileError } = await guest.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true });
   assert.ifError(profileError);
-  return { client: guest, user: auth.user, session: auth.session, avatarPath };
+  return { client: guest, user: auth.user, session: auth.session, avatarPath, isAnonymous: auth.user.is_anonymous === true };
 }
 
 test("Acceptance A–G against a configured Supabase project", { skip: enabled ? false : "Set HERE_TEST_SUPABASE_URL, HERE_TEST_SUPABASE_PUBLISHABLE_KEY and organizer credentials" }, async (t) => {
@@ -129,6 +129,7 @@ test("Acceptance A–G against a configured Supabase project", { skip: enabled ?
   });
 
   await t.test("G — RLS rejects cross-user and cross-Room writes", async () => {
+    assert.equal(anna.isAnonymous, true, "The Room privilege probe must use an actual anonymous Supabase user");
     const { data: directPeerProfile, error: peerReadError } = await anna.client.from("profiles").select("id, display_name").eq("id", mark.user.id);
     assert.ifError(peerReadError);
     assert.equal((directPeerProfile || []).length, 0);

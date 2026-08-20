@@ -8,15 +8,28 @@ const organizerEmail = process.env.HERE_TEST_ORGANIZER_EMAIL;
 const organizerPassword = process.env.HERE_TEST_ORGANIZER_PASSWORD;
 const allowGeneratedOrganizer = process.env.HERE_TEST_CREATE_ORGANIZER === "true";
 const enabled = Boolean(url && key && ((organizerEmail && organizerPassword) || allowGeneratedOrganizer));
+const liveClients = new Set();
 
 function client() {
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  liveClients.add(supabase);
+  return supabase;
 }
 
 async function createGuest(name, joinCode) {
   const guest = client();
-  const { data: auth, error: authError } = await guest.auth.signInAnonymously();
+  let { data: auth, error: authError } = await guest.auth.signInAnonymously();
+  if (authError && /rate limit/i.test(authError.message)) {
+    const email = `here-actor-${crypto.randomUUID()}@example.com`;
+    const password = `Here-${crypto.randomUUID()}-Aa1!`;
+    const permanent = await guest.auth.signUp({ email, password });
+    auth = permanent.data;
+    authError = permanent.error;
+  }
   assert.ifError(authError);
+  assert.ok(auth.user);
+  assert.ok(auth.session?.access_token);
+  await guest.realtime.setAuth(auth.session.access_token);
   const avatarPath = `${auth.user.id}/sprint3-${crypto.randomUUID()}.png`;
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   assert.ifError((await guest.storage.from("avatars").upload(avatarPath, png, { contentType: "image/png" })).error);
@@ -87,6 +100,12 @@ function subscribeForMessage(supabase, matchId, expectedBody) {
 }
 
 test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false : "Set live Supabase test variables" }, async (t) => {
+  t.after(async () => {
+    for (const supabase of liveClients) {
+      await supabase.removeAllChannels();
+      supabase.realtime.disconnect();
+    }
+  });
   const organizer = client();
   const generatedEmail = `here-sprint3-${crypto.randomUUID()}@example.com`;
   const generatedPassword = `Here-${crypto.randomUUID()}-Aa1!`;
@@ -157,16 +176,22 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
 
   await t.test("S3-E — both participants receive text messages through Realtime", async () => {
     const annaRealtime = subscribeForMessage(anna.client, matchId, "Hi Anna");
-    await annaRealtime.ready;
-    assert.ifError((await pavel.client.rpc("send_match_message", { p_match_id: matchId, p_body: "Hi Anna" })).error);
-    assert.equal((await annaRealtime.message).body, "Hi Anna");
-    await annaRealtime.cleanup();
+    try {
+      await annaRealtime.ready;
+      assert.ifError((await pavel.client.rpc("send_match_message", { p_match_id: matchId, p_body: "Hi Anna" })).error);
+      assert.equal((await annaRealtime.message).body, "Hi Anna");
+    } finally {
+      await annaRealtime.cleanup();
+    }
 
     const pavelRealtime = subscribeForMessage(pavel.client, matchId, "Hey Pavel");
-    await pavelRealtime.ready;
-    assert.ifError((await anna.client.rpc("send_match_message", { p_match_id: matchId, p_body: "Hey Pavel" })).error);
-    assert.equal((await pavelRealtime.message).body, "Hey Pavel");
-    await pavelRealtime.cleanup();
+    try {
+      await pavelRealtime.ready;
+      assert.ifError((await anna.client.rpc("send_match_message", { p_match_id: matchId, p_body: "Hey Pavel" })).error);
+      assert.equal((await pavelRealtime.message).body, "Hey Pavel");
+    } finally {
+      await pavelRealtime.cleanup();
+    }
   });
 
   await t.test("S3-F — conversation persists in order", async () => {

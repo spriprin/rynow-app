@@ -126,6 +126,10 @@ test("Sprint 3 creates one secure social loop without popularity ranking", async
     new URL("../supabase/migrations/202608200003_sprint3_matches_chat_safety.sql", import.meta.url),
     "utf8",
   );
+  const hardening = await readFile(
+    new URL("../supabase/migrations/202608200004_sprint3_live_hardening.sql", import.meta.url),
+    "utf8",
+  );
   const roomSource = await readFile(new URL("../app/components/RoomJoinApp.tsx", import.meta.url), "utf8");
 
   for (const table of ["matches", "messages", "blocks", "reports"]) {
@@ -144,6 +148,8 @@ test("Sprint 3 creates one secure social loop without popularity ranking", async
   assert.doesNotMatch(rankingBlock, /matches|messages|interests|popularity/i);
   assert.match(migration, /alter publication supabase_realtime add table public\.messages/i);
   assert.match(migration, /rooms_insert_permanent_organizer[\s\S]*is_anonymous[\s\S]*auth\.jwt\(\)[\s\S]*email/i);
+  assert.match(hardening, /rooms_insert_permanent_guard[\s\S]*as restrictive for insert/i);
+  assert.match(hardening, /alter table public\.messages replica identity full/i);
 
   assert.match(roomSource, /Interested Too/);
   assert.match(roomSource, /Not for me/);

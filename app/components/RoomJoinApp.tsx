@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Ban, CalendarDays, Check, Clock3, Flag, ImagePlus, LockKeyhole, MapPin, MessageCircle, Radio, RefreshCw, Send, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type { DropItem, DropItemAction, FoundationProfile, FoundationRoom, IncomingInterest, MatchMessage, RoomDropState, RoomMatch, RoomWallPerson } from "@/lib/types";
 
@@ -241,15 +242,25 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     if (!selectedMatchId) return;
     const client = getSupabaseBrowserClient();
     if (!client) return;
-    const channel = client
-      .channel(`match-${selectedMatchId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${selectedMatchId}` }, (payload) => {
-        const message = mapMessage(payload.new as MatchMessageRow);
-        setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
-        if (message.senderId !== profile?.id) void client.rpc("mark_match_messages_read", { p_match_id: selectedMatchId });
-      })
-      .subscribe();
-    return () => { void client.removeChannel(channel); };
+    let active = true;
+    let channel: RealtimeChannel | null = null;
+    void (async () => {
+      const { data: { session } } = await client.auth.getSession();
+      if (session) await client.realtime.setAuth(session.access_token);
+      if (!active) return;
+      channel = client
+        .channel(`match-${selectedMatchId}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${selectedMatchId}` }, (payload) => {
+          const message = mapMessage(payload.new as MatchMessageRow);
+          setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
+          if (message.senderId !== profile?.id) void client.rpc("mark_match_messages_read", { p_match_id: selectedMatchId });
+        })
+        .subscribe();
+    })();
+    return () => {
+      active = false;
+      if (channel) void client.removeChannel(channel);
+    };
   }, [profile?.id, selectedMatchId]);
 
   useEffect(() => {
