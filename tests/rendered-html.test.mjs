@@ -160,13 +160,21 @@ test("Sprint 3 creates one secure social loop without popularity ranking", async
 });
 
 test("Phase 0 hardens helper RPC identity and trigger privileges", async () => {
-  const migration = await readFile(
+  const initialHardening = await readFile(
     new URL("../supabase/migrations/20260820085448_phase0_privilege_hardening.sql", import.meta.url),
     "utf8",
   );
-  assert.match(migration, /target_user = \(select auth\.uid\(\)\)/i);
-  assert.match(migration, /viewer = \(select auth\.uid\(\)\)/i);
-  assert.match(migration, /set search_path = ''/i);
-  assert.match(migration, /revoke all on function public\.rooms_set_join_code\(\) from public, anon, authenticated/i);
-  assert.match(migration, /to_regprocedure\('public\.rls_auto_enable\(\)'\)/i);
+  const internalHelperSeparation = await readFile(
+    new URL("../supabase/migrations/20260820103251_restore_internal_membership_checks.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(initialHardening, /set search_path = ''/i);
+  assert.match(initialHardening, /revoke all on function public\.rooms_set_join_code\(\) from public, anon, authenticated/i);
+  assert.match(initialHardening, /to_regprocedure\('public\.rls_auto_enable\(\)'\)/i);
+  assert.match(internalHelperSeparation, /revoke all on function public\.is_room_member\(uuid, uuid\) from public, anon, authenticated/i);
+  assert.match(internalHelperSeparation, /revoke all on function public\.shares_active_room\(uuid, uuid\) from public, anon, authenticated/i);
+  assert.match(internalHelperSeparation, /rm\.user_id = \(select auth\.uid\(\)\)/i);
+  assert.match(internalHelperSeparation, /mine\.user_id = \(select auth\.uid\(\)\)/i);
+  assert.match(internalHelperSeparation, /public\.is_current_user_room_member\(id\)/i);
+  assert.match(internalHelperSeparation, /public\.shares_current_user_active_room/i);
 });

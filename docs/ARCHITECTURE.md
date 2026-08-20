@@ -71,14 +71,20 @@ The `avatars` bucket is private. Object paths begin with the authenticated user 
 
 The connected project is `xwycdnyxuluuhylcnnjh` (`Here MVP`, PostgreSQL 17). Supabase integration tools are the authority for live schema inspection, migrations, advisors and logs.
 
-The live tables exist and have RLS, but the remote migration-history listing is empty because the initial schema was applied manually. Until a reviewed baseline is established:
+The initial schema was applied manually, so Phase 0 first compared the intended
+objects and behavior with the live database. With explicit owner approval, the
+five matching historical versions were registered in
+`supabase_migrations.schema_migrations` without replaying their SQL. The two
+Phase 0 hardening migrations were then applied normally. Remote history now
+contains seven ordered versions through
+`20260820103251_restore_internal_membership_checks`.
 
-- do not blindly replay migrations `001`–`004`;
-- compare intended SQL with live objects before every schema update;
-- create a new local migration for every new schema change;
-- apply the matching migration through Supabase;
-- verify affected behavior and run security/performance advisors;
-- update documentation in the same commit.
+The generic `is_room_member(room, user)` and
+`shares_active_room(viewer, target)` functions remain available only to trusted
+database-owned functions; neither `anon` nor `authenticated` can execute them
+through RPC. RLS policies call separate one-target wrappers that derive the
+viewer from `auth.uid()`. This prevents forged-user presence probes without
+breaking server-side checks that legitimately validate both people.
 
 Phase 0 advisor classification:
 
@@ -86,9 +92,17 @@ Phase 0 advisor classification:
 - anonymous users receiving the `authenticated` role is intentional for the QR guest model; ownership and Room checks remain mandatory;
 - anonymous execution of `get_room_by_join_code` is intentional and returns only the public join-route fields;
 - authenticated execution of product RPCs is intentional where each function binds identity with `auth.uid()` and the acceptance suite attacks forged arguments;
-- public execution of `rls_auto_enable` and `rooms_set_join_code`, plus forged-user arguments in `is_room_member` and `shares_active_room`, are fixable and are hardened by pending migration `20260820085448`;
+- public execution of `rls_auto_enable` and `rooms_set_join_code` is revoked;
+- spoofable generic membership helpers are not Data API executable; the authenticated RLS wrappers bind identity to `auth.uid()`;
 - leaked-password protection is not enabled and remains an organizer-auth hardening limitation;
 - nine unindexed-foreign-key notices are low-scale performance debt, while four unused-index notices are not actionable on a new/test-heavy database.
+
+The post-DDL advisor run reports 38 notices: two informational RPC-only table
+notices, one intentional anonymous join-route function, 24 authenticated
+`SECURITY DEFINER` notices requiring normal function-by-function review, ten
+warnings caused by the intentional anonymous-guest model, and one leaked-
+password setting. Performance reports nine unindexed foreign keys and four
+unused indexes; none changed release correctness.
 
 Supabase Realtime showed one cold-tenant delivery timeout at 12 seconds. Logs
 showed replication startup rather than an authorization failure, and the full
@@ -98,9 +112,9 @@ cold subscription; production reliability should still be monitored.
 ## Release boundary
 
 The public Sites deployment remains version 8 / commit `ab8891e` from Sprint 1.
-Sprint 2/3 source and live schema are newer than the public frontend. Phase 0 is
-blocked because the live migration history is absent and the new helper-RPC
-regression fails until pending migration `20260820085448` can be applied through
-a reviewed history strategy. Publishing requires that reconciliation, a green
-expanded A–G plus S2/S3 regression, a clean build, a source-commit match and a
-smoke test on the public URL.
+Sprint 2/3 source and live schema are newer than the public frontend. Phase 0
+now has a reconciled seven-version migration history, green expanded Sprint 1
+A–G, Sprint 2 A–O and Sprint 3 A–N suites, plus a clean local production build.
+This is a verified release candidate, not a deployment. Publishing still
+requires separate owner authorization, an exact source-commit deployment and a
+production smoke test on the public URL.

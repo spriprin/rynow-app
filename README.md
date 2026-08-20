@@ -19,22 +19,20 @@ The product is not a full guest catalogue and does not rank people by popularity
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
 - Public frontend is still Sites version 8 from commit `ab8891e` (Sprint 1). A successful local build is not a deployment.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
-- Phase 0 production release status: **BLOCKED**. No publication was performed.
+- Phase 0 production release status: **VERIFIED RELEASE CANDIDATE**. No publication was performed.
 
 Phase 0 verification on 20 August 2026:
 
-- original Sprint 1 A–G: PASS;
+- expanded Sprint 1 A–G, including forged helper-RPC probes: PASS;
 - Sprint 2 S2-A–S2-O: PASS;
-- Sprint 3 S3-A–S3-N: one cold-start Realtime timeout, then PASS in full on retry;
+- Sprint 3 S3-A–S3-N: one cold-start Realtime timeout, then PASS in full on an independent retry;
 - typecheck, lint, static security contracts and production build: PASS.
 
-An expanded Sprint 1 security probe found that authenticated clients can call
-`is_room_member` with another user's UUID and use it as a cross-Room presence
-oracle. The same trust issue exists in `shares_active_room`. The additive
-`20260820085448_phase0_privilege_hardening.sql` migration and regression tests
-are prepared locally, but are not applied live because remote migration history
-is missing. The expanded live G test therefore intentionally remains failing
-until migration history is reconciled and that migration is applied.
+The Phase 0 audit found and fixed a cross-Room presence oracle in the generic
+`is_room_member` and `shares_active_room` helpers. Their spoofable signatures
+are no longer executable through the Data API. RLS now uses self-bound wrappers
+that derive the viewer from `auth.uid()`, while trusted backend RPCs retain the
+internal checks they need. Trigger helpers are also no longer client-executable.
 
 ## Product routes
 
@@ -91,13 +89,14 @@ matches, messages, blocks, reports
 
 All ten tables have RLS enabled. `drop_items` and `interests` intentionally have no direct client policies; access is provided through narrow RPC functions.
 
-The live schema was originally installed manually through SQL Editor. Both the
-connected Supabase migration API and a direct catalog check report that the
-`supabase_migrations.schema_migrations` table is absent even though the intended
-objects exist. Supabase CLI 2.115.0 was inspected, but CLI migration listing
-cannot authenticate in this environment without `supabase login` or
-`SUPABASE_ACCESS_TOKEN`. Do not reapply the old migrations blindly or repair
-history without an explicit reviewed decision.
+The live schema was originally installed manually through SQL Editor. With the
+owner's explicit approval, the five verified historical migrations were added
+to the canonical migration history without replaying their SQL. The operation
+and the first hardening migration were atomic. A follow-up migration separated
+generic internal membership checks from self-bound RLS wrappers after live
+Sprint 2 regression testing exposed that distinction. The connected migration
+API now reports seven applied versions. Supabase CLI 2.115.0 remains locally
+unauthenticated, so the connected Supabase integration is the live authority.
 
 Local migration order:
 
@@ -105,12 +104,13 @@ Local migration order:
 2. `202608190001_fix_join_code_trigger.sql`;
 3. `202608190002_sprint2_drops_interests.sql`;
 4. `202608200003_sprint3_matches_chat_safety.sql`;
-5. `202608200004_sprint3_live_hardening.sql`.
-6. `20260820085448_phase0_privilege_hardening.sql` — local release-candidate fix, not applied remotely.
+5. `202608200004_sprint3_live_hardening.sql`;
+6. `20260820085448_phase0_privilege_hardening.sql`;
+7. `20260820103251_restore_internal_membership_checks.sql`.
 
-For files 1–5, live objects and behavior were verified, but remote application
-records do not exist, so their historical applied status is **unknown**, not
-inferred. File 6 is definitively local-only and pending.
+All seven versions are present in remote migration history. Files 1–5 were
+baselined only after live catalog and behavior comparison; files 6–7 were
+applied live and verified by the expanded Sprint 1, Sprint 2 and Sprint 3 suites.
 
 Applied migration files are immutable. Every database update must use a new additive migration, be applied through the connected Supabase tooling, verified live, and documented in the same change.
 
