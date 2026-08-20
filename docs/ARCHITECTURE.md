@@ -1,46 +1,87 @@
-# HERE Sprint 1 architecture
+# HERE architecture after Sprint 3
 
-## Product boundary
-
-Sprint 1 separates persistent identity from temporary presence:
+## Identity and event presence
 
 ```text
-auth.users 1—1 profiles
-auth.users 1—N room_members N—1 rooms
+auth.users
+  ├── 1:1 profiles
+  ├── 1:N room_members N:1 rooms
+  ├── 1:N drop_items as viewer/candidate
+  ├── 1:N interests as sender/recipient
+  ├── N:N matches inside a Room
+  ├── 1:N messages inside a Match
+  ├── 1:N blocks
+  └── 1:N reports
+
+rooms 1:N drops 1:N drop_items 0:1 interests
 ```
 
-`profiles` never stores a `current_room_id`. One anonymous Auth user can reuse one minimal profile across many Rooms, while every Room visit has its own idempotent membership row.
+`profiles` never stores `current_room_id`. A browser identity can reuse one minimal profile across many Rooms; event presence is the canonical `(room_id, user_id)` membership.
 
-## Production versus demo
+## Production and demo isolation
 
-- `/r/{join_code}` uses only Supabase and fails closed when configuration is absent.
-- `/organizer` uses only a permanent Supabase Auth user and database-enforced ownership.
-- `/demo` retains the earlier mock interface. Its people, Interests, Matches and Chat do not enter production tables.
-- `/` is a static marketing surface and links to the explicitly isolated demo.
+- `/r/{join_code}` uses only live Supabase data and fails closed.
+- `/organizer` uses a permanent Supabase Auth user and database-enforced ownership.
+- `/demo` retains mock people and interactions only as a design reference.
+- No production RPC inserts fake people or mixes demo data into a Room.
 
-## Join trust boundary
+## Room boundary
 
-The `rooms` table is not publicly readable. `get_room_by_join_code` is a narrow security-definer function that accepts the unpredictable join code and returns only safe event fields. `join_room_by_code` then:
+`get_room_by_join_code` resolves only safe Room fields using an unpredictable public join code. `join_room_by_code` derives identity from `auth.uid()`, requires a completed 18+ profile, rejects non-open Rooms, and upserts only the caller's membership.
 
-1. derives identity from `auth.uid()`;
-2. requires a complete 18+ profile and owned avatar path;
-3. rejects missing, draft and closed Rooms;
-4. inserts or updates the canonical `(room_id, user_id)` row;
-5. refreshes `last_seen_at` and `is_active`.
+The Room Wall returns a joined count and no more than 12 minimal profiles. It is deliberately not a full catalogue and cannot originate an Interest.
 
-Clients cannot insert arbitrary membership rows because table INSERT privilege is not granted.
-The Room Wall does not expose the `profiles` table to peers directly: `room_wall_profiles` returns only `id`, `display_name`, `avatar_path` and join ordering for active members of that Room.
+Anonymous guests carry the PostgreSQL `authenticated` role, so organizer policies also inspect the JWT `is_anonymous` claim. Restrictive Room write policies prevent another permissive policy from accidentally restoring organizer rights to anonymous users.
 
-## Organizer trust boundary
+## Discovery and Fair Exposure
 
-Room writes require both `organizer_id = auth.uid()` and a JWT whose `is_anonymous` claim is false. The UI’s organizer state is only presentation; PostgreSQL RLS is the authority.
+A Drop is opened by persisted database time or an organizer RPC. `claim_your_drop` creates one stable assignment and position order per viewer and Drop.
 
-Joined count is exposed through an aggregate RPC available only to the Room owner or a Room member. Organizers do not receive a policy allowing them to enumerate individual membership rows.
+Eligibility is applied before ranking:
 
-## Avatar trust boundary
+1. same open Room and active memberships;
+2. complete 18+ profile;
+3. not self;
+4. pair is not blocked;
+5. candidate has not previously been seen by this viewer.
 
-The `avatars` bucket is private. An object path begins with the authenticated user UUID. Storage RLS validates both folder name and Storage `owner_id`. Signed URLs can be created only by the owner or another active member of a shared Room.
+Ranking uses actual delivered impressions (`first_seen_at`) plus pending reservations. A small randomization is allowed inside a close exposure band. Interests, declines, Matches, messages and popularity do not enter the ranking.
 
-## Future compatibility
+Interest creation accepts only a server-assigned, actually seen `drop_item`. The database enforces Room identity, sender identity and per-Drop Interest Budget.
 
-Future Drops, exposure scheduling, Interest budgets, Interests, Matches and Chat can reference `room_id` and `user_id` without changing the identity/presence model. Those tables and features are intentionally absent in Sprint 1.
+## Match and chat boundary
+
+`respond_to_interest` is callable only by the real recipient. Acceptance canonicalizes the two user UUIDs and inserts one unique `(room_id, user_a_id, user_b_id)` Match with conflict-safe idempotency.
+
+Messages are created only through `send_match_message`; history is readable only by the two unblocked Match participants. The selected chat subscribes to `messages INSERT` through Supabase Realtime using the current access token. Closing a Room prevents new discovery but does not delete existing Match/chat history.
+
+## Safety boundary
+
+- Block is private and excludes both directions before future Drop ranking.
+- Block closes pending Interests and unhandled cards for the pair.
+- A blocked pair cannot list its Match or send/read messages through normal access.
+- Reports are visible only to the reporter through ordinary product roles.
+- Organizer identity is not a moderation identity and cannot inspect Reports or chats.
+
+## Storage boundary
+
+The `avatars` bucket is private. Object paths begin with the authenticated user UUID. Upload, replacement and deletion are limited to the owner's folder; signed reads are available only to the owner or an active co-member where required by the Room UI.
+
+## Database operations
+
+The connected project is `xwycdnyxuluuhylcnnjh` (`Here MVP`, PostgreSQL 17). Supabase integration tools are the authority for live schema inspection, migrations, advisors and logs.
+
+The live tables exist and have RLS, but the remote migration-history listing is empty because the initial schema was applied manually. Until a reviewed baseline is established:
+
+- do not blindly replay migrations `001`–`004`;
+- compare intended SQL with live objects before every schema update;
+- create a new local migration for every new schema change;
+- apply the matching migration through Supabase;
+- verify affected behavior and run security/performance advisors;
+- update documentation in the same commit.
+
+Current advisor notes include intentional warnings for authenticated anonymous guest access and RPC-only tables without direct policies. Trigger/helper execution privileges and leaked-password protection remain items to audit before the next production release; advisor warnings must be classified, not silently ignored.
+
+## Release boundary
+
+The public Sites deployment remains Sprint 1. Sprint 2/3 source and live schema are newer than the public frontend. Publishing requires explicit release authorization, a clean build, full S1/S2/S3 live regression, a source-commit match and a smoke test on the public URL.

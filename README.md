@@ -1,104 +1,124 @@
-# HERE — Sprint 1 Real Foundation
+# HERE — IRL Social Room
 
-HERE is a mobile-first social discovery web app for physical events. Sprint 1 implements only the durable foundation:
+HERE is a mobile-first social discovery web app for people who are already at the same physical event.
 
-**Organizer creates a real Room → QR opens `/r/{join_code}` → guest receives a persistent anonymous session → creates a minimal profile → joins the Room → real participants survive refresh and remain isolated by Room.**
+The implemented core loop after Sprint 3 is:
+
+```text
+event QR → Room → Room Wall → Drop → Your Drop → Interest
+→ Interested in You → Interested Too → Match → realtime text chat → meet IRL
+```
+
+The product is not a full guest catalogue and does not rank people by popularity. Room Wall creates a sense of activity, Drops synchronize attention, Your Drop limits choice, and Fair Exposure balances opportunity rather than outcomes.
+
+## Current status
+
+- Sprint 1 foundation: implemented, verified against live Supabase and published.
+- Sprint 2 Drops/Interests: implemented and live-verified, not published.
+- Sprint 3 Match/Chat/Safety: implemented, hardened and live-verified, not published.
+- Public URL: `https://here-social-room.spriprin.chatgpt.site`.
+- Public frontend is still the earlier Sprint 1 release. A successful local build is not a deployment.
+- Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
+
+Live verification completed on 20 August 2026:
+
+- Sprint 1 A–G: PASS;
+- Sprint 2 S2-A–S2-O: PASS;
+- Sprint 3 S3-A–S3-N, including two-way Realtime: PASS;
+- typecheck, lint, static security contracts and production build: PASS.
 
 ## Product routes
 
-| Route | Current behavior |
+| Route | Behavior |
 | --- | --- |
-| `/` | Marketing landing page with a link to the isolated demo |
-| `/r/{join_code}` | Real Supabase Room flow; never falls back to fake people |
-| `/organizer` | Minimal protected organizer flow for real Rooms and QR codes |
-| `/demo` | Legacy interactive mock experience, explicitly isolated from production routes |
+| `/` | Marketing landing page |
+| `/r/{join_code}` | Real Supabase guest flow; never falls back to fake users |
+| `/organizer` | Permanent-account organizer flow for Rooms, QR and Drops |
+| `/demo` | Isolated legacy mock experience |
 
-Sprint 1 does **not** implement Drops, Fair Exposure, Interests, Matches, Chat, payments, Premium, recommendations, or social login.
+## Product contract
+
+- Persistent `profile` and temporary `room_member` are separate concepts.
+- If a user can see and participate in a Room, that user can also participate in discovery.
+- Room Wall is limited to a joined count and at most 12 real avatars; it is not a roster.
+- Drop availability and Interest Budget are enforced using database time and database transactions.
+- Assigning a card is not an impression; `first_seen_at` is the impression.
+- Interests, declines, Matches and messages never influence Fair Exposure.
+- An incoming Interest shows the sender to its recipient.
+- Match creation is atomic, canonical and idempotent on the backend.
+- Organizer access is aggregate-only and never includes individual Interests, Matches, Reports or chat bodies.
+- Block filtering happens before candidate ranking.
+
+Rejected legacy concepts `Hidden`, `Open to Meet`, `Selective` and blind-mutual discovery must not be reintroduced.
 
 ## Stack
 
-- Vinext/Next.js-compatible App Router, React 19 and TypeScript;
+- Vinext / Next.js-compatible App Router;
+- React 19 and TypeScript;
 - `@supabase/supabase-js` and `@supabase/ssr`;
-- Supabase Auth anonymous users for guests;
-- PostgreSQL with RLS for profiles, Rooms and memberships;
-- private Supabase Storage bucket for avatars;
-- QR generation with `qrcode`.
+- Supabase Auth, PostgreSQL 17, RLS, private Storage and Realtime;
+- QR generation with `qrcode`;
+- OpenAI Sites / Cloudflare-compatible production build.
 
-## Supabase setup
+## Supabase
 
-1. Create a Supabase project.
-2. Apply `supabase/migrations/202608110001_initial.sql` to a fresh project.
-3. In Supabase Authentication settings, enable **Allow anonymous sign-ins**.
-4. Create one permanent email/password Auth user for organizer development access. There is no organizer signup in the app.
-5. Copy `.env.example` to `.env.local` and set:
+Browser code may contain only:
 
 ```text
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+NEXT_PUBLIC_APP_URL
 ```
 
-Never place a service-role key in this project or any browser environment variable.
+Never put a database password, Personal Access Token, secret key or `service_role` key in `NEXT_PUBLIC_*`, source control or browser code.
 
-## Guest flow
+Remote schema currently contains:
 
-The public join code is a server-generated 24-character cryptographic token. Opening `/r/{join_code}` resolves only the safe Room fields through an RPC. A closed Room stops before Auth and displays `This Room has ended.`
+```text
+profiles, rooms, room_members
+drops, drop_items, interests
+matches, messages, blocks, reports
+```
 
-For an open Room:
+All ten tables have RLS enabled. `drop_items` and `interests` intentionally have no direct client policies; access is provided through narrow RPC functions.
 
-1. the browser restores its Supabase cookie session or calls `signInAnonymously()` once;
-2. an existing profile is reused;
-3. a new guest completes exactly three onboarding screens: photo, first name, and 18+ confirmation;
-4. the photo is uploaded to the private `avatars/{user_id}/...` folder and only its path is stored in PostgreSQL;
-5. `join_room_by_code` creates or reactivates the `(room_id, user_id)` membership and updates `last_seen_at`;
-6. the Room screen reads only real memberships and minimal shared profile fields.
+The live schema was originally installed manually through SQL Editor. Supabase migration history currently reports no tracked migrations even though the schema is present. Do not reapply the old migrations blindly. Before relying on CLI-style `db push`, establish or repair a remote baseline after reviewing the live schema.
 
-The Room Wall shows a maximum of 12 participant thumbnails. It has no Interest, Match, Drop or Chat controls.
+Local migration order:
 
-## Organizer flow
+1. `202608110001_initial.sql`;
+2. `202608190001_fix_join_code_trigger.sql`;
+3. `202608190002_sprint2_drops_interests.sql`;
+4. `202608200003_sprint3_matches_chat_safety.sql`;
+5. `202608200004_sprint3_live_hardening.sql`.
 
-`/organizer` accepts only a pre-created permanent Supabase Auth account. Anonymous JWTs are rejected by the Room insert/update policies. The organizer can:
+Applied migration files are immutable. Every database update must use a new additive migration, be applied through the connected Supabase tooling, verified live, and documented in the same change.
 
-- create a Room with name, venue, city, start and end time;
-- receive its real `/r/{join_code}` link and QR;
-- download the QR PNG or copy the link;
-- see only aggregate joined count;
-- close the Room.
-
-The organizer does not receive direct access to individual memberships, private user interaction data, or future chats.
-
-## RLS summary
-
-- `profiles`: direct reads/inserts/updates are limited to the owner; active Room members receive only `id`, `display_name` and `avatar_path` through the narrow Room Wall RPC;
-- `rooms`: owner read/update; participants read only after membership; public QR resolution is a narrow safe-fields RPC;
-- `room_members`: direct inserts are not granted; the authenticated user joins only through the idempotent security-definer RPC; members can read memberships only in Rooms they belong to and update only their own presence columns;
-- `storage.objects`: avatar reads are limited to the owner or active co-members; writes must target the authenticated user’s own folder.
-
-No private user table contains `using (true)` policies.
-
-## Development
+## Development and verification
 
 ```text
 pnpm install
 pnpm dev
 pnpm typecheck
 pnpm lint
-pnpm build
 pnpm test
+pnpm build
 ```
 
-The regular test command runs render/security contract tests. Full A–G integration tests require a configured disposable Supabase project:
+Live acceptance tests require the test Supabase environment variables:
 
 ```text
-HERE_TEST_SUPABASE_URL=...
-HERE_TEST_SUPABASE_PUBLISHABLE_KEY=...
-HERE_TEST_ORGANIZER_EMAIL=...
-HERE_TEST_ORGANIZER_PASSWORD=...
 pnpm test:acceptance
 ```
 
-## Current boundary
+The harness creates real test users and Rooms, so Supabase Auth rate limits can affect repeated runs. A permanent-account fallback must never be mistaken for an anonymous actor in security tests.
 
-The repository intentionally contains no production seed users or fake Rooms. The legacy mock people, Interests, Matches and Chat remain accessible only on `/demo` for design reference. They are not queried or inserted by the real QR and organizer routes.
+## Documentation rule
 
-See `docs/ARCHITECTURE.md` for the trust boundaries and future compatibility notes.
+Every code, schema, configuration or release change must update the relevant documentation in the same commit:
+
+- this README for product status and operating instructions;
+- `docs/ARCHITECTURE.md` for data model and trust boundaries;
+- `docs/HERE_HANDOFF_RU.md` for Russian handoff status and known limitations.
+
+See those files before starting a new sprint or production release.
