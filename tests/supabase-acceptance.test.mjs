@@ -153,6 +153,10 @@ test("Acceptance A–G against a configured Supabase project", { skip: enabled ?
     assert.ok(anonymousRoomInsert);
     const { data: roomWrite } = await anna.client.from("rooms").update({ name: "Hacked Room" }).eq("id", roomTwo.id).select();
     assert.equal((roomWrite || []).length, 0);
+    const foreignMembershipProbe = await anna.client.rpc("is_room_member", { target_room: roomTwo.id, target_user: isolated.user.id });
+    assert.ok(foreignMembershipProbe.error || foreignMembershipProbe.data === false, "Helper RPC must not reveal another user's Room membership");
+    const forgedSharedRoomProbe = await anna.client.rpc("shares_active_room", { viewer: isolated.user.id, target: isolated.user.id });
+    assert.ok(forgedSharedRoomProbe.error || forgedSharedRoomProbe.data === false, "Helper RPC must bind viewer to auth.uid()");
     const clientSource = await readFile(new URL("../lib/supabase/client.ts", import.meta.url), "utf8");
     assert.doesNotMatch(clientSource, /service[_-]?role/i);
   });

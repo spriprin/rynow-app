@@ -82,8 +82,10 @@ function subscribeForMessage(supabase, matchId, expectedBody) {
   let messageReject;
   const ready = new Promise((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
   const message = new Promise((resolve, reject) => { messageResolve = resolve; messageReject = reject; });
-  const readyTimer = setTimeout(() => readyReject(new Error("Realtime subscription timeout")), 12_000);
-  const messageTimer = setTimeout(() => messageReject(new Error("Realtime message timeout")), 12_000);
+  // A cold Supabase Realtime tenant can take longer than 12 seconds to start
+  // replication even though subsequent delivery is healthy.
+  const readyTimer = setTimeout(() => readyReject(new Error("Realtime subscription timeout")), 20_000);
+  const messageTimer = setTimeout(() => messageReject(new Error("Realtime message timeout")), 20_000);
   const channel = supabase
     .channel(`acceptance-${matchId}-${crypto.randomUUID()}`)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` }, (payload) => {

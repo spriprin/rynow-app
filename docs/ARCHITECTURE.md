@@ -80,8 +80,27 @@ The live tables exist and have RLS, but the remote migration-history listing is 
 - verify affected behavior and run security/performance advisors;
 - update documentation in the same commit.
 
-Current advisor notes include intentional warnings for authenticated anonymous guest access and RPC-only tables without direct policies. Trigger/helper execution privileges and leaked-password protection remain items to audit before the next production release; advisor warnings must be classified, not silently ignored.
+Phase 0 advisor classification:
+
+- `drop_items` and `interests` having RLS but no policies is intentional: product roles have no direct DML grants and all access is through narrow RPCs;
+- anonymous users receiving the `authenticated` role is intentional for the QR guest model; ownership and Room checks remain mandatory;
+- anonymous execution of `get_room_by_join_code` is intentional and returns only the public join-route fields;
+- authenticated execution of product RPCs is intentional where each function binds identity with `auth.uid()` and the acceptance suite attacks forged arguments;
+- public execution of `rls_auto_enable` and `rooms_set_join_code`, plus forged-user arguments in `is_room_member` and `shares_active_room`, are fixable and are hardened by pending migration `20260820085448`;
+- leaked-password protection is not enabled and remains an organizer-auth hardening limitation;
+- nine unindexed-foreign-key notices are low-scale performance debt, while four unused-index notices are not actionable on a new/test-heavy database.
+
+Supabase Realtime showed one cold-tenant delivery timeout at 12 seconds. Logs
+showed replication startup rather than an authorization failure, and the full
+two-way S3 suite passed on retry. The test harness now allows 20 seconds for a
+cold subscription; production reliability should still be monitored.
 
 ## Release boundary
 
-The public Sites deployment remains Sprint 1. Sprint 2/3 source and live schema are newer than the public frontend. Publishing requires explicit release authorization, a clean build, full S1/S2/S3 live regression, a source-commit match and a smoke test on the public URL.
+The public Sites deployment remains version 8 / commit `ab8891e` from Sprint 1.
+Sprint 2/3 source and live schema are newer than the public frontend. Phase 0 is
+blocked because the live migration history is absent and the new helper-RPC
+regression fails until pending migration `20260820085448` can be applied through
+a reviewed history strategy. Publishing requires that reconciliation, a green
+expanded A–G plus S2/S3 regression, a clean build, a source-commit match and a
+smoke test on the public URL.

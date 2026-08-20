@@ -158,3 +158,15 @@ test("Sprint 3 creates one secure social loop without popularity ranking", async
   assert.match(roomSource, /postgres_changes/);
   assert.match(roomSource, /Report and Block/);
 });
+
+test("Phase 0 hardens helper RPC identity and trigger privileges", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260820085448_phase0_privilege_hardening.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /target_user = \(select auth\.uid\(\)\)/i);
+  assert.match(migration, /viewer = \(select auth\.uid\(\)\)/i);
+  assert.match(migration, /set search_path = ''/i);
+  assert.match(migration, /revoke all on function public\.rooms_set_join_code\(\) from public, anon, authenticated/i);
+  assert.match(migration, /to_regprocedure\('public\.rls_auto_enable\(\)'\)/i);
+});
