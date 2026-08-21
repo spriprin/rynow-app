@@ -21,11 +21,12 @@ The product is not a full guest catalogue and does not rank people by popularity
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
 - Phase 0 production release status: **VERIFIED RELEASE CANDIDATE**. No publication was performed.
 
-Phase 0 verification on 20 August 2026:
+Phase 0 verification was repeated on 21 August 2026:
 
 - expanded Sprint 1 A–G, including forged helper-RPC probes: PASS;
 - Sprint 2 S2-A–S2-O: PASS;
 - Sprint 3 S3-A–S3-N: one cold-start Realtime timeout, then PASS in full on an independent retry;
+- direct Sprint 3 attacks now explicitly cover organizer message reads, reversed Match insertion, forged Block ownership and forged Report ownership;
 - typecheck, lint, static security contracts and production build: PASS.
 
 The Phase 0 audit found and fixed a cross-Room presence oracle in the generic
@@ -95,8 +96,9 @@ to the canonical migration history without replaying their SQL. The operation
 and the first hardening migration were atomic. A follow-up migration separated
 generic internal membership checks from self-bound RLS wrappers after live
 Sprint 2 regression testing exposed that distinction. The connected migration
-API now reports seven applied versions. Supabase CLI 2.115.0 remains locally
-unauthenticated, so the connected Supabase integration is the live authority.
+API now reports seven applied versions. A prior audit checked Supabase CLI
+2.115.0; the current shell has no `supabase` executable in `PATH` and no CLI
+session, so the connected Supabase integration is the live authority.
 
 Local migration order:
 

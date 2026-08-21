@@ -1,6 +1,6 @@
 # HERE — краткий handoff
 
-Актуально на 20 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
+Актуально на 21 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
 
 ## Состояние
 
@@ -18,6 +18,10 @@ Sprint 2 S2-A–S2-O PASS
 Sprint 3 S3-A–S3-N PASS на полном повторном прогоне; первый прогон поймал cold-start Realtime timeout
 typecheck/lint/static/build PASS
 ```
+
+Sprint 3 security coverage дополнен явными атаками: organizer read чужого chat,
+reversed Match insert, forged `blocker_id` и forged `reporter_id`. Все запросы
+должны быть отклонены клиентскими ролями.
 
 Найденный privacy-баг закрыт. Generic `is_room_member` и
 `shares_active_room` больше нельзя вызвать через Data API ни как `anon`, ни как
@@ -64,9 +68,10 @@ matches messages blocks reports
 self-bound RLS wrappers; необходимость этого разделения обнаружил live Sprint 2
 regression run, после исправления весь набор прошёл.
 
-Supabase CLI 2.115.0 проверен через официальный `--help`. CLI-сессия по-прежнему
-не аутентифицирована (`supabase login` / `SUPABASE_ACCESS_TOKEN` отсутствует),
-поэтому repair и DDL выполнены через подключённую Supabase integration.
+В предыдущем audit Supabase CLI 2.115.0 был проверен через официальный
+`--help`. В текущем shell executable `supabase` отсутствует в `PATH`, CLI-сессии
+нет, поэтому live schema/history проверяются через подключённую Supabase
+integration; именно через неё ранее были выполнены repair и DDL.
 
 После DDL advisors просмотрены: 38 security notices (из них единственный anon
 `SECURITY DEFINER` — намеренный public lookup join route), а также 9

@@ -208,6 +208,7 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
     const { data, error } = await mark.client.from("messages").select("id").eq("match_id", matchId);
     assert.ifError(error);
     assert.equal(data.length, 0);
+    assert.equal((await organizer.from("messages").select("id").eq("match_id", matchId)).data.length, 0);
     assert.match((await mark.client.rpc("send_match_message", { p_match_id: matchId, p_body: "attack" })).error?.message || "", /Match access required/i);
   });
 
@@ -216,6 +217,12 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
     const second = mark.user.id < anna.user.id ? anna.user.id : mark.user.id;
     const { error } = await mark.client.from("matches").insert({ room_id: room.id, user_a_id: first, user_b_id: second });
     assert.ok(error);
+    const { error: reversedDuplicate } = await pavel.client.from("matches").insert({
+      room_id: room.id,
+      user_a_id: anna.user.id,
+      user_b_id: pavel.user.id,
+    });
+    assert.ok(reversedDuplicate);
   });
 
   await t.test("S3-I — Block hides Match and prevents new messages", async () => {
@@ -234,6 +241,11 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
   const safetyDrop = await createOpenDrop(organizer, safetyRoom.id, { size: 2, unlock: 1, budget: 1 });
 
   await t.test("S3-J — blocked pair is excluded before Drop ranking", async () => {
+    const { error: forgedBlock } = await blocked.client.from("blocks").insert({
+      blocker_id: blocker.user.id,
+      blocked_id: safeCandidate.user.id,
+    });
+    assert.ok(forgedBlock);
     const { data: blockerItems, error } = await blocker.client.rpc("claim_your_drop", { p_drop_id: safetyDrop.id });
     assert.ifError(error);
     assert.ok(blockerItems.every((item) => item.candidate_id !== blocked.user.id));
@@ -246,6 +258,13 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
   await t.test("S3-K — Report is stored privately from reported user", async () => {
     const { data: reportId, error } = await anna.client.rpc("submit_report", { p_reported_user_id: pavel.user.id, p_room_id: room.id, p_match_id: matchId, p_reason: "Safety concern", p_details: "Acceptance test", p_block: false });
     assert.ifError(error);
+    const { error: forgedReport } = await pavel.client.from("reports").insert({
+      reporter_id: anna.user.id,
+      reported_user_id: mark.user.id,
+      room_id: room.id,
+      reason: "Spam",
+    });
+    assert.ok(forgedReport);
     assert.equal((await anna.client.from("reports").select("id").eq("id", reportId)).data.length, 1);
     assert.equal((await pavel.client.from("reports").select("id, reporter_id").eq("id", reportId)).data.length, 0);
     assert.equal((await organizer.from("reports").select("id").eq("id", reportId)).data.length, 0);

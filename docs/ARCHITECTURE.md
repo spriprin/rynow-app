@@ -92,6 +92,7 @@ Phase 0 advisor classification:
 - anonymous users receiving the `authenticated` role is intentional for the QR guest model; ownership and Room checks remain mandatory;
 - anonymous execution of `get_room_by_join_code` is intentional and returns only the public join-route fields;
 - authenticated execution of product RPCs is intentional where each function binds identity with `auth.uid()` and the acceptance suite attacks forged arguments;
+- direct regression attacks also reject organizer chat reads, reversed Match insertion, forged Block ownership and forged Report ownership;
 - public execution of `rls_auto_enable` and `rooms_set_join_code` is revoked;
 - spoofable generic membership helpers are not Data API executable; the authenticated RLS wrappers bind identity to `auth.uid()`;
 - leaked-password protection is not enabled and remains an organizer-auth hardening limitation;
