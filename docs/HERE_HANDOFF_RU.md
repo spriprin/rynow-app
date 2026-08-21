@@ -7,8 +7,24 @@
 - Sprint 1 реализован, live-проверен и опубликован.
 - Sprint 2 реализован и live-проверен, frontend не опубликован.
 - Sprint 3 реализован и функционально live-проверен, frontend не опубликован.
+- Self-service регистрация organizer и актуальные landing/demo реализованы локально, не опубликованы.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site` — Sites version 8, commit `ab8891e`, пока Sprint 1.
-- Phase 0 production release: **VERIFIED RELEASE CANDIDATE**, публикации не было.
+- Текущий product release candidate: **VERIFIED LOCAL RELEASE CANDIDATE**, публикации не было.
+
+Organizer теперь может самостоятельно создать постоянный email/password account,
+войти, восстановить пароль и выйти. Organizer Auth хранится отдельно от anonymous
+guest session, поэтому существующий guest не повышает права и не превращается в
+organizer. В live-проекте включён `mailer_autoconfirm`, поэтому сейчас новый
+account сразу получает session; интерфейс также умеет показать `Check your email`,
+если confirmation будет включён. Recovery redirect ограничен доверенным origin.
+Полный hosted email → click → new password нужно окончательно проверить во время
+production smoke с доступом к реальному inbox.
+
+Landing объясняет актуальный flow Room Wall → Your Drop → limited Interest →
+Interested in You → Interested Too → Match → chat → IRL. `/demo` теперь повторяет
+эту модель на локальных sample data, ничего не читает и не пишет в Supabase и
+явно отличается от настоящей persistent Room. Старые Hidden/Open to Meet/
+Selective, full People catalogue и blind-mutual механика удалены из актуального UI.
 
 Live acceptance:
 
@@ -97,6 +113,7 @@ Destructive database operations требуют отдельного подтве
 
 ## Следующий приоритет
 
-1. После отдельного разрешения опубликовать точный release-candidate commit Sprint 3.
-2. Выполнить production smoke на public URL и проверить соответствие frontend/backend.
-3. Затем — privacy-safe aggregate analytics, multi-device QA и закрытый pilot.
+1. После отдельного разрешения опубликовать точный новый release-candidate commit.
+2. Выполнить production smoke: organizer signup/sign-in/recovery, Room + QR и полный двухустройственный Sprint 1–3 flow.
+3. Проверить hosted recovery email/click и production redirect allow-list.
+4. Только после отдельного продуктового задания переходить к следующим функциям; Sprint 4 автоматически не начинать.

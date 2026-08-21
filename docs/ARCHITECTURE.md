@@ -21,9 +21,28 @@ rooms 1:N drops 1:N drop_items 0:1 interests
 ## Production and demo isolation
 
 - `/r/{join_code}` uses only live Supabase data and fails closed.
-- `/organizer` uses a permanent Supabase Auth user and database-enforced ownership.
-- `/demo` retains mock people and interactions only as a design reference.
+- `/organizer` creates or signs in a permanent email/password Supabase Auth user and uses database-enforced ownership.
+- Organizer Auth has its own persisted cookie/client namespace; it cannot overwrite or promote the anonymous guest session in the same browser.
+- `/demo` is a current Sprint 3 walkthrough backed only by local React state. It performs no Supabase reads or writes.
 - No production RPC inserts fake people or mixes demo data into a Room.
+
+The current demo deliberately exposes only a limited, non-clickable Room Wall
+sample and one Drop profile at a time. Its Interests, Match, messages and safety
+actions are disposable sample interactions. The production route uses real Room
+membership, server-selected Drops and database-authorized interactions.
+
+## Organizer Auth boundary
+
+Organizer signup uses Supabase email/password Auth and creates a permanent user;
+passwords are never stored by HERE. The project currently auto-confirms email,
+while the UI also handles a null signup session by showing a check-email state.
+Password recovery uses a fixed trusted application origin and completes with
+`updateUser` only after Supabase establishes the recovery session.
+
+Authorization never depends on `user_metadata` or a client `isAdmin` flag. Room
+inserts require a non-anonymous authenticated JWT and set
+`organizer_id = auth.uid()`; reads and updates remain owner-bound. Organizer
+identity grants no access to individual Interests, Matches, messages or Reports.
 
 ## Room boundary
 
@@ -116,6 +135,10 @@ The public Sites deployment remains version 8 / commit `ab8891e` from Sprint 1.
 Sprint 2/3 source and live schema are newer than the public frontend. Phase 0
 now has a reconciled seven-version migration history, green expanded Sprint 1
 A–G, Sprint 2 A–O and Sprint 3 A–N suites, plus a clean local production build.
-This is a verified release candidate, not a deployment. Publishing still
+The organizer self-service and current landing/demo changes form a newer local
+release candidate and do not change the seven-version database history. Email
+auto-confirm is enabled on the current live project. The full hosted recovery
+email/click path remains a production-smoke item because it requires inbox and
+redirect-configuration access. This is a release candidate, not a deployment. Publishing still
 requires separate owner authorization, an exact source-commit deployment and a
 production smoke test on the public URL.

@@ -16,10 +16,21 @@ The product is not a full guest catalogue and does not rank people by popularity
 - Sprint 1 foundation: implemented, verified against live Supabase and published.
 - Sprint 2 Drops/Interests: implemented and live-verified, not published.
 - Sprint 3 Match/Chat/Safety: implemented and functionally live-verified, not published.
+- Organizer self-service Auth and the current-product landing/demo: implemented as a new local release candidate, not published.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
 - Public frontend is still Sites version 8 from commit `ab8891e` (Sprint 1). A successful local build is not a deployment.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
-- Phase 0 production release status: **VERIFIED RELEASE CANDIDATE**. No publication was performed.
+- Product release status: **VERIFIED LOCAL RELEASE CANDIDATE**. No publication was performed.
+
+The current release candidate adds permanent organizer account creation, sign-in,
+sign-out and password recovery without changing the Sprint 1–3 database. Organizer
+Auth uses a dedicated persisted browser cookie, separate from the anonymous guest
+identity. The live project currently has email auto-confirm enabled, so a new
+organizer receives a session immediately; the UI also supports the confirmation-
+required state if that project setting changes. Recovery redirects are restricted
+to the configured application origin, local development, or the fixed production
+origin. Hosted recovery-email delivery and the clicked reset link still require a
+final production smoke test with access to a real inbox.
 
 Phase 0 verification was repeated on 21 August 2026:
 
@@ -39,10 +50,17 @@ internal checks they need. Trigger helpers are also no longer client-executable.
 
 | Route | Behavior |
 | --- | --- |
-| `/` | Marketing landing page |
+| `/` | Current HERE product landing and links to demo, organizer signup and sign-in |
 | `/r/{join_code}` | Real Supabase guest flow; never falls back to fake users |
-| `/organizer` | Permanent-account organizer flow for Rooms, QR and Drops |
-| `/demo` | Isolated legacy mock experience |
+| `/organizer` | Self-service permanent organizer signup/sign-in, Rooms, QR and Drops |
+| `/demo` | Isolated in-memory Sprint 3 product demo; no Supabase reads or writes |
+
+The landing and demo no longer use the rejected `Hidden`, `Open to Meet`,
+`Selective`, full-catalogue or blind-mutual model. The demo walks through Room
+Wall, one-card-at-a-time Your Drop, limited Interests, visible incoming Interest,
+Interested Too, Match, chat and safety actions. It uses sample state only and is
+explicitly distinguished from a real organizer-created Room with persistent
+Supabase participants and interactions.
 
 ## Product contract
 
@@ -134,6 +152,12 @@ pnpm test:acceptance
 ```
 
 The harness creates real test users and Rooms, so Supabase Auth rate limits can affect repeated runs. A permanent-account fallback must never be mistaken for an anonymous actor in security tests.
+
+`tests/organizer-auth-acceptance.test.mjs` verifies permanent signup and Room
+ownership, rejects anonymous and cross-organizer attacks, preserves the separate
+anonymous identity, restores the organizer session and signs it out locally. The
+password-recovery UI and its trusted redirect are covered by static/render tests;
+the live email-click path must also be included in the production smoke test.
 
 ## Documentation rule
 

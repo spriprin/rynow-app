@@ -1,28 +1,23 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import "./globals.css";
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const configuredUrl = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://here-social.example");
-  const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || configuredUrl.host;
-  const protocol = requestHeaders.get("x-forwarded-proto") || configuredUrl.protocol.replace(":", "");
-  const origin = `${protocol}://${host}`;
+export function generateMetadata(): Metadata {
+  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://here-social-room.spriprin.chatgpt.site").origin;
 
   return {
     metadataBase: new URL(origin),
-    title: "HERE — See who's here. Meet IRL.",
-    description: "Live social rooms for events, venues and parties. Meet the people who are already here.",
+    title: "HERE — Real people. Same place. Right now.",
+    description: "Room Wall, limited Drops, intentional Interests, Matches and realtime chat for people sharing one real event.",
     openGraph: {
-      title: "HERE — Meet the people who are already here.",
-      description: "Join a live social room for your event, venue or party.",
+      title: "HERE — Real people. Same place. Right now.",
+      description: "Join a live Room, open Your Drop, Match and meet IRL.",
       type: "website",
-      images: [{ url: `${origin}/og.png`, width: 1733, height: 909, alt: "HERE — Meet the people who are already here." }],
+      images: [{ url: `${origin}/og.png`, width: 1733, height: 909, alt: "HERE — live social Rooms for real events." }],
     },
     twitter: {
       card: "summary_large_image",
-      title: "HERE — See who's here. Meet IRL.",
-      description: "Live social rooms for real-world connection.",
+      title: "HERE — Real people. Same place. Right now.",
+      description: "Limited discovery for real-world connection.",
       images: [`${origin}/og.png`],
     },
   };

@@ -21,10 +21,13 @@ test("server-renders the product landing page", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /Meet the people/);
-  assert.match(html, /who are already/);
-  assert.match(html, /View product demo/);
-  assert.match(html, /Turn your event into/);
+  assert.match(html, /Real people/);
+  assert.match(html, /Same place/);
+  assert.match(html, /Try the product demo/);
+  assert.match(html, /Create a Room/);
+  assert.match(html, /Room Wall creates abundance/);
+  assert.match(html, /Interested Too/);
+  assert.doesNotMatch(html, /Open to meet|Selective/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
 
@@ -44,7 +47,50 @@ test("keeps real QR and organizer routes separate from demo data", async () => {
   assert.doesNotMatch(organizerHtml, /142|287|Friday Social Night/i);
   const demoHtml = await demoResponse.text();
   assert.match(demoHtml, /Product demo/);
+  assert.match(demoHtml, /ROOM WALL/);
+  assert.match(demoHtml, /74 people here/);
+  assert.match(demoHtml, /Open Your Drop/);
   assert.match(demoHtml, /Create a real Room &amp; QR/);
+  assert.doesNotMatch(demoHtml, /Open to meet|full People catalogue/i);
+});
+
+test("organizer self-service Auth keeps permanent and anonymous sessions separate", async () => {
+  const [organizer, organizerClient, landing] = await Promise.all([
+    readFile(new URL("../app/components/OrganizerFoundationApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/supabase/organizer-client.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/ProductLanding.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(organizer, /signUp\(/);
+  assert.match(organizer, /Create organizer account/);
+  assert.match(organizer, /signInWithPassword/);
+  assert.match(organizer, /Forgot password\?/);
+  assert.match(organizer, /resetPasswordForEmail/);
+  assert.match(organizer, /updateUser\(\{ password \}\)/);
+  assert.match(organizer, /emailRedirectTo: organizerAuthRedirect/);
+  assert.match(organizer, /redirectTo: organizerAuthRedirect/);
+  assert.match(organizer, /scope: "local"/);
+  assert.doesNotMatch(organizer, /ORGANIZER DEVELOPMENT ACCESS|pre-created permanent/i);
+  assert.doesNotMatch(organizer, /user_metadata|isAdmin|service[_-]?role/i);
+  assert.match(organizerClient, /ORGANIZER_AUTH_COOKIE = "here-organizer-auth"/);
+  assert.match(organizerClient, /isSingleton: false/);
+  assert.match(organizerClient, /localhost|127\.0\.0\.1/);
+  assert.match(organizerClient, /PRODUCTION_ORIGIN/);
+  assert.doesNotMatch(organizerClient, /service[_-]?role/i);
+  assert.match(landing, /href="\/organizer\?mode=signup"/);
+  assert.match(landing, /href="\/organizer\?mode=signin"/);
+  assert.doesNotMatch(landing.replaceAll("aria-hidden", ""), /Open to meet|Hidden|Selective/i);
+});
+
+test("current demo models Sprint 3 locally without production writes", async () => {
+  const demo = await readFile(new URL("../app/components/CurrentProductDemo.tsx", import.meta.url), "utf8");
+  for (const contract of ["Room Wall", "Your Drop", "Interest Budget", "Interests left", "Interested in You", "Interested Too", "IT’S MUTUAL", "Message Sofia", "Block Sofia", "Report", "Report and Block"]) {
+    assert.match(demo, new RegExp(contract, "i"));
+  }
+  assert.match(demo, /one profile at a time/i);
+  assert.match(demo, /sample people and interactions only/i);
+  assert.match(demo, /Nothing is written to production/i);
+  assert.doesNotMatch(demo, /supabase|from\("|rpc\(|insert\(|update\(|storage\./i);
+  assert.doesNotMatch(demo, /Open to meet|visibility-toggle|full People catalogue|Interest stays private/i);
 });
 
 test("Sprint 1 migration enforces the foundation trust boundaries", async () => {
@@ -106,11 +152,12 @@ test("client bundle source never references a service role key", async () => {
     "../app/components/RoomJoinApp.tsx",
     "../app/components/OrganizerFoundationApp.tsx",
     "../lib/supabase/client.ts",
+    "../lib/supabase/organizer-client.ts",
   ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
   assert.doesNotMatch(files.join("\n"), /service[_-]?role/i);
   assert.match(files[0], /signInAnonymously\(\)/);
   assert.match(files[0], /join_room_by_code/);
-  assert.match(files[1], /NEXT_PUBLIC_APP_URL/);
+  assert.match(files[3], /NEXT_PUBLIC_APP_URL/);
   assert.match(files[1], /margin: 4/);
   assert.match(files[1], /Open join link/);
   assert.match(files[0], /room_drop_state/);
