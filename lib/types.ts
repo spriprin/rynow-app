@@ -57,6 +57,7 @@ export interface FoundationProfile {
 export interface RoomWallPerson {
   id: string;
   displayName: string;
+  avatarPath: string;
   avatarUrl: string;
 }
 
@@ -196,5 +197,10 @@ export interface RoomAnalytics {
   collection_scope: {
     historical: string[];
     sprint4_onward: string[];
+  };
+  presence_model?: {
+    heartbeat_seconds: number;
+    active_timeout_seconds: number;
+    definition: string;
   };
 }

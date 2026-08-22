@@ -2,7 +2,7 @@
 
 HERE is a mobile-first social discovery web app for people who are already at the same physical event.
 
-The implemented product after Sprint 4 is:
+The implemented product after Sprint 5 is:
 
 ```text
 event QR → Room → Room Wall → Drop → Your Drop → Interest
@@ -18,11 +18,12 @@ The product is not a full guest catalogue and does not rank people by popularity
 - Sprint 2 Drops/Interests: implemented and live-verified, not published.
 - Sprint 3 Match/Chat/Safety: implemented and functionally live-verified, not published.
 - Sprint 4 privacy-safe Room analytics: implemented, migrated and live-verified, not published.
+- Sprint 5 pilot reliability hardening: implemented, migrated and live-verified, not published.
 - Organizer self-service Auth and the current-product landing/demo: implemented as a new local release candidate, not published.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
 - Public frontend is still Sites version 8 from commit `ab8891e` (Sprint 1). A successful local build is not a deployment.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
-- Product release status: **VERIFIED LOCAL RELEASE CANDIDATE**. No publication was performed.
+- Product release status: **SPRINT 5 LOCAL RELEASE CANDIDATE**. No publication was performed and no Sprint 6 work was started.
 
 The current release candidate includes permanent organizer account creation,
 sign-in, sign-out and password recovery plus the Sprint 4 aggregate dashboard. Organizer
@@ -43,6 +44,25 @@ Sprint 4 verification was completed on 22 August 2026:
 - organizer Auth/signup/recovery: PASS (7/7; the clicked inbox link remains a production-smoke item);
 - direct Sprint 3 attacks now explicitly cover organizer message reads, reversed Match insertion, forged Block ownership and forged Report ownership;
 - typecheck, lint, static security contracts and production build: PASS.
+
+Sprint 5 verification was completed against the same live Supabase project on
+22 August 2026. The dedicated S5-A–S5-R suite passed 17/17. The verified load
+run used 20 participant sessions, 20 concurrent join RPCs (249 ms total), and
+10 near-simultaneous Drop claims (458 ms total) with a maximum-minus-minimum
+exposure variance of 2. The real five-minute presence expiry was tested twice
+with a 302-second wait; the final recheck used the documented fast leave path.
+Realtime reconnect, persisted-history recovery, duplicate-message prevention,
+Room close, Block, signed-avatar recovery, idempotent Report/message mutations,
+analytics isolation and direct API security all passed live.
+
+Repeated full-regression runs can exhaust the project anonymous/signup quotas.
+The harness now separates identity preparation from concurrent Room joins,
+backs off boundedly on generated-account 429s, and never treats a permanent
+fallback as an anonymous identity for anonymous-only security probes. See
+`docs/SPRINT5_REPORT.md` for the exact final regression ledger and observed
+infrastructure limits. After quota recovery, the current post-Sprint-5 build
+also passed Sprint 1 A–G and Organizer Auth 7/7 live; Sprint 2, Sprint 3 and
+Sprint 4 had already passed their current post-migration reruns.
 
 The Phase 0 audit found and fixed a cross-Room presence oracle in the generic
 `is_room_member` and `shares_active_room` helpers. Their spoofable signatures
@@ -120,13 +140,20 @@ open state, and one owner-only `room_analytics(room_id)` RPC. Organizers retain 
 direct access to `drop_items`, `interests`, `matches`, `messages`, `blocks` or
 `reports`.
 
+Sprint 5 defines recent presence as an open-Room membership whose server-written
+`last_seen_at` is within five minutes. The client sends one heartbeat per minute
+only while visible and online. Membership/profile/Match/chat data is never
+deleted by presence expiry. `messages.client_message_id` and
+`reports.client_action_id` make accidental retries one logical mutation, and
+organizers receive only aggregate joined/recent counts.
+
 The live schema was originally installed manually through SQL Editor. With the
 owner's explicit approval, the five verified historical migrations were added
 to the canonical migration history without replaying their SQL. The operation
 and the first hardening migration were atomic. A follow-up migration separated
 generic internal membership checks from self-bound RLS wrappers after live
 Sprint 2 regression testing exposed that distinction. The connected migration
-API now reports ten applied versions. Sprint 4 migrations were created with the
+API now reports eleven applied versions. Sprint 4–5 migrations were created with the
 official Supabase CLI 2.115.0, transaction-dry-run against the linked database,
 then applied through the connected Supabase integration, which remains the live
 schema/history authority.
@@ -142,12 +169,32 @@ Local migration order:
 7. `20260820103251_restore_internal_membership_checks.sql`;
 8. `20260822140308_sprint4_privacy_safe_room_analytics.sql`;
 9. `20260822140512_sprint4_instrumentation_fk_indexes.sql`;
-10. `20260822140736_sprint4_no_historical_claim_backfill.sql`.
+10. `20260822140736_sprint4_no_historical_claim_backfill.sql`;
+11. `20260822170732_sprint5_presence_reliability.sql`.
 
-All ten versions are present in remote migration history. Files 1–5 were
+All eleven versions are present in remote migration history. Files 1–5 were
 baselined only after live catalog and behavior comparison; files 6–7 were
 applied live during Phase 0; files 8–10 were applied live and verified by the
-Sprint 4 suite and the complete Sprint 1–3 regression set.
+Sprint 4 suite and the complete Sprint 1–3 regression set. File 11 was dry-run
+inside a rollback transaction, applied live through the connected integration,
+and verified by the dedicated Sprint 5 suite.
+
+## Sprint 5 reliability model
+
+- Presence heartbeat: 60 seconds, visible/online tabs only; active timeout: five minutes using database time.
+- Room polling: one guarded 15-second foreground loop with cleanup; hidden/offline tabs make no polling or heartbeat writes.
+- Foreground/online recovery immediately refreshes Room, Drop, incoming Interest, Match and presence state.
+- Realtime accelerates chat delivery but Postgres history is authoritative. Subscriptions re-authenticate, retry with bounded backoff and re-fetch history; selected chat history also refreshes through the guarded poll fallback.
+- Read operations retry at most twice with jitter. Non-idempotent mutations are never blindly retried.
+- Message and Report retries use stable client action UUIDs and database uniqueness/advisory locking.
+- Private avatar URLs are cached below their signed lifetime, re-signed once after image failure, then fall back to initials without making the bucket public.
+- Auth 429 has a dedicated friendly state: `Too many people are joining at once. Please try again in a moment.`
+- Diagnostics log only operation/category/status and resource IDs where appropriate; they exclude chat bodies, report details, profile data and credentials.
+
+Actual physical iOS/Android device QA has not been performed. A 390×844 browser
+emulation pass covered landing, organizer Auth, isolated demo and closed QR Room,
+including horizontal overflow and 44 px touch targets. Status: **EMULATED PASS**.
+Use `docs/REAL_DEVICE_QA.md` for the required 10–20 device stage.
 
 ## Analytics formulas and privacy boundary
 
@@ -189,9 +236,10 @@ pnpm test:acceptance
 
 The harness creates real test users and Rooms, so Supabase Auth rate limits can affect repeated runs. A permanent-account fallback must never be mistaken for an anonymous actor in security tests.
 
-The acceptance runner executes organizer Auth, Sprint 1, Sprint 2, Sprint 3 and
-Sprint 4 sequentially so the strict anonymous-security probe runs before the
-high-volume discovery suites.
+The acceptance runner executes organizer Auth and Sprint 1–5 sequentially, with
+a short gap between suites and bounded Auth 429 backoff for generated test
+accounts. Anonymous-only security probes still require real anonymous quota and
+must fail rather than silently substituting a permanent test user.
 
 `tests/organizer-auth-acceptance.test.mjs` verifies permanent signup and Room
 ownership, rejects anonymous and cross-organizer attacks, preserves the separate

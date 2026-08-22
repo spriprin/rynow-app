@@ -6,7 +6,7 @@ import { getSupabaseOrganizerClient } from "@/lib/supabase/organizer-client";
 import type { FoundationRoom, RoomAnalytics, RoomAnalyticsDrop } from "@/lib/types";
 
 const FORMULAS = {
-  active: "Memberships where is_active = true. This is app presence, not exact physical attendance.",
+  active: "Memberships with a server heartbeat in the last 5 minutes. This is recent app presence, not exact physical attendance.",
   unlock: "Successful unique viewer + Drop unlocks ÷ unique viewer + Drop claim attempts.",
   completion: "Completed viewer + Drop runs ÷ started viewer + Drop runs. A run completes only when every assigned card was actually seen and handled.",
   response: "Accepted + declined Interests ÷ all Interests sent in this Room.",
@@ -99,13 +99,13 @@ export function OrganizerAnalytics({ room }: { room: FoundationRoom }) {
 
   return <section className="organizer-analytics">
     <header className="organizer-analytics__header">
-      <div><span className="eyebrow">ROOM ANALYTICS</span><h2>What happened in this Room.</h2><p>Aggregate product health only. Active means app presence, not verified physical attendance.</p></div>
+      <div><span className="eyebrow">ROOM ANALYTICS</span><h2>What happened in this Room.</h2><p>Aggregate product health only. Active means a heartbeat in the last 5 minutes, not verified physical attendance.</p></div>
       <div><small>Last updated<br /><strong>{updatedAt(analytics.last_updated)}</strong></small><button className="icon-button" onClick={() => void load(true)} disabled={refreshing} aria-label="Refresh Room analytics"><RefreshCw className={refreshing ? "spin" : ""} /></button></div>
     </header>
 
     <div className="analytics-summary-grid">
       <MetricCard label="Joined" value={count(summary.joined_memberships)} icon={<Users />} />
-      <MetricCard label="Active" value={count(summary.active_memberships)} icon={<Activity />} info={FORMULAS.active} />
+      <MetricCard label="Active now" value={count(summary.active_memberships)} icon={<Activity />} info={FORMULAS.active} />
       <MetricCard label="Cards seen" value={count(summary.cards_seen)} icon={<Eye />} info={FORMULAS.cardsSeen} />
       <MetricCard label="Interests" value={count(summary.interests_sent)} icon={<Heart />} />
       <MetricCard label="Matches" value={count(summary.matches_created)} icon={<Sparkles />} />

@@ -264,3 +264,38 @@ test("Phase 0 hardens helper RPC identity and trigger privileges", async () => {
   assert.match(internalHelperSeparation, /public\.is_current_user_room_member\(id\)/i);
   assert.match(internalHelperSeparation, /public\.shares_current_user_active_room/i);
 });
+
+test("Sprint 5 hardens presence, retries, Realtime and duplicate mutations", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260822170732_sprint5_presence_reliability.sql", import.meta.url),
+    "utf8",
+  );
+  const roomSource = await readFile(new URL("../app/components/RoomJoinApp.tsx", import.meta.url), "utf8");
+  const reliabilitySource = await readFile(new URL("../lib/reliability.ts", import.meta.url), "utf8");
+  const organizerSource = await readFile(new URL("../app/components/OrganizerFoundationApp.tsx", import.meta.url), "utf8");
+
+  assert.match(migration, /last_seen_at >= now\(\) - interval '5 minutes'/i);
+  assert.match(migration, /create or replace function public\.heartbeat_room_presence/i);
+  assert.match(migration, /set last_seen_at = heartbeat_at,[\s\S]*is_active = true/i);
+  assert.match(migration, /revoke update on public\.room_members from authenticated/i);
+  assert.match(migration, /rm\.last_seen_at >= instrumentation_now - interval '5 minutes'/i);
+  assert.match(migration, /create unique index messages_sender_client_message_uidx/i);
+  assert.match(migration, /create unique index reports_reporter_client_action_uidx/i);
+  assert.match(migration, /send_match_message_idempotent/i);
+  assert.match(migration, /submit_report_idempotent/i);
+  assert.match(migration, /pg_advisory_xact_lock/i);
+  assert.match(migration, /organizer_room_presence_counts/i);
+
+  assert.match(roomSource, /PRESENCE_HEARTBEAT_MS = 60_000/);
+  assert.match(roomSource, /document\.visibilityState === "hidden"/);
+  assert.match(roomSource, /addEventListener\("online"/);
+  assert.match(roomSource, /status === "SUBSCRIBED"[\s\S]*loadMessages/);
+  assert.match(roomSource, /ResilientAvatar/);
+  assert.match(roomSource, /send_match_message_idempotent/);
+  assert.match(roomSource, /submit_report_idempotent/);
+  assert.match(reliabilitySource, /value\.status === 429/);
+  assert.match(reliabilitySource, /Too many people are joining at once/);
+  assert.match(reliabilitySource, /\[HERE operation failed\]/);
+  assert.doesNotMatch(reliabilitySource, /body|details|display_name|avatar_path/);
+  assert.match(organizerSource, /joined ·.*recent/i);
+});

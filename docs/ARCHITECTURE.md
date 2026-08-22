@@ -1,4 +1,4 @@
-# HERE architecture after Sprint 4
+# HERE architecture after Sprint 5
 
 ## Identity and event presence
 
@@ -20,6 +20,24 @@ rooms 1:N private instrumentation and validated safety attribution
 ```
 
 `profiles` never stores `current_room_id`. A browser identity can reuse one minimal profile across many Rooms; event presence is the canonical `(room_id, user_id)` membership.
+
+## Recent presence model
+
+Membership and recent presence are intentionally different facts. A membership
+is durable event history; recent presence is eligible only when the Room is open,
+`is_active = true`, and the server-written `last_seen_at` is no older than five
+minutes. The visible/online client calls `heartbeat_room_presence(room_id)` once
+per 60 seconds. Hidden or offline tabs stop heartbeats. Returning to the foreground
+immediately heartbeats and refreshes Room state; `leave_room_presence` can mark
+the caller inactive without deleting membership.
+
+Guests have no direct UPDATE grant on `room_members`, so they cannot forge a
+future timestamp or update another user. Both heartbeat/leave RPCs derive the
+user from `auth.uid()` and use database time. `organizer_room_presence_counts()`
+returns only owner-authorized aggregate `joined_count` and five-minute
+`recent_count`. Room Wall sharing and new Drop eligibility use the same recent
+presence definition. Presence expiry never deletes a profile, membership, Match
+or message.
 
 ## Production and demo isolation
 
@@ -102,7 +120,7 @@ A Drop is opened by persisted database time or an organizer RPC. `claim_your_dro
 
 Eligibility is applied before ranking:
 
-1. same open Room and active memberships;
+1. same open Room and memberships active within the five-minute server-heartbeat window;
 2. complete 18+ profile;
 3. not self;
 4. pair is not blocked;
@@ -116,7 +134,16 @@ Interest creation accepts only a server-assigned, actually seen `drop_item`. The
 
 `respond_to_interest` is callable only by the real recipient. Acceptance canonicalizes the two user UUIDs and inserts one unique `(room_id, user_a_id, user_b_id)` Match with conflict-safe idempotency.
 
-Messages are created only through `send_match_message`; history is readable only by the two unblocked Match participants. The selected chat subscribes to `messages INSERT` through Supabase Realtime using the current access token. Closing a Room prevents new discovery but does not delete existing Match/chat history.
+Messages are created through the idempotent
+`send_match_message_idempotent(match_id, body, client_message_id)` surface;
+the database uniqueness constraint makes double-submit one logical message.
+History is readable only by the two unblocked Match participants. The selected
+chat subscribes to `messages INSERT` through Supabase Realtime using the current
+access token, deduplicates by persisted message ID, and reloads Postgres history
+on every subscription. Channel errors use bounded reconnect backoff; the single
+foreground Room poll also refreshes an open conversation. Realtime is delivery
+acceleration, never the source of truth. Closing a Room prevents new discovery
+but does not delete existing Match/chat history.
 
 ## Safety boundary
 
@@ -124,12 +151,33 @@ Messages are created only through `send_match_message`; history is readable only
 - Block closes pending Interests and unhandled cards for the pair.
 - A blocked pair cannot list its Match or send/read messages through normal access.
 - Reports are visible only to the reporter through ordinary product roles.
+- One report action uses `submit_report_idempotent(..., client_action_id)` so retries cannot duplicate the logical report; Report and Block remains one transaction.
 - Organizer identity is not a moderation identity and cannot inspect Reports or chats.
 - New Block/Report backend paths validate shared Room or actual Match context before storing Room attribution; cross-Room spoofing is rejected.
 
 ## Storage boundary
 
-The `avatars` bucket is private. Object paths begin with the authenticated user UUID. Upload, replacement and deletion are limited to the owner's folder; signed reads are available only to the owner or an active co-member where required by the Room UI.
+The `avatars` bucket is private. Object paths begin with the authenticated user
+UUID. Upload, replacement and deletion are limited to the owner's folder;
+signed reads are available to the owner, a recent active Room co-member, or an
+unblocked Match participant. This keeps Match/chat avatars available after a
+Room closes without exposing the bucket publicly. The client caches signed URLs
+for less than their lifetime, retries signing once after an image error, and
+falls back to initials if Storage remains unavailable.
+
+## Runtime recovery and diagnostics
+
+The Room screen owns one guarded 15-second poll and one 60-second heartbeat.
+Both stop while the document is hidden or offline and are cleaned up on unmount.
+Foreground/online events immediately refresh persisted Room, discovery, Match
+and presence state. Safe reads retry no more than twice with jitter; mutations
+are retried only through explicit database idempotency.
+
+Normal users receive friendly offline, reconnect, rate-limit and generic retry
+states rather than raw PostgREST/RPC/fetch errors. Development diagnostics use
+operation name, error code/status, timestamp and Room/Drop/Match IDs where
+appropriate. Chat bodies, Interest pairs, report details, profile data, session
+tokens and credentials are never logged.
 
 ## Database operations
 
@@ -140,9 +188,10 @@ objects and behavior with the live database. With explicit owner approval, the
 five matching historical versions were registered in
 `supabase_migrations.schema_migrations` without replaying their SQL. The two
 Phase 0 hardening migrations were then applied normally. Three additive Sprint
-4 migrations were created with the official CLI, transaction-dry-run, applied
-live and verified. Remote history now contains ten ordered versions through
-`20260822140736_sprint4_no_historical_claim_backfill`.
+4 migrations and the additive Sprint 5 reliability migration were created with
+the official CLI, transaction-dry-run, applied live and verified. Remote history
+now contains eleven ordered versions through
+`20260822170732_sprint5_presence_reliability`.
 
 The generic `is_room_member(room, user)` and
 `shares_active_room(viewer, target)` functions remain available only to trusted
@@ -161,33 +210,37 @@ Current advisor classification:
 - public execution of `rls_auto_enable` and `rooms_set_join_code` is revoked;
 - spoofable generic membership helpers are not Data API executable; the authenticated RLS wrappers bind identity to `auth.uid()`;
 - `private.drop_claim_states` and `private.interest_opens` having RLS with no policy is intentional deny-all instrumentation isolation;
-- Sprint 4 `SECURITY DEFINER` warnings are intentional narrow product surfaces with fixed `search_path`, `auth.uid()` binding and explicit owner/recipient/context authorization;
+- Sprint 4–5 `SECURITY DEFINER` warnings are intentional narrow product surfaces with fixed `search_path`, `auth.uid()` binding and explicit owner/recipient/context authorization;
 - leaked-password protection is not enabled and remains an organizer-auth hardening limitation;
 - the advisor's composite-FK notice for `(drop_id, room_id)` is covered for equality lookups by the existing `(room_id, drop_id)` index and leading `drop_id` primary-key column; a duplicate index was not added;
 - unused-index notices are expected immediately after adding safety/instrumentation indexes to a new test-heavy workload.
 
-The post-Sprint-4 advisor run reports no ERROR findings. Security has 42 notices:
+The post-Sprint-5 advisor run reports no ERROR findings. Security has 47 notices:
 four informational deny-all/RPC-only table notices, one intentional anonymous
-join-route RPC, 26 authenticated `SECURITY DEFINER` surfaces reviewed through
+join-route RPC, 31 authenticated `SECURITY DEFINER` surfaces reviewed through
 their authorization contracts, ten warnings caused by the intentional anonymous
-guest model, and one leaked-password setting. Performance has 19 informational
-notices (eight unindexed-FK heuristics and eleven unused indexes); none changes
-release correctness at current scale.
+guest model, and one leaked-password setting. Performance has 14 informational
+notices (seven unindexed-FK heuristics and seven currently-unused indexes); none
+changes release correctness at current scale.
 
-Supabase Realtime showed one cold-tenant delivery timeout while replication was
-initializing. Logs showed stream/slot startup rather than an authorization
-failure. The test now starts its delivery timeout only after `SUBSCRIBED` and
-allows 30 seconds; the complete two-way S3 suite then passed live.
+During the 20-session stress run, Supabase Realtime temporarily reported
+`DatabaseLackOfConnections`: only 9 database connections were available while
+the tenant required at least 12. This was capacity pressure rather than RLS or
+authorization failure. Bounded reconnect plus Postgres-history refresh recovered
+successfully in the final S5-H live run. The client now tolerates that transient
+condition, but project connection/Auth quotas remain an explicit pilot risk.
 
 ## Release boundary
 
 The public Sites deployment remains version 8 / commit `ab8891e` from Sprint 1.
-Sprint 2–4 source and live schema are newer than the public frontend. The current
-release candidate has a reconciled ten-version migration history, green Sprint
-1 A–G, Sprint 2 A–O, Sprint 3 A–N, Sprint 4 A–P and organizer-auth suites, plus
-a clean local production build. Email
+Sprint 2–5 source and live schema are newer than the public frontend. The current
+release candidate has a reconciled eleven-version migration history, a dedicated
+green S5-A–S5-R live suite and a clean local production build. The earlier
+complete Sprint 1–4/organizer baseline remains recorded; repeated final legacy
+reruns are tracked separately in `SPRINT5_REPORT.md` because live Auth quota can
+block identity creation without invalidating an already-completed scenario. Email
 auto-confirm is enabled on the current live project. The full hosted recovery
 email/click path remains a production-smoke item because it requires inbox and
 redirect-configuration access. This is a release candidate, not a deployment. Publishing still
-requires separate owner authorization, an exact source-commit deployment and a
+requires separate owner authorization, an exact release-candidate deployment and a
 production smoke test on the public URL.

@@ -6,10 +6,12 @@ const suites = [
   "tests/sprint2-acceptance.test.mjs",
   "tests/sprint3-acceptance.test.mjs",
   "tests/sprint4-acceptance.test.mjs",
+  "tests/sprint5-acceptance.test.mjs",
 ];
 
 let failed = false;
-for (const suite of suites) {
+for (const [index, suite] of suites.entries()) {
+  if (index > 0) await new Promise((resolve) => setTimeout(resolve, 7_500));
   const result = spawnSync(process.execPath, ["--test", "--test-reporter=spec", suite], {
     cwd: process.cwd(),
     env: process.env,

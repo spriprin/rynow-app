@@ -1,17 +1,19 @@
 "use client";
 /* eslint-disable @next/next/no-img-element, @next/next/no-html-link-for-pages -- QR codes are generated data URLs and brand links keep the Vinext client boundary dependency-free. */
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import QRCode from "qrcode";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, Clock3, Download, KeyRound, Link2, LockKeyhole, LogOut, MailCheck, MapPin, Plus, QrCode, Radio, ShieldCheck, Trash2, Users } from "lucide-react";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseOrganizerClient, getTrustedApplicationOrigin, organizerAuthRedirect } from "@/lib/supabase/organizer-client";
+import { logDiagnostic, retryRead, userFacingError } from "@/lib/reliability";
 import type { FoundationRoom, OrganizerDrop } from "@/lib/types";
 import { OrganizerAnalytics } from "./OrganizerAnalytics";
 
 type OrganizerScreen = "loading" | "configuration" | "auth" | "check-email" | "reset-password" | "rooms" | "create";
 type AuthMode = "signin" | "signup" | "forgot";
-type OrganizerRoom = FoundationRoom & { joinedCount: number };
+type OrganizerRoom = FoundationRoom & { joinedCount: number; recentCount: number };
+type OrganizerPresenceCount = { room_id: string; joined_count: number; recent_count: number };
 
 function localDateTime(offsetHours: number) {
   const date = new Date(Date.now() + offsetHours * 60 * 60 * 1000);
@@ -34,6 +36,7 @@ export function OrganizerFoundationApp() {
   const [toast, setToast] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [pendingEmail, setPendingEmail] = useState("");
+  const closingRoom = useRef(false);
 
   const selectedRoom = rooms.find((room) => room.id === selectedId) || rooms[0] || null;
   const origin = useMemo(() => {
@@ -42,18 +45,43 @@ export function OrganizerFoundationApp() {
   }, []);
   const joinUrl = useMemo(() => selectedRoom ? `${origin}/r/${selectedRoom.join_code}` : "", [origin, selectedRoom]);
 
-  async function loadRooms(userId: string) {
+  const loadPresenceCounts = useCallback(async () => {
     const client = getSupabaseOrganizerClient();
     if (!client) return;
-    const { data, error: roomError } = await client.from("rooms").select("id, name, venue_name, city, starts_at, ends_at, status, join_code, cover_path").eq("organizer_id", userId).order("created_at", { ascending: false });
-    if (roomError) throw roomError;
-    const withCounts = await Promise.all((data || []).map(async (room) => {
-      const { data: count } = await client.rpc("room_joined_count", { p_room_id: room.id });
-      return { ...(room as FoundationRoom), joinedCount: Number(count || 0) };
+    const data = await retryRead("organizer_presence_counts", async () => {
+      const result = await client.rpc("organizer_room_presence_counts");
+      if (result.error) throw result.error;
+      return (result.data || []) as OrganizerPresenceCount[];
+    });
+    const counts = new Map(data.map((item) => [item.room_id, item]));
+    setRooms((current) => current.map((room) => ({
+      ...room,
+      joinedCount: Number(counts.get(room.id)?.joined_count || 0),
+      recentCount: Number(counts.get(room.id)?.recent_count || 0),
+    })));
+  }, []);
+
+  const loadRooms = useCallback(async (userId: string) => {
+    const client = getSupabaseOrganizerClient();
+    if (!client) return;
+    const [roomData, presenceData] = await retryRead("organizer_rooms", async () => {
+      const results = await Promise.all([
+        client.from("rooms").select("id, name, venue_name, city, starts_at, ends_at, status, join_code, cover_path").eq("organizer_id", userId).order("created_at", { ascending: false }),
+        client.rpc("organizer_room_presence_counts"),
+      ]);
+      if (results[0].error) throw results[0].error;
+      if (results[1].error) throw results[1].error;
+      return [results[0].data || [], (results[1].data || []) as OrganizerPresenceCount[]] as const;
+    });
+    const counts = new Map(presenceData.map((item) => [item.room_id, item]));
+    const withCounts = roomData.map((room) => ({
+      ...(room as FoundationRoom),
+      joinedCount: Number(counts.get(room.id)?.joined_count || 0),
+      recentCount: Number(counts.get(room.id)?.recent_count || 0),
     }));
     setRooms(withCounts);
     setSelectedId((current) => current || withCounts[0]?.id || "");
-  }
+  }, []);
 
   useEffect(() => {
     async function bootstrap() {
@@ -90,12 +118,27 @@ export function OrganizerFoundationApp() {
       setScreen("auth");
     });
     return () => subscription?.data.subscription.unsubscribe();
-  }, []);
+  }, [loadRooms]);
 
   useEffect(() => {
     if (!joinUrl) return;
     void QRCode.toDataURL(joinUrl, { width: 960, margin: 4, errorCorrectionLevel: "H", color: { dark: "#000000", light: "#ffffff" } }).then(setQrDataUrl);
   }, [joinUrl]);
+
+  useEffect(() => {
+    if (screen !== "rooms" || !organizerId) return;
+    const refresh = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        void loadPresenceCounts().catch((reason: unknown) => logDiagnostic("organizer_presence_poll", reason));
+      }
+    };
+    const timer = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadPresenceCounts, organizerId, screen]);
 
   function flash(message: string) {
     setToast(message);
@@ -117,7 +160,8 @@ export function OrganizerFoundationApp() {
       await loadRooms(data.user.id);
       setScreen("rooms");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "We couldn’t sign you in. Please try again.");
+      logDiagnostic("organizer_sign_in", reason);
+      setError(userFacingError(reason, "We couldn’t sign you in. Please try again.", "Too many requests. Please try again in a moment."));
     } finally {
       setBusy(false);
     }
@@ -154,7 +198,8 @@ export function OrganizerFoundationApp() {
       setScreen("rooms");
       flash("Organizer account created");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "We couldn’t create the account. Please try again.");
+      logDiagnostic("organizer_sign_up", reason);
+      setError(userFacingError(reason, "We couldn’t create the account. Please try again.", "Too many requests. Please try again in a moment."));
     } finally {
       setBusy(false);
     }
@@ -176,7 +221,8 @@ export function OrganizerFoundationApp() {
       setPendingEmail(email);
       setScreen("check-email");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "We couldn’t send the recovery email. Please try again.");
+      logDiagnostic("organizer_password_recovery", reason);
+      setError(userFacingError(reason, "We couldn’t send the recovery email. Please try again.", "Too many requests. Please try again in a moment."));
     } finally {
       setBusy(false);
     }
@@ -201,7 +247,8 @@ export function OrganizerFoundationApp() {
       setScreen("rooms");
       flash("Password updated");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "We couldn’t update the password.");
+      logDiagnostic("organizer_password_update", reason);
+      setError(userFacingError(reason, "We couldn’t update the password. Try again."));
     } finally {
       setBusy(false);
     }
@@ -225,26 +272,35 @@ export function OrganizerFoundationApp() {
         status: "open",
       }).select("id, name, venue_name, city, starts_at, ends_at, status, join_code, cover_path").single();
       if (createError || !data) throw createError || new Error("Could not create Room");
-      const created = { ...(data as FoundationRoom), joinedCount: 0 };
+      const created = { ...(data as FoundationRoom), joinedCount: 0, recentCount: 0 };
       setRooms((current) => [created, ...current]);
       setSelectedId(created.id);
       setScreen("rooms");
       flash("Room created — the QR is live");
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not create Room");
+      logDiagnostic("organizer_create_room", reason);
+      setError(userFacingError(reason, "We couldn’t create this Room. Try again."));
     } finally {
       setBusy(false);
     }
   }
 
   async function closeRoom() {
-    if (!selectedRoom) return;
+    if (!selectedRoom || closingRoom.current) return;
+    closingRoom.current = true;
     const client = getSupabaseOrganizerClient();
-    if (!client) return;
-    const { error: closeError } = await client.from("rooms").update({ status: "closed" }).eq("id", selectedRoom.id);
-    if (closeError) return setError(closeError.message);
-    setRooms((current) => current.map((room) => room.id === selectedRoom.id ? { ...room, status: "closed" } : room));
-    flash("Room closed");
+    if (!client) { closingRoom.current = false; return; }
+    try {
+      const { error: closeError } = await client.from("rooms").update({ status: "closed" }).eq("id", selectedRoom.id);
+      if (closeError) throw closeError;
+      setRooms((current) => current.map((room) => room.id === selectedRoom.id ? { ...room, status: "closed", recentCount: 0 } : room));
+      flash("Room closed");
+    } catch (reason) {
+      logDiagnostic("close_room", reason, { roomId: selectedRoom.id });
+      setError(userFacingError(reason, "We couldn’t close this Room. Try again."));
+    } finally {
+      closingRoom.current = false;
+    }
   }
 
   async function copyLink() {
@@ -274,7 +330,7 @@ export function OrganizerFoundationApp() {
 
   if (screen === "create") return <main className="foundation-organizer"><header className="foundation-organizer__top"><span className="brand"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></span></header><section className="foundation-create"><button className="back-link" onClick={() => { setError(""); setScreen("rooms"); }}><ArrowLeft size={17} />Back to Rooms</button><span className="eyebrow">SPRINT 1</span><h1>Create a Room.</h1><p>Only the event essentials. A unique join code and QR are generated automatically.</p><form onSubmit={createRoom}><label>Room name<input name="name" required minLength={2} maxLength={100} placeholder="HERE Test Party" /></label><div className="form-grid"><label>Venue name<input name="venueName" placeholder="Lumen Club" /></label><label>City<input name="city" placeholder="Riga" /></label></div><div className="form-grid"><label>Starts<input name="startsAt" type="datetime-local" required defaultValue={localDateTime(1)} /></label><label>Ends<input name="endsAt" type="datetime-local" required defaultValue={localDateTime(5)} /></label></div>{error && <p className="form-error">{error}</p>}<button className="button button--lime" disabled={busy}>{busy ? "Creating…" : "Create Room & QR"}<ArrowRight size={18} /></button></form></section></main>;
 
-  return <main className="foundation-organizer"><header className="foundation-organizer__top"><span className="brand"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></span><div><button className="button button--lime button--small" onClick={() => setScreen("create")}><Plus size={17} />Create Room</button><button className="icon-button" onClick={signOut} aria-label="Sign out"><LogOut size={18} /></button></div></header><section className="foundation-organizer__heading"><div><span className="eyebrow">REAL ROOMS</span><h1>Organizer space</h1><p>Persistent Rooms, real join links and privacy-safe aggregate analytics.</p></div></section>{rooms.length === 0 ? <section className="foundation-no-rooms"><QrCode /><h2>No Rooms yet.</h2><p>Create the first real event Room. No demo Room will be added automatically.</p><button className="button button--lime" onClick={() => setScreen("create")}><Plus size={18} />Create Room</button></section> : <><div className="foundation-organizer-grid"><section className="foundation-room-list">{rooms.map((room) => <button key={room.id} className={`foundation-room-row ${selectedRoom?.id === room.id ? "active" : ""}`} onClick={() => setSelectedId(room.id)}><span className={`status-badge status-badge--${room.status}`}><i />{room.status}</span><div><h2>{room.name}</h2><p><MapPin size={14} />{[room.venue_name, room.city].filter(Boolean).join(", ") || "Venue not set"}</p><p><CalendarDays size={14} />{eventDate(room.starts_at)}</p></div><strong><Users size={17} />{room.joinedCount} joined</strong></button>)}</section>{selectedRoom && <div className="foundation-organizer-sidebar"><aside className="foundation-qr-card"><span className="eyebrow">ROOM ACCESS</span><h2>{selectedRoom.name}</h2><p>{selectedRoom.status === "closed" ? "This Room has ended." : "Scan to join this exact Room."}</p><div className="qr-image">{qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${selectedRoom.name}`} /> : <QrCode size={160} />}</div><a className="foundation-join-link" href={joinUrl} target="_blank" rel="noreferrer">{joinUrl}</a><div className="qr-actions"><a className="button button--dark" href={qrDataUrl} download={`${selectedRoom.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-qr.png`}><Download size={17} />Download PNG</a><a className="button button--ghost" href={joinUrl} target="_blank" rel="noreferrer"><ArrowRight size={17} />Open join link</a><button className="button button--ghost" onClick={copyLink}><Link2 size={17} />Copy link</button></div><div className="foundation-qr-stats"><Users /><span><strong>{selectedRoom.joinedCount}</strong> real participants</span></div>{selectedRoom.status !== "closed" && <button className="foundation-close-room" onClick={closeRoom}>Close Room</button>}</aside><OrganizerDropControls room={selectedRoom} /></div>}</div>{selectedRoom && <OrganizerAnalytics room={selectedRoom} />}</>}{error && <p className="foundation-global-error form-error">{error}</p>}{toast && <div className="toast"><Check size={17} />{toast}</div>}</main>;
+  return <main className="foundation-organizer"><header className="foundation-organizer__top"><span className="brand"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></span><div><button className="button button--lime button--small" onClick={() => setScreen("create")}><Plus size={17} />Create Room</button><button className="icon-button" onClick={signOut} aria-label="Sign out"><LogOut size={18} /></button></div></header><section className="foundation-organizer__heading"><div><span className="eyebrow">REAL ROOMS</span><h1>Organizer space</h1><p>Persistent Rooms, real join links and privacy-safe aggregate analytics.</p></div></section>{rooms.length === 0 ? <section className="foundation-no-rooms"><QrCode /><h2>No Rooms yet.</h2><p>Create the first real event Room. No demo Room will be added automatically.</p><button className="button button--lime" onClick={() => setScreen("create")}><Plus size={18} />Create Room</button></section> : <><div className="foundation-organizer-grid"><section className="foundation-room-list">{rooms.map((room) => <button key={room.id} className={`foundation-room-row ${selectedRoom?.id === room.id ? "active" : ""}`} onClick={() => setSelectedId(room.id)}><span className={`status-badge status-badge--${room.status}`}><i />{room.status}</span><div><h2>{room.name}</h2><p><MapPin size={14} />{[room.venue_name, room.city].filter(Boolean).join(", ") || "Venue not set"}</p><p><CalendarDays size={14} />{eventDate(room.starts_at)}</p></div><strong><Users size={17} />{room.joinedCount} joined · {room.recentCount} recent</strong></button>)}</section>{selectedRoom && <div className="foundation-organizer-sidebar"><aside className="foundation-qr-card"><span className="eyebrow">ROOM ACCESS</span><h2>{selectedRoom.name}</h2><p>{selectedRoom.status === "closed" ? "This Room has ended." : "Scan to join this exact Room."}</p><div className="qr-image">{qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${selectedRoom.name}`} /> : <QrCode size={160} />}</div><a className="foundation-join-link" href={joinUrl} target="_blank" rel="noreferrer">{joinUrl}</a><div className="qr-actions"><a className="button button--dark" href={qrDataUrl} download={`${selectedRoom.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-qr.png`}><Download size={17} />Download PNG</a><a className="button button--ghost" href={joinUrl} target="_blank" rel="noreferrer"><ArrowRight size={17} />Open join link</a><button className="button button--ghost" onClick={copyLink}><Link2 size={17} />Copy link</button></div><div className="foundation-qr-stats"><Users /><span><strong>{selectedRoom.joinedCount}</strong> joined · <strong>{selectedRoom.recentCount}</strong> active in last 5 min</span></div>{selectedRoom.status !== "closed" && <button className="foundation-close-room" onClick={closeRoom}>Close Room</button>}</aside><OrganizerDropControls room={selectedRoom} /></div>}</div>{selectedRoom && <OrganizerAnalytics room={selectedRoom} />}</>}{error && <p className="foundation-global-error form-error">{error}</p>}{toast && <div className="toast"><Check size={17} />{toast}</div>}</main>;
 }
 
 function OrganizerState({ title, copy }: { title: string; copy: string }) {
@@ -296,10 +352,10 @@ function OrganizerDropControls({ room }: { room: OrganizerRoom }) {
   }, [room.id]);
 
   useEffect(() => {
-    const loadTimer = window.setTimeout(() => { void loadDrops().catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "Could not load Drops")); }, 0);
+    const loadTimer = window.setTimeout(() => { void loadDrops().catch((reason: unknown) => { logDiagnostic("organizer_load_drops", reason, { roomId: room.id }); setError(userFacingError(reason, "We couldn’t load Drops. Try again.")); }); }, 0);
     const clockTimer = window.setInterval(() => setNowMs(Date.now()), 30000);
     return () => { window.clearTimeout(loadTimer); window.clearInterval(clockTimer); };
-  }, [loadDrops]);
+  }, [loadDrops, room.id]);
 
   async function addDrop(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -319,7 +375,7 @@ function OrganizerDropControls({ room }: { room: OrganizerRoom }) {
       if (createError) throw createError;
       await loadDrops();
       formElement.reset();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not add Drop"); }
+    } catch (reason) { logDiagnostic("organizer_create_drop", reason, { roomId: room.id }); setError(userFacingError(reason, "We couldn’t add this Drop. Try again.")); }
     finally { setBusy(false); }
   }
 
@@ -330,7 +386,7 @@ function OrganizerDropControls({ room }: { room: OrganizerRoom }) {
       const { error: openError } = await client!.rpc("open_drop_now", { p_drop_id: dropId });
       if (openError) throw openError;
       await loadDrops();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not open Drop"); }
+    } catch (reason) { logDiagnostic("organizer_open_drop", reason, { roomId: room.id, dropId }); setError(userFacingError(reason, "We couldn’t open this Drop. Try again.")); }
     finally { setBusy(false); }
   }
 
@@ -341,7 +397,7 @@ function OrganizerDropControls({ room }: { room: OrganizerRoom }) {
       const { error: deleteError } = await client!.rpc("delete_future_drop", { p_drop_id: dropId });
       if (deleteError) throw deleteError;
       await loadDrops();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not delete Drop"); }
+    } catch (reason) { logDiagnostic("organizer_delete_drop", reason, { roomId: room.id, dropId }); setError(userFacingError(reason, "We couldn’t delete this Drop. Try again.")); }
     finally { setBusy(false); }
   }
 

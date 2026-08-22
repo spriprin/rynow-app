@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
+import { retryAuthRateLimit } from "./live-auth-helpers.mjs";
 
 const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
@@ -16,7 +17,7 @@ async function registerPermanent(label) {
   const authClient = client();
   const email = `here-organizer-${label}-${crypto.randomUUID()}@example.com`;
   const password = `Here-${crypto.randomUUID()}-Aa1!`;
-  const { data, error } = await authClient.auth.signUp({ email, password });
+  const { data, error } = await retryAuthRateLimit(() => authClient.auth.signUp({ email, password }));
   assert.ifError(error);
   assert.ok(data.user);
   assert.notEqual(data.user.is_anonymous, true);
