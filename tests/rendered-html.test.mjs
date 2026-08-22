@@ -206,6 +206,45 @@ test("Sprint 3 creates one secure social loop without popularity ranking", async
   assert.match(roomSource, /Report and Block/);
 });
 
+test("Sprint 4 exposes owner-only aggregates and instruments only real product events", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260822140308_sprint4_privacy_safe_room_analytics.sql", import.meta.url),
+    "utf8",
+  );
+  const historicalGuard = await readFile(
+    new URL("../supabase/migrations/20260822140736_sprint4_no_historical_claim_backfill.sql", import.meta.url),
+    "utf8",
+  );
+  const roomSource = await readFile(new URL("../app/components/RoomJoinApp.tsx", import.meta.url), "utf8");
+  const organizerSource = await readFile(new URL("../app/components/OrganizerAnalytics.tsx", import.meta.url), "utf8");
+
+  assert.match(migration, /create table private\.drop_claim_states/i);
+  assert.match(migration, /primary key \(drop_id, viewer_id\)/i);
+  assert.match(migration, /create table private\.interest_opens/i);
+  assert.match(migration, /create or replace function public\.mark_incoming_interest_opened/i);
+  assert.match(migration, /i\.to_user_id = current_user_id[\s\S]*i\.status = 'pending'/i);
+  assert.match(migration, /create or replace function public\.block_user_in_context/i);
+  assert.match(migration, /create or replace function public\.room_analytics/i);
+  assert.match(migration, /r\.organizer_id = current_user_id/i);
+  assert.match(migration, /set search_path = ''/i);
+  assert.match(migration, /when cr\.claim_attempts = 0 then null/i);
+  assert.match(migration, /when ir\.started_runs = 0 then null/i);
+  assert.match(migration, /when ints\.interests_sent = 0 then null/i);
+  assert.match(migration, /di\.first_seen_at is not null/i);
+  assert.match(migration, /revoke all on private\.drop_claim_states from public, anon, authenticated/i);
+  assert.match(migration, /revoke all on function public\.room_analytics\(uuid\) from public, anon, authenticated/i);
+  assert.match(historicalGuard, /guard_new_claim_instrumentation/i);
+  assert.match(historicalGuard, /exists[\s\S]*from public\.drop_items/i);
+
+  assert.match(roomSource, /mark_incoming_interest_opened/);
+  assert.match(roomSource, /if \(!incomingOpen \|\| !selectedIncoming/);
+  assert.match(roomSource, /block_user_in_context/);
+  assert.match(organizerSource, /room_analytics/);
+  assert.match(organizerSource, /No data/);
+  assert.match(organizerSource, /Joined → Your Drop started → Card seen → Interest → Match → Conversation|From Room to conversation/);
+  assert.doesNotMatch(organizerSource, /display_name|avatar_path|from_user_id|to_user_id|message body/i);
+});
+
 test("Phase 0 hardens helper RPC identity and trigger privileges", async () => {
   const initialHardening = await readFile(
     new URL("../supabase/migrations/20260820085448_phase0_privilege_hardening.sql", import.meta.url),

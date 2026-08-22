@@ -85,6 +85,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [dropError, setDropError] = useState("");
   const bootstrapStarted = useRef(false);
   const markingSeen = useRef(new Set<string>());
+  const markingIncomingOpened = useRef(new Set<string>());
   const zeroRequeryFor = useRef("");
   const selectedMatchId = selectedMatch?.id || "";
 
@@ -286,6 +287,18 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     });
   }, [activeItem, dropOpen]);
 
+  useEffect(() => {
+    if (!incomingOpen || !selectedIncoming || markingIncomingOpened.current.has(selectedIncoming.interestId)) return;
+    const client = getSupabaseBrowserClient();
+    if (!client) return;
+    const interestId = selectedIncoming.interestId;
+    markingIncomingOpened.current.add(interestId);
+    void client.rpc("mark_incoming_interest_opened", { p_interest_id: interestId }).then(({ error: openedError }) => {
+      markingIncomingOpened.current.delete(interestId);
+      if (openedError) setError(openedError.message);
+    });
+  }, [incomingOpen, selectedIncoming]);
+
   function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -411,7 +424,11 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     try {
       const client = getSupabaseBrowserClient();
       if (!client) throw new Error("Supabase is not configured");
-      const { error: blockError } = await client.rpc("block_user", { p_blocked_id: target.userId });
+      const { error: blockError } = await client.rpc("block_user_in_context", {
+        p_blocked_id: target.userId,
+        p_room_id: room.id,
+        p_match_id: target.matchId,
+      });
       if (blockError) throw blockError;
       setSafetyTarget(null); setSelectedIncoming(null); setSelectedMatch(null); setMatchMoment(null);
       if (room.status === "open") await loadDiscovery(room.id);

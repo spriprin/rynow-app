@@ -85,7 +85,7 @@ function subscribeForMessage(supabase, matchId, expectedBody) {
   // A cold Supabase Realtime tenant can take longer than 12 seconds to start
   // replication even though subsequent delivery is healthy.
   const readyTimer = setTimeout(() => readyReject(new Error("Realtime subscription timeout")), 20_000);
-  const messageTimer = setTimeout(() => messageReject(new Error("Realtime message timeout")), 20_000);
+  let messageTimer;
   const channel = supabase
     .channel(`acceptance-${matchId}-${crypto.randomUUID()}`)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${matchId}` }, (payload) => {
@@ -95,7 +95,11 @@ function subscribeForMessage(supabase, matchId, expectedBody) {
       }
     })
     .subscribe((status) => {
-      if (status === "SUBSCRIBED") { clearTimeout(readyTimer); readyResolve(); }
+      if (status === "SUBSCRIBED") {
+        clearTimeout(readyTimer);
+        messageTimer = setTimeout(() => messageReject(new Error("Realtime message timeout")), 30_000);
+        readyResolve();
+      }
       if (status === "CHANNEL_ERROR") { clearTimeout(readyTimer); readyReject(new Error("Realtime channel error")); }
     });
   return { ready, message, cleanup: () => supabase.removeChannel(channel) };
@@ -226,7 +230,7 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
   });
 
   await t.test("S3-I — Block hides Match and prevents new messages", async () => {
-    assert.ifError((await anna.client.rpc("block_user", { p_blocked_id: pavel.user.id })).error);
+    assert.ifError((await anna.client.rpc("block_user_in_context", { p_blocked_id: pavel.user.id, p_room_id: room.id, p_match_id: matchId })).error);
     assert.equal((await anna.client.rpc("room_matches", { p_room_id: room.id })).data.length, 0);
     assert.equal((await pavel.client.rpc("room_matches", { p_room_id: room.id })).data.length, 0);
     assert.match((await pavel.client.rpc("send_match_message", { p_match_id: matchId, p_body: "blocked" })).error?.message || "", /unavailable/i);
@@ -237,7 +241,7 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
   const blocker = await createGuest("Blocker", safetyRoom.join_code);
   const blocked = await createGuest("Blocked", safetyRoom.join_code);
   const safeCandidate = await createGuest("Safe Candidate", safetyRoom.join_code);
-  assert.ifError((await blocker.client.rpc("block_user", { p_blocked_id: blocked.user.id })).error);
+  assert.ifError((await blocker.client.rpc("block_user_in_context", { p_blocked_id: blocked.user.id, p_room_id: safetyRoom.id, p_match_id: null })).error);
   const safetyDrop = await createOpenDrop(organizer, safetyRoom.id, { size: 2, unlock: 1, budget: 1 });
 
   await t.test("S3-J — blocked pair is excluded before Drop ranking", async () => {

@@ -131,3 +131,70 @@ export interface OrganizerDrop {
   interest_budget: number;
   created_at: string;
 }
+
+export interface RoomAnalyticsSummary {
+  joined_memberships: number;
+  active_memberships: number;
+  scheduled_drops: number;
+  effectively_opened_drops: number;
+  claim_attempts: number;
+  forming_attempts: number;
+  successful_unlocks: number;
+  cards_seen: number;
+  your_drop_started_participants: number;
+  card_seen_participants: number;
+  your_drop_started_runs: number;
+  your_drop_completed_runs: number;
+  your_drop_completed_participants: number;
+  interests_sent: number;
+  interest_senders: number;
+  incoming_interests_opened: number;
+  pending_interests: number;
+  accepted_interests: number;
+  declined_interests: number;
+  matches_created: number;
+  conversations_started: number;
+  median_match_to_first_message_seconds: number | null;
+  blocks_count: number;
+  reports_count: number;
+}
+
+export interface RoomAnalyticsRates {
+  unlock_rate: number | null;
+  drop_completion_rate: number | null;
+  interest_response_rate: number | null;
+  interest_acceptance_rate: number | null;
+  interest_decline_rate: number | null;
+  match_to_conversation_rate: number | null;
+}
+
+export interface RoomAnalyticsDrop {
+  drop_id: string;
+  sequence_number: number;
+  scheduled_at: string;
+  effective_open_at: string;
+  effective_status: "scheduled" | "opened";
+  claim_attempts: number;
+  forming_attempts: number;
+  successful_unlocks: number;
+  unlock_rate: number | null;
+  cards_seen: number;
+  started_runs: number;
+  completed_runs: number;
+  completion_rate: number | null;
+  interests_sent: number;
+  incoming_interests_opened: number;
+  matches_created: number;
+}
+
+export interface RoomAnalytics {
+  room_id: string;
+  last_updated: string;
+  summary: RoomAnalyticsSummary;
+  rates: RoomAnalyticsRates;
+  drops: RoomAnalyticsDrop[];
+  collection_scope: {
+    historical: string[];
+    sprint4_onward: string[];
+  };
+}

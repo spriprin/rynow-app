@@ -56,7 +56,8 @@ test("Organizer self-service Auth live acceptance", { skip: enabled ? false : "S
   });
 
   await t.test("password recovery request accepts only the fixed production organizer redirect", async () => {
-    const { error } = await first.client.auth.resetPasswordForEmail(first.email, {
+    const recoveryProbeEmail = `here.sprint4.recovery+${crypto.randomUUID()}@gmail.com`;
+    const { error } = await first.client.auth.resetPasswordForEmail(recoveryProbeEmail, {
       redirectTo: "https://here-social-room.spriprin.chatgpt.site/organizer?recovery=1",
     });
     assert.ifError(error);
