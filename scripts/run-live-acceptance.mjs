@@ -7,6 +7,8 @@ const suites = [
   "tests/sprint3-acceptance.test.mjs",
   "tests/sprint4-acceptance.test.mjs",
   "tests/sprint5-acceptance.test.mjs",
+  "tests/pre-pilot-acceptance.test.mjs",
+  "tests/auth-capacity.test.mjs",
 ];
 
 let failed = false;

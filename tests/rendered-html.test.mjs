@@ -49,9 +49,10 @@ test("keeps real QR and organizer routes separate from demo data", async () => {
   assert.match(demoHtml, /Product demo/);
   assert.match(demoHtml, /ROOM WALL/);
   assert.match(demoHtml, /74 people here/);
-  assert.match(demoHtml, /Open Your Drop/);
+  assert.match(demoHtml, /Explore now/);
+  assert.match(demoHtml, /Preview Drop/);
   assert.match(demoHtml, /Create a real Room &amp; QR/);
-  assert.doesNotMatch(demoHtml, /Open to meet|full People catalogue/i);
+  assert.doesNotMatch(demoHtml, /Open to meet|visibility-toggle/i);
 });
 
 test("organizer self-service Auth keeps permanent and anonymous sessions separate", async () => {
@@ -81,16 +82,16 @@ test("organizer self-service Auth keeps permanent and anonymous sessions separat
   assert.doesNotMatch(landing.replaceAll("aria-hidden", ""), /Open to meet|Hidden|Selective/i);
 });
 
-test("current demo models Sprint 3 locally without production writes", async () => {
+test("current demo models the authoritative Explore + Drops flow without production writes", async () => {
   const demo = await readFile(new URL("../app/components/CurrentProductDemo.tsx", import.meta.url), "utf8");
-  for (const contract of ["Room Wall", "Your Drop", "Interest Budget", "Interests left", "Interested in You", "Interested Too", "IT’S MUTUAL", "Message Sofia", "Block Sofia", "Report", "Report and Block"]) {
+  for (const contract of ["Room Wall", "Explore", "all evening", "Your Drop", "Adaptive Interest Budget", "Interests left", "Interested in You", "Interested Too", "IT’S MUTUAL", "Message Sofia", "Block Sofia", "Report", "Report and Block"]) {
     assert.match(demo, new RegExp(contract, "i"));
   }
   assert.match(demo, /one profile at a time/i);
   assert.match(demo, /sample people and interactions only/i);
   assert.match(demo, /Nothing is written to production/i);
   assert.doesNotMatch(demo, /supabase|from\("|rpc\(|insert\(|update\(|storage\./i);
-  assert.doesNotMatch(demo, /Open to meet|visibility-toggle|full People catalogue|Interest stays private/i);
+  assert.doesNotMatch(demo, /Open to meet|visibility-toggle|Interest stays private/i);
 });
 
 test("Sprint 1 migration enforces the foundation trust boundaries", async () => {
@@ -298,4 +299,48 @@ test("Sprint 5 hardens presence, retries, Realtime and duplicate mutations", asy
   assert.match(reliabilitySource, /\[HERE operation failed\]/);
   assert.doesNotMatch(reliabilitySource, /body|details|display_name|avatar_path/);
   assert.match(organizerSource, /joined ·.*recent/i);
+});
+
+test("Pre-pilot revision makes Explore primary while keeping Drops and explicit presence control", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260824093231_pre_pilot_core_revision.sql", import.meta.url),
+    "utf8",
+  );
+  const [roomSource, landingSource, organizerSource, replacementFix, leftStateFix, fkIndexes] = await Promise.all([
+    readFile(new URL("../app/components/RoomJoinApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/ProductLanding.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/components/OrganizerAnalytics.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260824094220_fix_explore_replacement_position.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260824094426_fix_left_presence_state.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260824095156_pre_pilot_fk_indexes.sql", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(migration, /add column if not exists discovery_enabled boolean not null default true/i);
+  assert.match(migration, /add column if not exists left_at timestamptz/i);
+  assert.match(migration, /interval '10 minutes'/i);
+  assert.match(migration, /interval '60 minutes'/i);
+  assert.match(migration, /create table public\.explore_batches/i);
+  assert.match(migration, /create table public\.explore_items/i);
+  assert.match(migration, /revoke all on public\.explore_batches from anon, authenticated/i);
+  assert.match(migration, /private\.explore_target_size/i);
+  assert.match(migration, /database_now \+ interval '15 minutes'/i);
+  assert.match(migration, /new_total >= 3/i);
+  assert.match(migration, /private\.adaptive_interest_budget/i);
+  assert.match(migration, /ceil\(p_batch_size::numeric \* 0\.5\)/i);
+  assert.match(migration, /private\.discovery_delivered_count/i);
+  assert.match(migration, /private\.discovery_pending_count/i);
+  assert.match(replacementFix, /where invalidated_at is null/i);
+  assert.match(leftStateFix, /select 1 from public\.room_members/i);
+  assert.doesNotMatch(leftStateFix, /public\.is_room_member/i);
+  assert.match(fkIndexes, /interests_explore_assignment_idx/i);
+  const rankingBlock = migration.slice(migration.indexOf("with candidate_exposure"), migration.indexOf("create or replace function private.complete_explore_batch_if_finished"));
+  assert.doesNotMatch(rankingBlock, /matches|messages|status = 'accepted'|popularity/i);
+
+  for (const contract of ["claim_explore_batch", "mark_explore_item_seen", "send_explore_interest", "Leave event", "Rejoin event", "Explore now", "Interested in You", "Matches"]) {
+    assert.match(roomSource, new RegExp(contract, "i"));
+  }
+  assert.match(landingSource, /Explore works all evening/i);
+  assert.match(landingSource, /scheduled Drops create synchronized bursts/i);
+  assert.match(organizerSource, /discovery eligible/i);
+  assert.match(organizerSource, /Explore started/i);
 });

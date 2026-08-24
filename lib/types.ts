@@ -61,6 +61,49 @@ export interface RoomWallPerson {
   avatarUrl: string;
 }
 
+export interface RoomPresenceState {
+  discovery_enabled: boolean;
+  left_at: string | null;
+  recently_active: boolean;
+  discovery_eligible: boolean;
+  server_now: string;
+}
+
+export type ExploreAvailability = "ready" | "active" | "caught_up" | "waiting" | "left";
+
+export interface ExploreItem {
+  id: string;
+  position: number;
+  firstSeenAt: string | null;
+  action: DropItemAction;
+  candidateId: string;
+  displayName: string;
+  avatarPath: string;
+  avatarUrl: string;
+}
+
+export interface ExploreState {
+  status: ExploreAvailability;
+  batch_id: string | null;
+  assigned_count: number;
+  remaining_count: number;
+  interest_budget: number;
+  interests_used: number;
+  cooldown_until: string | null;
+  discovery_enabled: boolean;
+  left_at: string | null;
+  server_now: string;
+  items?: Array<{
+    id: string;
+    position: number;
+    first_seen_at: string | null;
+    action: DropItemAction;
+    candidate_id: string;
+    display_name: string;
+    avatar_path: string;
+  }>;
+}
+
 export type DropItemAction = "passed" | "interested" | null;
 
 export interface RoomDropState {
@@ -158,6 +201,11 @@ export interface RoomAnalyticsSummary {
   median_match_to_first_message_seconds: number | null;
   blocks_count: number;
   reports_count: number;
+  discovery_eligible_memberships: number;
+  explore_batches_claimed: number;
+  explore_batches_completed: number;
+  explore_cards_seen: number;
+  explore_interests_sent: number;
 }
 
 export interface RoomAnalyticsRates {
@@ -200,7 +248,15 @@ export interface RoomAnalytics {
   };
   presence_model?: {
     heartbeat_seconds: number;
-    active_timeout_seconds: number;
+    recent_active_timeout_seconds: number;
+    discovery_eligible_timeout_seconds: number;
     definition: string;
+  };
+  explore?: {
+    batches_claimed: number;
+    batches_completed: number;
+    cards_seen: number;
+    interests_sent: number;
+    completion_rate: number | null;
   };
 }

@@ -7,10 +7,10 @@ export function generateMetadata(): Metadata {
   return {
     metadataBase: new URL(origin),
     title: "HERE — Real people. Same place. Right now.",
-    description: "Room Wall, limited Drops, intentional Interests, Matches and realtime chat for people sharing one real event.",
+    description: "Room Wall, curated Explore, optional live Drops, intentional Interests, Matches and realtime chat for people sharing one real event.",
     openGraph: {
       title: "HERE — Real people. Same place. Right now.",
-      description: "Join a live Room, open Your Drop, Match and meet IRL.",
+      description: "Join a live Room, Explore who’s here, Match and meet IRL.",
       type: "website",
       images: [{ url: `${origin}/og.png`, width: 1733, height: 909, alt: "HERE — live social Rooms for real events." }],
     },

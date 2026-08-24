@@ -5,10 +5,10 @@ import { ArrowRight, Heart, MessageCircle, Radio, ScanLine, Sparkles, Users } fr
 const steps = [
   ["01", "Scan the Room QR", "Join the event Room in seconds — no email or password for guests."],
   ["02", "See the Room come alive", "A limited Room Wall shows that real people are here without becoming a catalogue."],
-  ["03", "Open Your Drop", "Your Drop limits choice with a synchronized, server-selected set."],
-  ["04", "Send a limited Interest", "An Interest Budget makes every signal intentional and limits spam."],
-  ["05", "Respond with Interested Too", "Interested in You makes Interest visible: the sender is shown. Choose Interested Too or Not for me."],
-  ["06", "Match, say hi and meet", "Match confirms mutual intent and opens realtime chat so both people can meet in the room."],
+  ["03", "Explore who’s here", "Explore works all evening with small, fair, server-selected batches — never a full catalogue."],
+  ["04", "Send a limited Interest", "An adaptive Interest Budget makes every signal intentional and limits spam."],
+  ["05", "Join Drop moments", "Optional scheduled Drops create synchronized bursts of fresh discovery without blocking Explore."],
+  ["06", "Match, say hi and meet", "Interested Too creates a Match and opens realtime chat so both people can meet in the room."],
 ] as const;
 
 export function ProductLanding() {
@@ -29,7 +29,7 @@ export function ProductLanding() {
         <div className="current-hero__copy">
           <span className="eyebrow"><i className="live-pulse" />LIVE SOCIAL ROOMS</span>
           <h1>Real people.<br />Same place.<br /><em>Right now.</em></h1>
-          <p>HERE turns one event QR into a focused path from a lively Room Wall to a limited Drop, a mutual Match and a real hello across the room.</p>
+          <p>HERE turns one event QR into a focused path from a lively Room Wall to always-on curated Explore, a mutual Match and a real hello across the room.</p>
           <div className="button-row">
             <a className="button button--lime" href="/demo">Try the product demo <ArrowRight size={18} /></a>
             <a className="button button--ghost" href="/organizer?mode=signup">Create a Room</a>
@@ -51,8 +51,8 @@ export function ProductLanding() {
             </div>
           </div>
           <article className="current-drop-card">
-            <span>YOUR DROP · 3 INTERESTS LEFT</span>
-            <div className="current-drop-card__photo" role="img" aria-label="Sample Your Drop profile" />
+            <span>EXPLORE · 4 INTERESTS LEFT</span>
+            <div className="current-drop-card__photo" role="img" aria-label="Sample Explore profile" />
             <div><strong>Sofia, 26</strong><small>Here tonight</small></div>
             <div className="current-drop-card__actions"><span>Next</span><b><Heart size={15} />Interested</b></div>
           </article>
@@ -62,8 +62,8 @@ export function ProductLanding() {
 
       <section className="current-principles">
         <article><Users /><strong>Room Wall creates abundance.</strong></article>
-        <article><Sparkles /><strong>Drops synchronize attention.</strong></article>
-        <article><Heart /><strong>Interest Budget limits spam.</strong></article>
+        <article><Sparkles /><strong>Explore works all evening.</strong></article>
+        <article><Heart /><strong>Drops create shared moments.</strong></article>
         <article><MessageCircle /><strong>Chat helps people meet IRL.</strong></article>
       </section>
 
@@ -95,7 +95,7 @@ export function ProductLanding() {
         </div>
       </section>
 
-      <footer><span className="brand">HERE<span className="brand-dot">.</span></span><p>Room Wall → Drop → Match → meet IRL.</p></footer>
+      <footer><span className="brand">HERE<span className="brand-dot">.</span></span><p>Room Wall → Explore + Drops → Match → meet IRL.</p></footer>
     </main>
   );
 }

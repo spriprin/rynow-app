@@ -1,4 +1,4 @@
-# HERE architecture after Sprint 5
+# HERE architecture — Pre-Pilot Core Revision
 
 ## Identity and event presence
 
@@ -7,6 +7,8 @@ auth.users
   ├── 1:1 profiles
   ├── 1:N room_members N:1 rooms
   ├── 1:N drop_items as viewer/candidate
+  ├── 1:N explore_batches as viewer
+  ├── 1:N explore_items as viewer/candidate
   ├── 1:N interests as sender/recipient
   ├── N:N matches inside a Room
   ├── 1:N messages inside a Match
@@ -16,41 +18,49 @@ auth.users
   └── 1:N private.interest_opens as recipient
 
 rooms 1:N drops 1:N drop_items 0:1 interests
+rooms 1:N explore_batches 1:N explore_items 0:1 interests
 rooms 1:N private instrumentation and validated safety attribution
 ```
 
 `profiles` never stores `current_room_id`. A browser identity can reuse one minimal profile across many Rooms; event presence is the canonical `(room_id, user_id)` membership.
 
-## Recent presence model
+## Split presence model
 
-Membership and recent presence are intentionally different facts. A membership
-is durable event history; recent presence is eligible only when the Room is open,
-`is_active = true`, and the server-written `last_seen_at` is no older than five
-minutes. The visible/online client calls `heartbeat_room_presence(room_id)` once
-per 60 seconds. Hidden or offline tabs stop heartbeats. Returning to the foreground
-immediately heartbeats and refreshes Room state; `leave_room_presence` can mark
-the caller inactive without deleting membership.
+Membership, recent activity and discovery eligibility are intentionally distinct.
+A membership is durable event history. `recently active` requires an open Room,
+`is_active`, `discovery_enabled`, no `left_at`, and server-written `last_seen_at`
+within 10 minutes. It drives Room Wall vitality and the organizer recent count.
+`discovery eligible` uses the same explicit state plus a valid completed profile
+and a 60-minute server window; it drives new Explore and Drop assignments.
+
+The visible/online client calls `heartbeat_room_presence(room_id)` once per 60
+seconds. Hidden or offline tabs stop heartbeats. Returning to the foreground
+immediately restores automatic timeout eligibility. `leave_room_presence` is an
+explicit user decision: it writes `discovery_enabled=false`, `left_at=now()` and
+invalidates unseen assignments where that person is the candidate. Heartbeat,
+refresh and idempotent join do not undo explicit Leave. `rejoin_room_presence`
+is required and works only while the Room is open.
 
 Guests have no direct UPDATE grant on `room_members`, so they cannot forge a
 future timestamp or update another user. Both heartbeat/leave RPCs derive the
 user from `auth.uid()` and use database time. `organizer_room_presence_counts()`
-returns only owner-authorized aggregate `joined_count` and five-minute
-`recent_count`. Room Wall sharing and new Drop eligibility use the same recent
-presence definition. Presence expiry never deletes a profile, membership, Match
-or message.
+returns only owner-authorized aggregate `joined_count`, ten-minute `recent_count`
+and sixty-minute `eligible_count`. Automatic or explicit ineligibility never
+deletes a profile, membership, Match or message. Existing Matches/chat and safety
+actions remain available after Leave.
 
 ## Production and demo isolation
 
 - `/r/{join_code}` uses only live Supabase data and fails closed.
 - `/organizer` creates or signs in a permanent email/password Supabase Auth user and uses database-enforced ownership for Rooms, Drops and aggregate analytics.
 - Organizer Auth has its own persisted cookie/client namespace; it cannot overwrite or promote the anonymous guest session in the same browser.
-- `/demo` is a current Sprint 3 walkthrough backed only by local React state. It performs no Supabase reads or writes.
+- `/demo` is a current Explore + Drops walkthrough backed only by local React state. It performs no Supabase reads or writes.
 - No production RPC inserts fake people or mixes demo data into a Room.
 
 The current demo deliberately exposes only a limited, non-clickable Room Wall
-sample and one Drop profile at a time. Its Interests, Match, messages and safety
-actions are disposable sample interactions. The production route uses real Room
-membership, server-selected Drops and database-authorized interactions.
+sample and one profile at a time. Explore is primary; Drop is a separate optional
+moment. Its interactions are disposable sample state. Production uses real Room
+membership, server-selected persistent Explore/Drop batches and authorized RPCs.
 
 ## Organizer Auth boundary
 
@@ -75,8 +85,10 @@ times, statuses, counts and rates. It never returns participant/profile IDs,
 names, avatars, assignments, Interest/Match/message IDs, pairs, safety actors,
 reasons, details or message bodies.
 
-Canonical historical sources remain `room_members`, `drops`, `drop_items`,
-`interests`, `matches`, `messages`, `blocks` and `reports`. No analytics event
+Canonical historical sources remain `room_members`, `explore_batches`,
+`explore_items`, `drops`, `drop_items`, `interests`, `matches`, `messages`,
+`blocks` and `reports`. Explore analytics exposes only batches claimed/completed,
+real cards seen and Explore Interests. No analytics event
 warehouse or generic person-level log exists. Two private tables store only
 facts that cannot be reconstructed reliably:
 
@@ -99,7 +111,8 @@ Exact rate definitions (returned as `null` when the denominator is zero):
 5. Interest decline = declined / accepted + declined;
 6. Match → conversation = Matches with at least one persisted message / all Matches.
 
-`cards_seen` counts only `drop_items.first_seen_at is not null`. Conversation
+Drop `cards_seen` and Explore `explore_cards_seen` count only assignments whose
+`first_seen_at` is not null. Conversation
 latency is the median database-time interval from Match creation to the first
 persisted message. Joined/active are membership semantics; active is not claimed
 to be precise physical attendance. Claim/forming/unlock, incoming-open and
@@ -116,19 +129,41 @@ Anonymous guests carry the PostgreSQL `authenticated` role, so organizer policie
 
 ## Discovery and Fair Exposure
 
-A Drop is opened by persisted database time or an organizer RPC. `claim_your_drop` creates one stable assignment and position order per viewer and Drop.
+The deprecated architecture `Room → wait for Drop → discovery` is not
+authoritative. `claim_explore_batch(room_id)` gives an eligible participant a
+small persistent server-selected batch throughout the evening. Target size is:
+available candidates up to 5; 6 for eligible pools 6–11; 8 for 12–49; and 10
+for 50+. The browser never receives the full eligible pool or direct table access.
+
+After every card is handled, the ambient batch is complete and the next one is
+unavailable for 15 minutes unless at least three genuinely new eligible unseen
+participants joined after the completed batch was created. Refresh returns the
+same batch and progression. If an unseen candidate becomes ineligible, only that
+unseen reservation may be invalidated and replaced; seen cards never reroll.
+
+A scheduled Drop is opened by persisted database time or an organizer RPC and
+creates an independent synchronized batch of up to 12 fresh people. Explore
+remains usable before and after a Drop. A pending or genuinely seen candidate in
+either mode is excluded from the other mode while unseen eligible people remain.
 
 Eligibility is applied before ranking:
 
-1. same open Room and memberships active within the five-minute server-heartbeat window;
+1. same open Room and discovery-eligible memberships within the 60-minute server window;
 2. complete 18+ profile;
 3. not self;
 4. pair is not blocked;
 5. candidate has not previously been seen by this viewer.
 
-Ranking uses actual delivered impressions (`first_seen_at`) plus pending reservations. A small randomization is allowed inside a close exposure band. Interests, declines, Matches, messages and popularity do not enter the ranking.
+Explore and Drops share one opportunity calculation: actual delivered impressions
+(`first_seen_at`) plus pending reservations across both modes. A small
+randomization is allowed inside close exposure bands. Interests, declines,
+Matches, messages and popularity do not enter ranking.
 
-Interest creation accepts only a server-assigned, actually seen `drop_item`. The database enforces Room identity, sender identity and per-Drop Interest Budget.
+Interest creation accepts only a server-assigned, actually seen Explore or Drop
+item. The budget is batch-scoped and backend-only: for assigned size `<=5`,
+budget equals assigned size; otherwise it is `ceil(size × 0.5)`. Decline does not
+refund. Explore and Drop budgets are separate but both feed the same incoming
+Interest/Match flow.
 
 ## Match and chat boundary
 
@@ -147,7 +182,7 @@ but does not delete existing Match/chat history.
 
 ## Safety boundary
 
-- Block is private and excludes both directions before future Drop ranking.
+- Block is private and excludes both directions before future Explore/Drop ranking.
 - Block closes pending Interests and unhandled cards for the pair.
 - A blocked pair cannot list its Match or send/read messages through normal access.
 - Reports are visible only to the reporter through ordinary product roles.
@@ -189,9 +224,15 @@ five matching historical versions were registered in
 `supabase_migrations.schema_migrations` without replaying their SQL. The two
 Phase 0 hardening migrations were then applied normally. Three additive Sprint
 4 migrations and the additive Sprint 5 reliability migration were created with
-the official CLI, transaction-dry-run, applied live and verified. Remote history
-now contains eleven ordered versions through
-`20260822170732_sprint5_presence_reliability`.
+the official CLI, transaction-dry-run, applied live and verified. Sprint 5.1
+added one core revision plus three narrow follow-ups, each transaction-dry-run
+before application. Remote history now contains fifteen ordered versions through
+`20260824095156_pre_pilot_fk_indexes`:
+
+- `20260824093231_pre_pilot_core_revision`;
+- `20260824094220_fix_explore_replacement_position`;
+- `20260824094426_fix_left_presence_state`;
+- `20260824095156_pre_pilot_fk_indexes`.
 
 The generic `is_room_member(room, user)` and
 `shares_active_room(viewer, target)` functions remain available only to trusted
@@ -202,7 +243,7 @@ breaking server-side checks that legitimately validate both people.
 
 Current advisor classification:
 
-- `drop_items` and `interests` having RLS but no policies is intentional: product roles have no direct DML grants and all access is through narrow RPCs;
+- `drop_items`, `interests`, `explore_batches` and `explore_items` having RLS but no policies is intentional: product roles have no direct DML grants and all access is through narrow RPCs;
 - anonymous users receiving the `authenticated` role is intentional for the QR guest model; ownership and Room checks remain mandatory;
 - anonymous execution of `get_room_by_join_code` is intentional and returns only the public join-route fields;
 - authenticated execution of product RPCs is intentional where each function binds identity with `auth.uid()` and the acceptance suite attacks forged arguments;
@@ -210,37 +251,43 @@ Current advisor classification:
 - public execution of `rls_auto_enable` and `rooms_set_join_code` is revoked;
 - spoofable generic membership helpers are not Data API executable; the authenticated RLS wrappers bind identity to `auth.uid()`;
 - `private.drop_claim_states` and `private.interest_opens` having RLS with no policy is intentional deny-all instrumentation isolation;
-- Sprint 4–5 `SECURITY DEFINER` warnings are intentional narrow product surfaces with fixed `search_path`, `auth.uid()` binding and explicit owner/recipient/context authorization;
+- Sprint 4–5.1 `SECURITY DEFINER` warnings are intentional narrow product surfaces with fixed `search_path`, `auth.uid()` binding and explicit owner/recipient/context authorization;
 - leaked-password protection is not enabled and remains an organizer-auth hardening limitation;
 - the advisor's composite-FK notice for `(drop_id, room_id)` is covered for equality lookups by the existing `(room_id, drop_id)` index and leading `drop_id` primary-key column; a duplicate index was not added;
 - unused-index notices are expected immediately after adding safety/instrumentation indexes to a new test-heavy workload.
 
-The post-Sprint-5 advisor run reports no ERROR findings. Security has 47 notices:
-four informational deny-all/RPC-only table notices, one intentional anonymous
-join-route RPC, 31 authenticated `SECURITY DEFINER` surfaces reviewed through
-their authorization contracts, ten warnings caused by the intentional anonymous
-guest model, and one leaked-password setting. Performance has 14 informational
-notices (seven unindexed-FK heuristics and seven currently-unused indexes); none
-changes release correctness at current scale.
+The post-Sprint-5.1 advisor run reports no ERROR findings. Security has 6 INFO
+and 51 WARN notices. The categories are intentional deny-all/RPC-only tables,
+reviewed identity-bound product RPCs, the intentional anonymous guest model and
+the existing leaked-password-protection setting. Performance advisor suggestions
+for the new Explore foreign keys were addressed by the final covering-index
+migration; older informational heuristics remain documented rather than being
+treated as authorization failures.
 
-During the 20-session stress run, Supabase Realtime temporarily reported
+During the earlier 20-session stress run, Supabase Realtime temporarily reported
 `DatabaseLackOfConnections`: only 9 database connections were available while
 the tenant required at least 12. This was capacity pressure rather than RLS or
 authorization failure. Bounded reconnect plus Postgres-history refresh recovered
 successfully in the final S5-H live run. The client now tolerates that transient
-condition, but project connection/Auth quotas remain an explicit pilot risk.
+condition. The more severe current blocker is hosted anonymous Auth: the 24
+August controlled test sent 100 fresh anonymous signup requests from one NAT in
+10-request bursts every 1.5 seconds. Only 1 succeeded; 99 returned 429 in 15.094
+seconds. The public Auth settings confirm anonymous signup and email
+auto-confirm, but expose no configured CAPTCHA/Turnstile protection. No retry,
+spoofed forwarding, secret-in-browser or RLS weakening is an acceptable fix.
 
 ## Release boundary
 
 The public Sites deployment remains version 8 / commit `ab8891e` from Sprint 1.
-Sprint 2–5 source and live schema are newer than the public frontend. The current
-release candidate has a reconciled eleven-version migration history, a dedicated
-green S5-A–S5-R live suite and a clean local production build. The earlier
+Sprint 2–5.1 source and live schema are newer than the public frontend. The current
+release candidate has a reconciled fifteen-version migration history, a dedicated
+green functional PP suite and the earlier green S5-A–S5-R live suite. The earlier
 complete Sprint 1–4/organizer baseline remains recorded; repeated final legacy
 reruns are tracked separately in `SPRINT5_REPORT.md` because live Auth quota can
 block identity creation without invalidating an already-completed scenario. Email
-auto-confirm is enabled on the current live project. The full hosted recovery
-email/click path remains a production-smoke item because it requires inbox and
-redirect-configuration access. This is a release candidate, not a deployment. Publishing still
-requires separate owner authorization, an exact release-candidate deployment and a
-production smoke test on the public URL.
+auto-confirm is enabled on the current live project. PP-P, PP-Q and PP-R are
+blocked, so the owner-authorized publication condition is not met. This is a
+blocked release candidate, not a deployment. Resolution requires supported Auth
+rate-limit configuration and abuse protection (or an owner-approved replacement
+identity architecture), followed by a fresh 50/100 capacity test, complete
+regression, exact commit deployment and production smoke.

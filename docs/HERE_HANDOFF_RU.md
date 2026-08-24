@@ -1,6 +1,6 @@
 # HERE — краткий handoff
 
-Актуально на 22 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
+Актуально на 24 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
 
 ## Состояние
 
@@ -9,9 +9,20 @@
 - Sprint 3 реализован и функционально live-проверен, frontend не опубликован.
 - Sprint 4 privacy-safe analytics реализован, применён в live Supabase и проверен, frontend не опубликован.
 - Sprint 5 pilot reliability реализован, применён в live Supabase и live-проверен, frontend не опубликован.
+- Sprint 5.1 Pre-Pilot Core Revision реализован и применён в live Supabase:
+  always-on Explore, разделённое presence, Leave/Rejoin, adaptive Interest Budget
+  и aggregate Explore analytics. Функциональный PP-набор зелёный, frontend не опубликован.
 - Self-service регистрация organizer и актуальные landing/demo реализованы локально, не опубликованы.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site` — Sites version 8, commit `ab8891e`, пока Sprint 1.
-- Текущий product release candidate: **SPRINT 5 LOCAL RELEASE CANDIDATE**, публикации не было, Sprint 6 не начинался.
+- Текущий статус: **PRE-PILOT RELEASE BLOCKED BY AUTH CAPACITY**. Публикации не было, Sprint 6 не начинался.
+
+Обязательный same-NAT тест 24 августа: 100 действительно новых anonymous
+sessions, пакеты по 10 запросов каждые 1,5 секунды. За 15,094 секунды прошла
+**1 session**, **99 запросов получили HTTP 429**. Median latency 123 мс, p95
+240 мс, диапазон 103–384 мс. Поэтому PP-P/PP-Q не проходят. В публичных Auth
+settings anonymous signup включён, но настроенный CAPTCHA/Turnstile не виден;
+PP-R также не закрыт. По прямому release contract публикация запрещена до
+официального решения лимита и повторного успешного 50/100 теста.
 
 Organizer теперь может самостоятельно создать постоянный email/password account,
 войти, восстановить пароль и выйти. Organizer Auth хранится отдельно от anonymous
@@ -22,8 +33,9 @@ account сразу получает session; интерфейс также ум�
 Полный hosted email → click → new password нужно окончательно проверить во время
 production smoke с доступом к реальному inbox.
 
-Landing объясняет актуальный flow Room Wall → Your Drop → limited Interest →
-Interested in You → Interested Too → Match → chat → IRL. `/demo` теперь повторяет
+Landing объясняет актуальный flow Room Wall → always-on curated Explore → limited
+Interest → Interested in You → Interested Too → Match → chat → IRL. Scheduled
+Drops остаются опциональными синхронными моментами. `/demo` повторяет
 эту модель на локальных sample data, ничего не читает и не пишет в Supabase и
 явно отличается от настоящей persistent Room. Старые Hidden/Open to Meet/
 Selective, full People catalogue и blind-mutual механика удалены из актуального UI.
@@ -37,13 +49,27 @@ Sprint 3 S3-A–S3-N PASS, включая настоящий Realtime между
 Sprint 4 S4-A–S4-P PASS, 18/18 с Fair Exposure regression
 Organizer Auth     PASS, 7/7
 Sprint 5 S5-A–S5-R PASS, 17/17 dedicated live run
-typecheck/lint/static/build PASS
+PP functional       PASS, 10/10 групп (PP-A–O, PP-S/PP-T)
+PP-P/PP-Q Auth      BLOCKED, 1/100 success, 99 × 429
+PP-R abuse guard    BLOCKED, Turnstile/CAPTCHA не подтверждён
+typecheck/lint       PASS
+static/render        PASS, 12/12
+production build    PASS
+local route smoke    PASS
+credential scan      PASS
 ```
+
+Новый полный Sprint 1–5 live rerun после 100-session теста не объявлен зелёным:
+Auth bucket доказанно исчерпан/ограничен. Предыдущий зелёный ledger остаётся
+историческим regression evidence, но перед публикацией его нужно повторить уже
+после исправления Auth capacity.
 
 Последний зелёный Sprint 5 load run: 20 participant sessions, 20 одновременных
 join RPC за 249 мс; 10 конкурентных Drop claims за 458 мс; exposure variance 2.
-Настоящий five-minute expiry дважды проверен ожиданием 302 секунды. Финальный
-короткий recheck использовал явный leave-RPC. S5-H Realtime reconnect прошёл с
+Исторический Sprint 5 five-minute expiry был проверен до изменения модели.
+Новая модель отдельно проверена server-time состояниями: на 11-й минуте
+`recent=false`, `eligible=true`; на 61-й минуте оба false; recovery возвращает
+оба true. S5-H Realtime reconnect прошёл с
 восстановлением persisted history и без дубликатов.
 
 После восстановления Auth quota текущий post-Sprint-5 build отдельно прошёл
@@ -58,13 +84,19 @@ backoff на 429 и запускает 20 Room joins отдельно и одн�
 последней регрессии и инфраструктурные ограничения находятся в
 `docs/SPRINT5_REPORT.md`.
 
-## Sprint 5 reliability
+## Pre-Pilot presence и discovery
 
 - heartbeat раз в 60 секунд только для visible/online tab;
-- recent active = open Room + `is_active` + server `last_seen_at` не старше 5 минут;
+- recently active = open Room + discovery enabled + server `last_seen_at` не старше 10 минут;
+- discovery eligible = те же explicit-state условия + complete profile + `last_seen_at` не старше 60 минут;
 - membership/profile/Match/chat при expiry не удаляются;
-- Fair Exposure и Room Wall sharing исключают stale participants;
-- organizer отдельно видит `joined` и `active in last 5 min`, только агрегаты;
+- явный Leave сразу убирает пользователя из Room Wall и новых Explore/Drop assignments, но сохраняет membership, profile, Matches и chat;
+- heartbeat/refresh не отменяют explicit Leave; `Rejoin event` снова включает discovery только в открытой Room;
+- Explore доступен весь вечер маленькими persistent batches: до 5, затем 6/8/10 по размеру eligible unseen pool;
+- завершённый ambient batch имеет cooldown 15 минут, либо открывается раньше после 3+ действительно новых eligible unseen arrivals;
+- Fair Exposure общий для Explore и Drop: real impressions + pending reservations; outcomes не влияют;
+- Interest Budget: `<=5 → batch size`, иначе `ceil(batch size × 0.5)`, отдельно для каждого Explore/Drop batch;
+- organizer отдельно видит `joined`, `recently active` и `discovery eligible`, только агрегаты;
 - один guarded Room poll раз в 15 секунд, без hidden/offline duplicate loops;
 - foreground/online сразу обновляет Room, Drop, incoming Interests, Matches и presence;
 - Realtime — ускорение доставки, Postgres history — source of truth; есть bounded reconnect и polling fallback;
@@ -121,9 +153,10 @@ unlock, фактический open входящего Interest и Room-attribut
 
 ```text
 Room Wall creates abundance.
-Drops synchronize attention.
-Your Drop limits choice.
-Interest Budget limits spam.
+Explore works all evening in small curated batches.
+Drops create optional synchronized attention bursts.
+Explore and Your Drop limit choice.
+Adaptive Interest Budget limits spam.
 Fair Exposure balances opportunity, not outcomes.
 Interested in You shows the sender to the recipient.
 Interested Too confirms reciprocity.
@@ -133,7 +166,11 @@ Block and Report provide minimum safety.
 IRL meeting remains the goal.
 ```
 
-Нельзя возвращать `Hidden`, `Open to Meet`, `Selective` или blind-mutual discovery. Нельзя превращать Room Wall в полный каталог. Interests, declines, Matches и messages не участвуют в Fair Exposure. Organizer видит только агрегаты и не получает individual Interests, Matches, Reports или chats.
+Deprecated-модель `Room → wait for Drop → discovery` нельзя возвращать. Нельзя
+возвращать `Hidden`, `Open to Meet`, `Selective` или blind-mutual discovery.
+Нельзя превращать Room Wall/Explore в полный каталог или infinite swipe.
+Interests, declines, Matches и messages не участвуют в Fair Exposure. Organizer
+видит только агрегаты и не получает individual Interests, Matches, Reports или chats.
 
 ## Supabase
 
@@ -144,6 +181,7 @@ Live присутствуют таблицы:
 ```text
 profiles rooms room_members
 drops drop_items interests
+explore_batches explore_items
 matches messages blocks reports
 private.drop_claim_states private.interest_opens
 ```
@@ -164,7 +202,16 @@ live Sprint 2 regression run. Затем применены три additive Spri
 20260822170732_sprint5_presence_reliability.sql
 ```
 
-Remote migration API видит все одиннадцать версий. Sprint 4–5 SQL сначала
+После Sprint 5 применены additive Pre-Pilot migrations:
+
+```text
+20260824093231_pre_pilot_core_revision.sql
+20260824094220_fix_explore_replacement_position.sql
+20260824094426_fix_left_presence_state.sql
+20260824095156_pre_pilot_fk_indexes.sql
+```
+
+Remote migration API видит все пятнадцать версий. Sprint 4–5.1 SQL сначала
 проверен в транзакции с rollback, затем применён live. Применённые
 migration-файлы неизменяемы.
 
@@ -173,14 +220,12 @@ Supabase CLI 2.115.0 запускался через официальный pack
 live schema/history и применение DDL выполняются через подключённую Supabase
 integration.
 
-После Sprint 5 DDL advisors просмотрены: ERROR findings нет. Security: 47
-notice (4 informational deny-all/RPC-only tables, 1 намеренный anon join lookup,
-31 проверенный surface `SECURITY DEFINER` для authenticated, 10 anonymous guest warnings и
-1 leaked-password warning). Performance: 14 INFO (7 unindexed-FK heuristics,
-7 unused indexes). Private tables без policies — намеренный deny-all. Новый
-composite FK уже покрыт подходящим equality index/leading key, поэтому
-дублирующий index не добавлялся. Новые unused indexes ожидаемы на тестовом
-объёме. Leaked-password protection остаётся ограничением organizer auth.
+После Sprint 5.1 DDL advisors просмотрены: ERROR findings нет. Security: 6 INFO
+и 51 WARN в категориях намеренных deny-all/RPC-only таблиц, проверенных
+identity-bound `SECURITY DEFINER` product RPC, anonymous guest model и
+leaked-password protection. Новые Explore FK paths получили отдельные covering
+indexes. Private/assignment tables без policies — намеренный deny-all; клиент
+работает только через narrow RPC.
 
 ## Definition of Done
 
@@ -193,15 +238,20 @@ composite FK уже покрыт подходящим equality index/leading key
 - Supabase advisors просмотрены после DDL;
 - секретов нет в browser bundle;
 - README, архитектура и этот handoff обновлены в том же commit;
-- deployment не выполнялся без явного разрешения;
+- deployment выполняется только после явного разрешения и всех release gates;
 - ограничения и результаты проверки сообщены честно.
 
 Destructive database operations требуют отдельного подтверждения владельца.
 
 ## Следующий приоритет
 
-1. После отдельного разрешения опубликовать точный Sprint 5 release-candidate commit.
-2. Выполнить production smoke: organizer signup/sign-in/recovery, Room + QR, полный двухустройственный core flow, analytics, reconnect и Room close.
-3. Провести 10–20 physical-device QA по `REAL_DEVICE_QA.md`, затем исправлять только найденные pilot bugs.
-4. Проверить hosted recovery email/click и production redirect allow-list.
-5. Не начинать Sprint 6, growth, monetization, notifications или новые product features до pilot data.
+1. Через официальный Supabase Auth configuration/support поднять безопасную
+   anonymous event capacity и подключить совместимый invisible Turnstile/CAPTCHA.
+   Не использовать spoofed IP, browser secret, service role или ослабление RLS.
+2. Повторить контролируемые PP-P 50 и PP-Q 100 same-NAT sessions; PP-R должен
+   подтвердить abuse protection без challenge на каждом refresh.
+3. После зелёного Auth gate повторить full Sprint 1–5 + PP regression,
+   typecheck/lint/static/build/secret scan. Только затем опубликовать точный commit.
+4. Выполнить production smoke полного Room → Explore + Drops → Match → Chat flow.
+5. Провести 10–20 physical-device QA, затем только blocking bug fixes и closed pilot.
+6. Не начинать Sprint 6, growth, monetization, notifications или новые product features до pilot data.

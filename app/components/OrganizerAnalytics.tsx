@@ -6,7 +6,8 @@ import { getSupabaseOrganizerClient } from "@/lib/supabase/organizer-client";
 import type { FoundationRoom, RoomAnalytics, RoomAnalyticsDrop } from "@/lib/types";
 
 const FORMULAS = {
-  active: "Memberships with a server heartbeat in the last 5 minutes. This is recent app presence, not exact physical attendance.",
+  active: "Memberships with a server heartbeat in the last 10 minutes whose guest has not explicitly left. This is recent app presence, not exact physical attendance.",
+  eligible: "Guests with discovery enabled and a server heartbeat in the last 60 minutes. They may appear in new Explore or Drop assignments.",
   unlock: "Successful unique viewer + Drop unlocks ÷ unique viewer + Drop claim attempts.",
   completion: "Completed viewer + Drop runs ÷ started viewer + Drop runs. A run completes only when every assigned card was actually seen and handled.",
   response: "Accepted + declined Interests ÷ all Interests sent in this Room.",
@@ -82,8 +83,8 @@ export function OrganizerAnalytics({ room }: { room: FoundationRoom }) {
     const summary = analytics.summary;
     return [
       ["Joined", summary.joined_memberships],
-      ["Your Drop started", summary.your_drop_started_participants],
-      ["Card seen", summary.card_seen_participants],
+      ["Explore started", summary.explore_batches_claimed],
+      ["Explore card seen", summary.explore_cards_seen],
       ["Interest", summary.interest_senders],
       ["Match", summary.matches_created],
       ["Conversation", summary.conversations_started],
@@ -99,18 +100,30 @@ export function OrganizerAnalytics({ room }: { room: FoundationRoom }) {
 
   return <section className="organizer-analytics">
     <header className="organizer-analytics__header">
-      <div><span className="eyebrow">ROOM ANALYTICS</span><h2>What happened in this Room.</h2><p>Aggregate product health only. Active means a heartbeat in the last 5 minutes, not verified physical attendance.</p></div>
+      <div><span className="eyebrow">ROOM ANALYTICS</span><h2>What happened in this Room.</h2><p>Aggregate product health only. Recently active and discovery eligible are different server-time windows, not verified physical attendance.</p></div>
       <div><small>Last updated<br /><strong>{updatedAt(analytics.last_updated)}</strong></small><button className="icon-button" onClick={() => void load(true)} disabled={refreshing} aria-label="Refresh Room analytics"><RefreshCw className={refreshing ? "spin" : ""} /></button></div>
     </header>
 
     <div className="analytics-summary-grid">
       <MetricCard label="Joined" value={count(summary.joined_memberships)} icon={<Users />} />
-      <MetricCard label="Active now" value={count(summary.active_memberships)} icon={<Activity />} info={FORMULAS.active} />
+      <MetricCard label="Recently active" value={count(summary.active_memberships)} icon={<Activity />} info={FORMULAS.active} />
+      <MetricCard label="Discovery eligible" value={count(summary.discovery_eligible_memberships)} icon={<Sparkles />} info={FORMULAS.eligible} />
       <MetricCard label="Cards seen" value={count(summary.cards_seen)} icon={<Eye />} info={FORMULAS.cardsSeen} />
       <MetricCard label="Interests" value={count(summary.interests_sent)} icon={<Heart />} />
       <MetricCard label="Matches" value={count(summary.matches_created)} icon={<Sparkles />} />
       <MetricCard label="Conversations" value={count(summary.conversations_started)} icon={<MessageCircle />} />
     </div>
+
+    <section className="analytics-panel analytics-discovery">
+      <div className="analytics-panel__heading"><div><span>ALWAYS-ON EXPLORE</span><h3>Small, fair selections throughout the evening</h3></div><Sparkles /></div>
+      <div className="analytics-compact-grid">
+        <div><span>Batches claimed</span><strong>{count(summary.explore_batches_claimed)}</strong></div>
+        <div><span>Batches completed</span><strong>{count(summary.explore_batches_completed)}</strong></div>
+        <div><span>Real cards seen</span><strong>{count(summary.explore_cards_seen)}</strong></div>
+        <div><span>Explore Interests</span><strong>{count(summary.explore_interests_sent)}</strong></div>
+        <div><span>Completion rate</span><strong>{rate(analytics.explore?.completion_rate)}</strong></div>
+      </div>
+    </section>
 
     {summary.joined_memberships === 0 && <div className="analytics-empty"><Users /><div><strong>No participant data yet.</strong><p>Share this Room’s QR. Aggregates will appear after real guests join.</p></div></div>}
 

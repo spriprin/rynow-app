@@ -166,12 +166,12 @@ test("Sprint 5 live acceptance — S5-A through S5-R", { skip: enabled ? false :
   await t.test("S5-A — server heartbeat expires without deleting membership", async () => {
     await Promise.all(actors.map(({ client: value }) => value.rpc("heartbeat_room_presence", { p_room_id: room.id })));
     if (fastRecheck) {
-      t.diagnostic("Fast recheck deactivates presence explicitly; the default suite still waits the full 302 seconds.");
+      t.diagnostic("Fast recheck uses explicit Leave; the dedicated pre-pilot suite validates the separate 10/60-minute boundaries.");
       const leaves = await Promise.all(actors.map(({ client: value }) => value.rpc("leave_room_presence", { p_room_id: room.id })));
       leaves.forEach((result) => assert.ifError(result.error));
     } else {
-      t.diagnostic("Waiting 302 seconds to cross the documented 5-minute server-time presence boundary.");
-      await wait(302_000);
+      t.diagnostic("Waiting 602 seconds to cross the authoritative 10-minute recently-active boundary.");
+      await wait(602_000);
     }
     const counts = countFor(await presenceCounts(owner.client), room.id);
     assert.equal(counts.joined, 20);
@@ -183,6 +183,10 @@ test("Sprint 5 live acceptance — S5-A through S5-R", { skip: enabled ? false :
   });
 
   await t.test("S5-B — returning sessions recover presence without duplicate membership", async () => {
+    if (fastRecheck) {
+      const rejoins = await Promise.all(actors.map(({ client: value }) => value.rpc("rejoin_room_presence", { p_room_id: room.id })));
+      rejoins.forEach((result) => assert.ifError(result.error));
+    }
     const recovered = await Promise.all(actors.map(({ client: value }) => value.rpc("heartbeat_room_presence", { p_room_id: room.id })));
     recovered.forEach((result) => assert.ifError(result.error));
     const counts = countFor(await presenceCounts(owner.client), room.id);
@@ -401,7 +405,7 @@ test("Sprint 5 live acceptance — S5-A through S5-R", { skip: enabled ? false :
   await t.test("S5-O/S5-P — analytics and Fair Exposure remain outcome-neutral", async () => {
     const analytics = await owner.client.rpc("room_analytics", { p_room_id: room.id });
     assert.ifError(analytics.error);
-    assert.deepEqual(analytics.data.presence_model, { heartbeat_seconds: 60, active_timeout_seconds: 300, definition: "recent server heartbeat" });
+    assert.deepEqual(analytics.data.presence_model, { heartbeat_seconds: 60, recent_active_timeout_seconds: 600, discovery_eligible_timeout_seconds: 3600, definition: "server heartbeat plus explicit discovery state" });
     assert.equal(Number(analytics.data.summary.joined_memberships), 20);
     assert.ok(Number(analytics.data.summary.cards_seen) >= 1);
     const distribution = [...exposureCounts.values()];
