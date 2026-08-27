@@ -1,6 +1,6 @@
 # HERE — краткий handoff
 
-Актуально на 24 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
+Актуально на 27 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
 
 ## Состояние
 
@@ -13,16 +13,51 @@
   always-on Explore, разделённое presence, Leave/Rejoin, adaptive Interest Budget
   и aggregate Explore analytics. Функциональный PP-набор зелёный, frontend не опубликован.
 - Self-service регистрация organizer и актуальные landing/demo реализованы локально, не опубликованы.
+- Локально добавлена официальная Supabase Auth CAPTCHA-интеграция с Cloudflare
+  Turnstile для новых anonymous sessions и organizer Auth. Существующая session
+  не получает повторный challenge. Live anonymous limit уже безопасно настроен;
+  production Managed widget создан для публичного hostname, public site key
+  добавлен в Sites environment revision 2, а secret хранится только в Supabase
+  Auth. CAPTCHA включена.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site` — Sites version 8, commit `ab8891e`, пока Sprint 1.
-- Текущий статус: **PRE-PILOT RELEASE BLOCKED BY AUTH CAPACITY**. Публикации не было, Sprint 6 не начинался.
+- Текущий статус: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
+  Публикация точного release commit на существующий URL разрешена и выполняется;
+  Sprint 6 не начинался.
 
-Обязательный same-NAT тест 24 августа: 100 действительно новых anonymous
-sessions, пакеты по 10 запросов каждые 1,5 секунды. За 15,094 секунды прошла
-**1 session**, **99 запросов получили HTTP 429**. Median latency 123 мс, p95
-240 мс, диапазон 103–384 мс. Поэтому PP-P/PP-Q не проходят. В публичных Auth
-settings anonymous signup включён, но настроенный CAPTCHA/Turnstile не виден;
-PP-R также не закрыт. По прямому release contract публикация запрещена до
-официального решения лимита и повторного успешного 50/100 теста.
+24 августа была предпринята разрешённая попытка создать временную Supabase
+Branch, но Management API вернул: `Branching is supported only on the Pro plan
+or above`. Branch не была создана и списаний не было. С разрешения владельца
+затем создан отдельный временный Free project
+`HERE Auth Gate Temporary 20260826` (`rgenouyngkgfurrffcgw`, `eu-west-1`,
+$0/month). В него применена полная migration chain и test-only Auth/CAPTCHA
+конфигурация. Production не использовался как CAPTCHA token farm. Временный
+проект сохраняется только до production smoke, после чего должен быть сразу
+безвозвратно удалён, а его отсутствие — проверено.
+
+27 августа обязательный isolated same-NAT gate прошёл. AUTH-P1 создал 100/100
+действительно новых distinct anonymous users за 588,973 секунды: 0 HTTP 429,
+0 других ошибок, p95 473 мс. После полного естественного refill AUTH-P2 создал
+50/50 новых users за 49,487 секунды: 0 HTTP 429, 0 других ошибок, p95 336 мс.
+Старый depleted-bucket результат 1/100 остаётся только историческим негативным
+свидетельством и не используется как capacity proof. Isolated official
+always-fail и always-pass Turnstile phases прошли по 3/3. Production PP-R
+отклонил отсутствующий и malformed proof 3/3 без 429. Настоящий Managed-widget
+token принят production anonymous Auth один раз, replay отклонён CAPTCHA-specific
+HTTP 400; существующая guest session после refresh вошла в Room без widget.
+Остался exact-hostname browser smoke после deployment.
+
+Authenticated Dashboard показал фактическое значение Free-project:
+`rate_limit_anonymous_users = 30/hour/IP`; поле доступно для редактирования, IP
+forwarding выключен. Dashboard официально принял pilot target `1800/hour/IP`, а
+полная перезагрузка страницы снова показала 1800. Фиксированный hosted bucket
+остаётся 30 токенов, refill теперь 30/minute. Никакого spoofed/forwarded IP нет.
+
+Turnstile-код уже fail-closed: новый гость без public site key не создаётся;
+валидная сохранённая guest session идёт сразу к profile/Room. CAPTCHA включается
+в Supabase на весь Auth project, поэтому токен также добавлен в organizer signup,
+password sign-in и recovery. В browser разрешён только public site key. Turnstile
+secret передан напрямую из Cloudflare в Supabase Auth settings и не записан в
+репозиторий; service-role/secret key в клиент не добавлялись.
 
 Organizer теперь может самостоятельно создать постоянный email/password account,
 войти, восстановить пароль и выйти. Organizer Auth хранится отдельно от anonymous
@@ -47,22 +82,23 @@ Sprint 1 A–G       PASS, включая forged helper-RPC probes
 Sprint 2 S2-A–S2-O PASS
 Sprint 3 S3-A–S3-N PASS, включая настоящий Realtime между двумя sessions
 Sprint 4 S4-A–S4-P PASS, 18/18 с Fair Exposure regression
-Organizer Auth     PASS, 7/7
+Organizer Auth     PASS, 8/8
 Sprint 5 S5-A–S5-R PASS, 17/17 dedicated live run
 PP functional       PASS, 10/10 групп (PP-A–O, PP-S/PP-T)
-PP-P/PP-Q Auth      BLOCKED, 1/100 success, 99 × 429
-PP-R abuse guard    BLOCKED, Turnstile/CAPTCHA не подтверждён
+PP-P/PP-Q Auth      PASS: 100/100 + 50/50 fresh same-NAT, 0 × 429
+PP-R abuse guard    PASS: isolated accept/reject + production-negative; deployed smoke pending
+full live regression PASS, 92/92, 0 fail, 0 skip
 typecheck/lint       PASS
-static/render        PASS, 12/12
+Auth/static/render   PASS, 20/20 local tests, 0 skip
 production build    PASS
 local route smoke    PASS
 credential scan      PASS
 ```
 
-Новый полный Sprint 1–5 live rerun после 100-session теста не объявлен зелёным:
-Auth bucket доказанно исчерпан/ограничен. Предыдущий зелёный ledger остаётся
-историческим regression evidence, но перед публикацией его нужно повторить уже
-после исправления Auth capacity.
+После Auth-capacity gate строгий release runner повторил Organizer Auth,
+Sprint 1–5 и Sprint 5.1 полностью: 92/92 PASS, 0 fail, 0 skip. Прогон включал
+реальный 603-секундный presence expiry, 20 одновременных joins, 10 конкурентных
+Drop claims и проверку exposure variance 2. P0=0, P1=0.
 
 Последний зелёный Sprint 5 load run: 20 participant sessions, 20 одновременных
 join RPC за 249 мс; 10 конкурентных Drop claims за 458 мс; exposure variance 2.
@@ -72,10 +108,9 @@ join RPC за 249 мс; 10 конкурентных Drop claims за 458 мс; e
 оба true. S5-H Realtime reconnect прошёл с
 восстановлением persisted history и без дубликатов.
 
-После восстановления Auth quota текущий post-Sprint-5 build отдельно прошёл
-Sprint 1 A–G и Organizer Auth 7/7. Вместе с уже зелёными текущими прогонами
-Sprint 2–4 это даёт полный live regression ledger без подмены live-проверок
-source inspection.
+Локальная финальная проверка того же кандидата: TypeScript PASS, lint PASS,
+Auth harness 7/7, static/render/security 13/13, production build PASS и
+`git diff --check` PASS. Всего 20/20 локальных тестов без skip.
 
 Повторные полные прогоны быстро исчерпывают проектные anonymous/signup quotas.
 Test harness теперь создаёт identities небольшими пакетами, делает bounded
@@ -209,11 +244,14 @@ live Sprint 2 regression run. Затем применены три additive Spri
 20260824094220_fix_explore_replacement_position.sql
 20260824094426_fix_left_presence_state.sql
 20260824095156_pre_pilot_fk_indexes.sql
+20260827163024_restore_closed_room_error_precedence.sql
 ```
 
-Remote migration API видит все пятнадцать версий. Sprint 4–5.1 SQL сначала
-проверен в транзакции с rollback, затем применён live. Применённые
-migration-файлы неизменяемы.
+Remote migration API видит все шестнадцать версий. Последняя additive migration
+восстанавливает контракт ошибки `This Room has ended.` в `claim_your_drop` и
+`send_interest`, не меняя eligibility, RLS, данные или сохранение Match/chat.
+Sprint 4–5.1 SQL сначала проверен в транзакции с rollback, затем применён live.
+Применённые migration-файлы неизменяемы.
 
 Supabase CLI 2.115.0 запускался через официальный package runtime: им созданы
 новые migration-файлы и проверены команды. Постоянной CLI-сессии нет, поэтому
@@ -245,13 +283,13 @@ Destructive database operations требуют отдельного подтве
 
 ## Следующий приоритет
 
-1. Через официальный Supabase Auth configuration/support поднять безопасную
-   anonymous event capacity и подключить совместимый invisible Turnstile/CAPTCHA.
-   Не использовать spoofed IP, browser secret, service role или ослабление RLS.
-2. Повторить контролируемые PP-P 50 и PP-Q 100 same-NAT sessions; PP-R должен
-   подтвердить abuse protection без challenge на каждом refresh.
-3. После зелёного Auth gate повторить full Sprint 1–5 + PP regression,
-   typecheck/lint/static/build/secret scan. Только затем опубликовать точный commit.
-4. Выполнить production smoke полного Room → Explore + Drops → Match → Chat flow.
+1. Опубликовать точный проверенный release commit на существующий Sites URL.
+2. Выполнить production smoke: organizer signup/sign-in, реальная Room/QR,
+   два fresh guest, refresh/session, Room Wall, Explore + Drop, Interest → Match
+   → Chat, block/report, aggregate analytics, closed Room, `/demo` isolation,
+   Turnstile exact hostname и отсутствие browser secrets.
+3. Сразу после smoke безвозвратно удалить временный Free Supabase project
+   `rgenouyngkgfurrffcgw` и подтвердить его отсутствие.
+4. Обновить release-документацию фактическим version/commit/smoke результатом.
 5. Провести 10–20 physical-device QA, затем только blocking bug fixes и closed pilot.
 6. Не начинать Sprint 6, growth, monetization, notifications или новые product features до pilot data.

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
-import { retryAuthRateLimit } from "./live-auth-helpers.mjs";
+import { allowPermanentGuestFallback, anonymousSignInCredentials, retryAuthRateLimit, withAuthCaptcha } from "./live-auth-helpers.mjs";
 
 const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
@@ -19,11 +19,11 @@ function client() {
 
 async function createGuest(name, joinCode) {
   const guest = client();
-  let { data: auth, error: authError } = await guest.auth.signInAnonymously();
-  if (authError && /rate limit/i.test(authError.message)) {
+  let { data: auth, error: authError } = await guest.auth.signInAnonymously(anonymousSignInCredentials());
+  if (authError && /rate limit/i.test(authError.message) && allowPermanentGuestFallback()) {
     const email = `here-actor-${crypto.randomUUID()}@example.com`;
     const password = `Here-${crypto.randomUUID()}-Aa1!`;
-    const permanent = await retryAuthRateLimit(() => guest.auth.signUp({ email, password }));
+    const permanent = await retryAuthRateLimit(() => guest.auth.signUp(withAuthCaptcha({ email, password })));
     auth = permanent.data;
     authError = permanent.error;
   }
@@ -116,8 +116,8 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
   const generatedEmail = `here-sprint3-${crypto.randomUUID()}@example.com`;
   const generatedPassword = `Here-${crypto.randomUUID()}-Aa1!`;
   const { data: organizerAuth, error: organizerError } = await retryAuthRateLimit(() => organizerEmail && organizerPassword
-    ? organizer.auth.signInWithPassword({ email: organizerEmail, password: organizerPassword })
-    : organizer.auth.signUp({ email: generatedEmail, password: generatedPassword }));
+    ? organizer.auth.signInWithPassword(withAuthCaptcha({ email: organizerEmail, password: organizerPassword }))
+    : organizer.auth.signUp(withAuthCaptcha({ email: generatedEmail, password: generatedPassword })));
   assert.ifError(organizerError);
   assert.ok(organizerAuth.user && !organizerAuth.user.is_anonymous);
   const roomsToClose = [];

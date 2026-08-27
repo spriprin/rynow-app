@@ -66,6 +66,8 @@ test("organizer self-service Auth keeps permanent and anonymous sessions separat
   assert.match(organizer, /signInWithPassword/);
   assert.match(organizer, /Forgot password\?/);
   assert.match(organizer, /resetPasswordForEmail/);
+  assert.match(organizer, /AuthTurnstile/);
+  assert.match(organizer, /captchaToken/);
   assert.match(organizer, /updateUser\(\{ password \}\)/);
   assert.match(organizer, /emailRedirectTo: organizerAuthRedirect/);
   assert.match(organizer, /redirectTo: organizerAuthRedirect/);
@@ -154,9 +156,17 @@ test("client bundle source never references a service role key", async () => {
     "../app/components/OrganizerFoundationApp.tsx",
     "../lib/supabase/client.ts",
     "../lib/supabase/organizer-client.ts",
+    "../app/components/AuthTurnstile.tsx",
   ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
   assert.doesNotMatch(files.join("\n"), /service[_-]?role/i);
-  assert.match(files[0], /signInAnonymously\(\)/);
+  assert.match(files[0], /signInAnonymously\(\{[\s\S]*options: \{ captchaToken \}/);
+  assert.match(files[0], /getSession\(\)[\s\S]*isTurnstileConfigured/);
+  assert.match(files[0], /Existing guest sessions skip this check/);
+  assert.match(files[0], /createdSession[\s\S]*setScreen\("error"\)/);
+  assert.match(files[1], /signInWithPassword\([\s\S]*captchaToken/);
+  assert.match(files[1], /resetPasswordForEmail\([\s\S]*captchaToken/);
+  assert.match(files[4], /NEXT_PUBLIC_TURNSTILE_SITE_KEY/);
+  assert.doesNotMatch(files[4], /secret|service[_-]?role/i);
   assert.match(files[0], /join_room_by_code/);
   assert.match(files[3], /NEXT_PUBLIC_APP_URL/);
   assert.match(files[1], /margin: 4/);
@@ -167,6 +177,36 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[0], /Interested in You/i);
   assert.match(files[0], /new Date\(target\)\.getTime\(\) > nowMs/);
   assert.match(files[0], /aria-expanded=\{incomingOpen\}/);
+});
+
+test("Auth release gates are isolated, complete and skip-intolerant", async () => {
+  const [helpers, capacity, captcha, runner] = await Promise.all([
+    "../tests/live-auth-helpers.mjs",
+    "../tests/auth-capacity.test.mjs",
+    "../tests/auth-captcha.test.mjs",
+    "../scripts/run-live-acceptance.mjs",
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+  assert.match(helpers, /Cloudflare test proof must never be used against the HERE production Supabase project/);
+  assert.match(helpers, /HERE_TEST_ISOLATED_PROJECT_REF/);
+  assert.match(helpers, /OFFICIAL_TURNSTILE_ALWAYS_PASS_TOKEN/);
+  assert.match(helpers, /HERE_TEST_DELETE_ISOLATED_PROJECT_AFTER_RUN/);
+  assert.match(helpers, /HERE_REQUIRE_RELEASE_GATES !== "true"/);
+  assert.match(capacity, /AUTH-P1 \/ PP-Q/);
+  assert.match(capacity, /AUTH-P2 \/ PP-P/);
+  assert.match(capacity, /official repeatable Turnstile test token/);
+  assert.match(capacity, /assertAuthorizedIsolatedAuthLoad\(url, key\)/);
+  assert.match(captcha, /OFFICIAL_TURNSTILE_ALWAYS_PASS_TOKEN/);
+  assert.match(captcha, /production-negative/);
+  assert.match(captcha, /captchaToken: validToken/);
+  assert.match(runner, /HERE_TEST_CREATE_ORGANIZER/);
+  assert.match(runner, /HERE_TEST_EMAIL_CONFIRMATION_DISABLED_VERIFIED/);
+  assert.match(runner, /HERE_TEST_FAST_RECHECK/);
+  assert.match(runner, /HERE_TEST_AUTH_CAPACITY_VERIFIED/);
+  assert.match(runner, /HERE_TEST_AUTH_CAPTCHA_ACCEPT_VERIFIED/);
+  assert.match(runner, /releaseGate \? regressionSuites/);
+  assert.match(runner, /full anonymous Auth bucket/);
+  assert.match(runner, /HERE_TEST_REAL_TURNSTILE_BROWSER_VERIFIED/);
+  assert.match(runner, /# SKIP\\b/);
 });
 
 test("Sprint 3 creates one secure social loop without popularity ranking", async () => {

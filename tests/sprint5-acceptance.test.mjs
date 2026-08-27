@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
+import { allowPermanentGuestFallback, anonymousSignInCredentials, withAuthCaptcha } from "./live-auth-helpers.mjs";
 
 const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
@@ -29,8 +30,8 @@ async function organizer() {
   let result;
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     result = organizerEmail && organizerPassword
-      ? await value.auth.signInWithPassword(credentials)
-      : await value.auth.signUp(credentials);
+      ? await value.auth.signInWithPassword(withAuthCaptcha(credentials))
+      : await value.auth.signUp(withAuthCaptcha(credentials));
     if (!result.error || (result.error.status !== 429 && !/rate limit/i.test(result.error.message || ""))) break;
     await wait(Math.min(10_000, 2_000 * attempt + Math.round(Math.random() * 1_000)));
   }
@@ -56,12 +57,12 @@ async function createRoom(owner, ownerId, name) {
 
 async function actor(name, joinCode, { deferJoin = false } = {}) {
   const value = client();
-  let { data: auth, error: authError } = await value.auth.signInAnonymously();
-  if (authError?.status === 429 || /rate limit/i.test(authError?.message || "")) {
+  let { data: auth, error: authError } = await value.auth.signInAnonymously(anonymousSignInCredentials());
+  if ((authError?.status === 429 || /rate limit/i.test(authError?.message || "")) && allowPermanentGuestFallback()) {
     const credentials = { email: `here-sprint5-actor-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!` };
     let fallback;
     for (let attempt = 1; attempt <= 5; attempt += 1) {
-      fallback = await value.auth.signUp(credentials);
+      fallback = await value.auth.signUp(withAuthCaptcha(credentials));
       if (!fallback.error || (fallback.error.status !== 429 && !/rate limit/i.test(fallback.error.message || ""))) break;
       await wait(Math.min(10_000, 2_000 * attempt + Math.round(Math.random() * 1_000)));
     }
@@ -256,16 +257,26 @@ test("Sprint 5 live acceptance — S5-A through S5-R", { skip: enabled ? false :
   });
 
   await t.test("S5-G — backgrounded client observes a scheduled Drop become live", async () => {
+    const baseline = await actors[19].client.rpc("room_drop_state", { p_room_id: room.id });
+    assert.ifError(baseline.error);
+    const scheduledAt = new Date(new Date(baseline.data[0].server_now).getTime() + 5_000).toISOString();
     const scheduled = await createDrop(owner.client, room.id, {
       size: 4,
       unlock: 2,
-      scheduledAt: new Date(Date.now() + 2_500).toISOString(),
+      scheduledAt,
       open: false,
     });
     const before = await actors[19].client.rpc("room_drop_state", { p_room_id: room.id });
     assert.ifError(before.error);
-    await wait(3_200);
-    const after = await actors[19].client.rpc("room_drop_state", { p_room_id: room.id });
+    assert.ok(new Date(before.data[0].server_now).getTime() < new Date(scheduledAt).getTime());
+    let after = before;
+    const pollingDeadline = Date.now() + 12_000;
+    while (after.data[0].drop_id !== scheduled.id && Date.now() < pollingDeadline) {
+      const databaseRemaining = new Date(scheduledAt).getTime() - new Date(after.data[0].server_now).getTime();
+      await wait(Math.min(1_000, Math.max(100, databaseRemaining + 100)));
+      after = await actors[19].client.rpc("room_drop_state", { p_room_id: room.id });
+      assert.ifError(after.error);
+    }
     assert.ifError(after.error);
     assert.equal(after.data[0].drop_id, scheduled.id);
     assert.ok(new Date(after.data[0].effective_open_at).getTime() <= new Date(after.data[0].server_now).getTime());
@@ -418,14 +429,15 @@ test("Sprint 5 live acceptance — S5-A through S5-R", { skip: enabled ? false :
     const closeDrop = await createDrop(owner.client, room.id, { size: 20, unlock: 1, budget: 3 });
     const claim = await actors[10].client.rpc("claim_your_drop", { p_drop_id: closeDrop.id });
     assert.ifError(claim.error);
-    const toActor11 = claim.data.find((item) => item.candidate_id === actors[11].user.id);
-    closeInterestItem = claim.data.find((item) => item.id !== toActor11?.id);
-    assert.ok(toActor11 && closeInterestItem);
-    assert.ifError((await actors[10].client.rpc("mark_drop_item_seen", { p_drop_item_id: toActor11.id })).error);
-    assert.ifError((await actors[10].client.rpc("send_interest", { p_drop_item_id: toActor11.id })).error);
-    const incoming = await actors[11].client.rpc("interested_in_you", { p_room_id: room.id });
+    const matchItem = claim.data[0];
+    closeInterestItem = claim.data[1];
+    const closeRecipient = actors.find((value) => value.user.id === matchItem?.candidate_id);
+    assert.ok(matchItem && closeInterestItem && closeRecipient);
+    assert.ifError((await actors[10].client.rpc("mark_drop_item_seen", { p_drop_item_id: matchItem.id })).error);
+    assert.ifError((await actors[10].client.rpc("send_interest", { p_drop_item_id: matchItem.id })).error);
+    const incoming = await closeRecipient.client.rpc("interested_in_you", { p_room_id: room.id });
     const interest = incoming.data.find((item) => item.from_user_id === actors[10].user.id);
-    const accepted = await actors[11].client.rpc("respond_to_interest", { p_interest_id: interest.interest_id, p_interested: true });
+    const accepted = await closeRecipient.client.rpc("respond_to_interest", { p_interest_id: interest.interest_id, p_interested: true });
     assert.ifError(accepted.error);
     closeMatchId = accepted.data;
     assert.ifError((await actors[10].client.rpc("mark_drop_item_seen", { p_drop_item_id: closeInterestItem.id })).error);
@@ -438,7 +450,7 @@ test("Sprint 5 live acceptance — S5-A through S5-R", { skip: enabled ? false :
     assert.match(claimDenied.error?.message || "", /ended/i);
     const chatStillWorks = await actors[10].client.rpc("send_match_message_idempotent", { p_match_id: closeMatchId, p_body: "Room ended, Match remains", p_client_message_id: crypto.randomUUID() });
     assert.ifError(chatStillWorks.error);
-    const matchAvatar = await actors[10].client.storage.from("avatars").createSignedUrl(actors[11].avatarPath, 60);
+    const matchAvatar = await actors[10].client.storage.from("avatars").createSignedUrl(closeRecipient.avatarPath, 60);
     assert.ifError(matchAvatar.error);
   });
 

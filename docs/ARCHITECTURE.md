@@ -1,5 +1,18 @@
 # HERE architecture — Pre-Pilot Core Revision
 
+## Auth release-gate environment
+
+The production organization is on the Supabase Free plan. An authorized
+temporary Branch could not be created on 24 August 2026 because hosted Branching
+requires Pro; the failed request created no resource and incurred no charge.
+With owner authorization, a separate temporary Free project,
+`HERE Auth Gate Temporary 20260826` (`rgenouyngkgfurrffcgw`, `eu-west-1`, quoted
+at $0/month), was created for the destructive Auth-capacity and repeatable
+CAPTCHA phases. It received the complete migration chain and test-only Auth
+configuration. Production was not used as an automated CAPTCHA token farm. The
+temporary project is retained only through the authorized production smoke and
+must then be permanently deleted and verified absent.
+
 ## Identity and event presence
 
 ```text
@@ -226,13 +239,16 @@ Phase 0 hardening migrations were then applied normally. Three additive Sprint
 4 migrations and the additive Sprint 5 reliability migration were created with
 the official CLI, transaction-dry-run, applied live and verified. Sprint 5.1
 added one core revision plus three narrow follow-ups, each transaction-dry-run
-before application. Remote history now contains fifteen ordered versions through
-`20260824095156_pre_pilot_fk_indexes`:
+before application. A final compatibility migration restored the established
+closed-Room error precedence without changing eligibility or access. Remote
+history now contains sixteen ordered versions through
+`20260827163024_restore_closed_room_error_precedence`:
 
 - `20260824093231_pre_pilot_core_revision`;
 - `20260824094220_fix_explore_replacement_position`;
 - `20260824094426_fix_left_presence_state`;
-- `20260824095156_pre_pilot_fk_indexes`.
+- `20260824095156_pre_pilot_fk_indexes`;
+- `20260827163024_restore_closed_room_error_precedence`.
 
 The generic `is_room_member(room, user)` and
 `shares_active_room(viewer, target)` functions remain available only to trusted
@@ -256,10 +272,11 @@ Current advisor classification:
 - the advisor's composite-FK notice for `(drop_id, room_id)` is covered for equality lookups by the existing `(room_id, drop_id)` index and leading `drop_id` primary-key column; a duplicate index was not added;
 - unused-index notices are expected immediately after adding safety/instrumentation indexes to a new test-heavy workload.
 
-The post-Sprint-5.1 advisor run reports no ERROR findings. Security has 6 INFO
-and 51 WARN notices. The categories are intentional deny-all/RPC-only tables,
-reviewed identity-bound product RPCs, the intentional anonymous guest model and
-the existing leaked-password-protection setting. Performance advisor suggestions
+The post-fix production advisor run reports no ERROR findings. Security has 6
+INFO and 51 WARN notices; Performance has 18 INFO and no ERROR. The categories
+are intentional deny-all/RPC-only tables, reviewed identity-bound product RPCs,
+the intentional anonymous guest model and the existing leaked-password-protection
+setting. Performance advisor suggestions
 for the new Explore foreign keys were addressed by the final covering-index
 migration; older informational heuristics remain documented rather than being
 treated as authorization failures.
@@ -269,25 +286,63 @@ During the earlier 20-session stress run, Supabase Realtime temporarily reported
 the tenant required at least 12. This was capacity pressure rather than RLS or
 authorization failure. Bounded reconnect plus Postgres-history refresh recovered
 successfully in the final S5-H live run. The client now tolerates that transient
-condition. The more severe current blocker is hosted anonymous Auth: the 24
-August controlled test sent 100 fresh anonymous signup requests from one NAT in
-10-request bursts every 1.5 seconds. Only 1 succeeded; 99 returned 429 in 15.094
-seconds. The public Auth settings confirm anonymous signup and email
-auto-confirm, but expose no configured CAPTCHA/Turnstile protection. No retry,
-spoofed forwarding, secret-in-browser or RLS weakening is an acceptable fix.
+condition. The earlier 24 August anonymous run (1 success, 99 HTTP 429) was made
+against a depleted token bucket and remains only historical negative evidence;
+it is not used as capacity proof. No retry, spoofed forwarding,
+secret-in-browser or RLS weakening was used as a fix.
+
+The Auth-capacity release candidate now integrates Cloudflare Turnstile through
+Supabase's supported CAPTCHA contract. A fresh open-Room guest first resolves the
+Room, checks `getSession()`, and only when no valid session exists obtains a token
+for `signInAnonymously({ options: { captchaToken } })`. Existing sessions continue
+directly to profile/membership state. Invalid, draft and closed Room routes never
+create an identity. Since Supabase CAPTCHA is a project-wide Auth setting rather
+than an anonymous-only switch, permanent organizer sign-in, signup and password
+recovery use the same public widget/token contract. The public site key is a
+browser build variable; the Turnstile secret must exist only in hosted Supabase
+Auth configuration.
+
+The official hosted rate limiter uses a 30-token maximum IP bucket and the
+configured anonymous hourly value as its refill rate. Test code therefore records
+the exact inspected `rate_limit_anonymous_users`, waits for a full natural refill,
+requires 100 unique users over roughly ten minutes and then 50 unique users in
+roughly one minute, and fails on every 429. Repeatable Cloudflare test proof is
+allowed only against an explicitly isolated non-production Supabase project.
+Authenticated Dashboard inspection showed the actual HERE Free-project value was
+30/hour/IP and the anonymous field was editable. The Dashboard accepted
+`1800/hour/IP`, and a full reload independently returned 1800. IP forwarding
+remains disabled. This gives a 30/minute refill while preserving the hosted
+30-token burst ceiling. The production Cloudflare Managed widget is restricted
+to `here-social-room.spriprin.chatgpt.site`; its public site key is present in
+Sites environment revision 2 as a non-secret client build variable. Supabase
+persisted CAPTCHA as enabled with provider `Turnstile by
+Cloudflare`. The provider secret was transferred directly into Supabase Auth and
+is absent from the repository and browser configuration. Live production Auth
+now rejects both missing and invalid proof without returning 429. A real widget
+token was accepted once by production anonymous Auth and its replay was rejected
+with a CAPTCHA-specific HTTP 400. Refresh of an existing guest session rendered
+no widget and returned directly to the Room. Temporary localhost/loopback widget
+hostnames and the probe route were removed immediately afterward. The isolated
+provider phases passed independently: the official always-fail configuration
+rejected 3/3 attempts and the official always-pass configuration accepted 3/3.
+Production PP-R rejected missing and malformed proof 3/3 without 429. AUTH-P1
+then created 100/100 genuinely fresh users from one NAT over 588.973 seconds
+with 0 HTTP 429 and p95 latency 473 ms. After a clean refill, AUTH-P2 created
+50/50 fresh users over 49.487 seconds with 0 HTTP 429 and p95 latency 336 ms.
+The deployed exact-hostname smoke remains the final browser-side verification.
 
 ## Release boundary
 
-The public Sites deployment remains version 8 / commit `ab8891e` from Sprint 1.
-Sprint 2–5.1 source and live schema are newer than the public frontend. The current
-release candidate has a reconciled fifteen-version migration history, a dedicated
-green functional PP suite and the earlier green S5-A–S5-R live suite. The earlier
-complete Sprint 1–4/organizer baseline remains recorded; repeated final legacy
-reruns are tracked separately in `SPRINT5_REPORT.md` because live Auth quota can
-block identity creation without invalidating an already-completed scenario. Email
-auto-confirm is enabled on the current live project. PP-P, PP-Q and PP-R are
-blocked, so the owner-authorized publication condition is not met. This is a
-blocked release candidate, not a deployment. Resolution requires supported Auth
-rate-limit configuration and abuse protection (or an owner-approved replacement
-identity architecture), followed by a fresh 50/100 capacity test, complete
-regression, exact commit deployment and production smoke.
+Before this release operation, the public Sites deployment remains version 8 /
+commit `ab8891e` from Sprint 1 while Sprint 2–5.1 source and the live schema are
+newer. The release candidate has a reconciled sixteen-version migration history,
+supported Turnstile protection and the verified 1800/hour/IP anonymous setting.
+AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
+strict final live runner passed 92/92 tests with 0 fail and 0 skip across
+Organizer Auth, Sprint 1–5 and Sprint 5.1, including the real 603-second presence
+test. Typecheck, lint, Auth harness, static/render/security contracts and the
+production build are also green (20/20 local tests). P0=0 and P1=0, so the
+owner-authorized publication condition is met. The remaining release operations
+are exact-commit Sites deployment, production smoke on the deployed hostname and
+immediate verified deletion of the temporary Supabase project. Sprint 6 is out
+of scope.

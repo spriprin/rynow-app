@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
-import { retryAuthRateLimit } from "./live-auth-helpers.mjs";
+import { allowPermanentGuestFallback, anonymousSignInCredentials, retryAuthRateLimit, withAuthCaptcha } from "./live-auth-helpers.mjs";
 
 const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
@@ -16,12 +16,12 @@ function client() {
 
 async function createGuest(name, joinCode) {
   const guest = client();
-  let { data: auth, error: authError } = await guest.auth.signInAnonymously();
-  if (authError?.message?.match(/rate limit/i)) {
-    const passwordAuth = await retryAuthRateLimit(() => guest.auth.signUp({
+  let { data: auth, error: authError } = await guest.auth.signInAnonymously(anonymousSignInCredentials());
+  if (authError?.message?.match(/rate limit/i) && allowPermanentGuestFallback()) {
+    const passwordAuth = await retryAuthRateLimit(() => guest.auth.signUp(withAuthCaptcha({
       email: `here-guest-${crypto.randomUUID()}@example.com`,
       password: `Here-${crypto.randomUUID()}-Aa1!`,
-    }));
+    })));
     auth = passwordAuth.data;
     authError = passwordAuth.error;
   }
@@ -82,8 +82,8 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
   const generatedEmail = `here-sprint2-${crypto.randomUUID()}@example.com`;
   const generatedPassword = `Here-${crypto.randomUUID()}-Aa1!`;
   const { data: organizerAuth, error: organizerError } = await retryAuthRateLimit(() => organizerEmail && organizerPassword
-    ? organizer.auth.signInWithPassword({ email: organizerEmail, password: organizerPassword })
-    : organizer.auth.signUp({ email: generatedEmail, password: generatedPassword }));
+    ? organizer.auth.signInWithPassword(withAuthCaptcha({ email: organizerEmail, password: organizerPassword }))
+    : organizer.auth.signUp(withAuthCaptcha({ email: generatedEmail, password: generatedPassword })));
   assert.ifError(organizerError);
   assert.ok(organizerAuth.user && !organizerAuth.user.is_anonymous);
 
@@ -169,17 +169,21 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.equal(afterRefresh[0].first_seen_at, firstSeen);
   });
 
-  await t.test("S2-J — budget three survives requests and rejects a fourth Interest", async () => {
-    for (const item of firstClaim.slice(0, 3)) {
+  const adaptiveBudget = Math.ceil(firstClaim.length * 0.5);
+
+  await t.test("S2-J — adaptive budget survives requests and rejects the next Interest", async () => {
+    assert.equal(adaptiveBudget, 5);
+    for (const item of firstClaim.slice(0, adaptiveBudget)) {
+      assert.ifError((await viewer.client.rpc("mark_drop_item_seen", { p_drop_item_id: item.id })).error);
       const { error } = await viewer.client.rpc("send_interest", { p_drop_item_id: item.id });
       assert.ifError(error);
     }
-    assert.ifError((await viewer.client.rpc("mark_drop_item_seen", { p_drop_item_id: firstClaim[3].id })).error);
-    const { error: fourthError } = await viewer.client.rpc("send_interest", { p_drop_item_id: firstClaim[3].id });
-    assert.match(fourthError?.message || "", /No Interests left/i);
+    assert.ifError((await viewer.client.rpc("mark_drop_item_seen", { p_drop_item_id: firstClaim[adaptiveBudget].id })).error);
+    const { error: exhaustedError } = await viewer.client.rpc("send_interest", { p_drop_item_id: firstClaim[adaptiveBudget].id });
+    assert.match(exhaustedError?.message || "", /No Interests left/i);
     const { data: state, error: stateError } = await viewer.client.rpc("room_drop_state", { p_room_id: primaryRoom.id });
     assert.ifError(stateError);
-    assert.equal(Number(state[0].interests_used), 3);
+    assert.equal(Number(state[0].interests_used), adaptiveBudget);
   });
 
   const otherRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Cross-room Isolation");
@@ -190,7 +194,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
   await t.test("S2-K — arbitrary, self, cross-room, Wall and non-assigned Interests are rejected", async () => {
     const randomItem = crypto.randomUUID();
     assert.match((await viewer.client.rpc("send_interest", { p_drop_item_id: randomItem })).error?.message || "", /not found/i);
-    assert.match((await viewer.client.rpc("send_interest", { p_drop_item_id: firstClaim[3].id })).error?.message || "", /No Interests left/i);
+    assert.match((await viewer.client.rpc("send_interest", { p_drop_item_id: firstClaim[adaptiveBudget].id })).error?.message || "", /No Interests left/i);
     assert.ok((await viewer.client.from("interests").insert({ room_id: primaryRoom.id, drop_id: drop1.id, drop_item_id: firstClaim[0].id, from_user_id: viewer.user.id, to_user_id: viewer.user.id })).error);
     assert.ok((await viewer.client.from("interests").insert({ room_id: otherRoom.id, drop_id: otherRoomDrop.id, drop_item_id: randomItem, from_user_id: viewer.user.id, to_user_id: otherRoomGuest.user.id })).error);
     assert.ok((await viewer.client.from("interests").insert({ room_id: primaryRoom.id, drop_id: drop1.id, drop_item_id: randomItem, from_user_id: viewer.user.id, to_user_id: primaryCandidates[10].user.id })).error);
@@ -206,10 +210,10 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
 
     const { data: sent, error: sentError } = await viewer.client.rpc("sent_interests", { p_room_id: primaryRoom.id });
     assert.ifError(sentError);
-    assert.equal(sent.length, 3);
+    assert.equal(sent.length, adaptiveBudget);
     assert.ok(sent.some((interest) => interest.to_user_id === recipient.user.id));
 
-    const recipients = new Set(firstClaim.slice(0, 3).map((item) => item.candidate_id));
+    const recipients = new Set(firstClaim.slice(0, adaptiveBudget).map((item) => item.candidate_id));
     const thirdPerson = primaryCandidates.find((guest) => !recipients.has(guest.user.id));
     const { data: thirdIncoming, error: thirdError } = await thirdPerson.client.rpc("interested_in_you", { p_room_id: primaryRoom.id });
     assert.ifError(thirdError);
@@ -227,8 +231,8 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.ok((await otherRoomGuest.client.rpc("sent_interests", { p_room_id: primaryRoom.id })).error);
   });
 
-  for (const item of firstClaim.slice(3)) {
-    if (item.id === firstClaim[3].id) {
+  for (const item of firstClaim.slice(adaptiveBudget)) {
+    if (item.id === firstClaim[adaptiveBudget].id) {
       assert.ifError((await viewer.client.rpc("pass_drop_item", { p_drop_item_id: item.id })).error);
     } else {
       await markAndPass(viewer, item);

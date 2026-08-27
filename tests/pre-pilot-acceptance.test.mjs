@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
+import { allowPermanentGuestFallback, anonymousSignInCredentials, withAuthCaptcha } from "./live-auth-helpers.mjs";
 
 const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
@@ -36,8 +37,8 @@ async function organizer() {
     ? { email: organizerEmail, password: organizerPassword }
     : { email: `here-pp-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!` };
   const { data, error } = await withAuthRetry(() => organizerEmail && organizerPassword
-    ? value.auth.signInWithPassword(credentials)
-    : value.auth.signUp(credentials));
+    ? value.auth.signInWithPassword(withAuthCaptcha(credentials))
+    : value.auth.signUp(withAuthCaptcha(credentials)));
   assert.ifError(error);
   assert.ok(data.user && data.session && !data.user.is_anonymous);
   return { client: value, user: data.user };
@@ -45,10 +46,10 @@ async function organizer() {
 
 async function actor(name) {
   const value = client();
-  let result = await withAuthRetry(() => value.auth.signInAnonymously(), 3);
-  if (result.error) {
+  let result = await withAuthRetry(() => value.auth.signInAnonymously(anonymousSignInCredentials()), 3);
+  if (result.error && allowPermanentGuestFallback()) {
     const credentials = { email: `here-pp-guest-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!` };
-    result = await withAuthRetry(() => value.auth.signUp(credentials));
+    result = await withAuthRetry(() => value.auth.signUp(withAuthCaptcha(credentials)));
   }
   assert.ifError(result.error);
   assert.ok(result.data.user && result.data.session);

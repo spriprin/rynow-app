@@ -1,11 +1,15 @@
 # HERE — Sprint 5 verification report
 
-Date: 22 August 2026. Status: local release candidate; not deployed.
+Original Sprint 5 run: 22 August 2026. Final pre-pilot gate addendum: 27 August
+2026. Status before this release operation: exact candidate verified and
+owner-authorized for deployment; not yet deployed.
 
 ## Architecture and presence
 
 - Client heartbeat every 60 seconds while visible and online.
-- Recent active timeout: five minutes, evaluated from server/database time.
+- Historical Sprint 5 recent-active timeout: five minutes, evaluated from
+  server/database time. Sprint 5.1 superseded it with 10-minute recent activity
+  and 60-minute discovery eligibility.
 - Stale participants remain durable members but leave Room Wall sharing and new Drop eligibility.
 - Organizer sees aggregate joined and recent counts; no individual presence analytics is exposed.
 - Guests cannot directly update `room_members`; self-bound heartbeat/leave RPCs own the timestamp.
@@ -70,6 +74,13 @@ An earlier all-in-one rerun hit the documented anonymous/signup 429 limit; after
 quota recovery, the remaining identity-sensitive suites above passed live without
 source-inspection substitutions.
 
+Final strict post-Auth-gate rerun: Organizer Auth + Sprint 1–5 + Sprint 5.1
+passed 92/92 with 0 fail and 0 skip. It included the real 603-second presence
+expiry, 20 concurrent joins, 10 concurrent Drop claims and exposure variance 2.
+Local typecheck/lint/Auth/static/render/security/build verification passed 20/20.
+The additive migration chain is reconciled at 16/16 through
+`20260827163024_restore_closed_room_error_precedence`.
+
 ## Browser/device status
 
 - Actual physical devices: **not tested**.
@@ -79,17 +90,25 @@ source-inspection substitutions.
 
 ## Known limitations and open pilot risks
 
-- Supabase anonymous sign-in and generated email signup can return 429 during repeated same-IP load tests. Existing sessions recover; new guests see friendly retry UX. Venue NAT concentration must be tested before the pilot.
+- The actual anonymous limit is configured through the supported Supabase setting
+  at 1800/hour/IP with IP forwarding off. AUTH-P1 passed 100/100 fresh users over
+  588.973 seconds and AUTH-P2 passed 50/50 over 49.487 seconds from one NAT, both
+  with zero HTTP 429. The fixed hosted burst bucket remains 30 and should still be
+  monitored during a physical pilot.
 - During peak test load, Realtime logs reported only 9 available database connections when 12 were required. Bounded reconnect and Postgres-history fallback recovered, but connection headroom should be monitored or increased for the event.
 - Leaked-password protection is not enabled for organizer Auth.
 - Hosted password-recovery email/click has not been smoke-tested with a real inbox.
-- The public URL still serves the old Sprint 1 frontend; the live database is newer.
+- Before this release operation, the public URL still serves the old Sprint 1
+  frontend; the live database and verified release candidate are newer.
 - Physical iOS Safari/Android Chrome QA is pending.
 
-Bug classification at handoff: `P0 = 0`, `P1 = 0` in all completed live scenarios. Auth/Realtime project-capacity headroom and pending physical QA are open pilot risks, not silently closed findings.
+Bug classification at handoff: `P0 = 0`, `P1 = 0` in all completed live
+scenarios. Realtime headroom and pending physical QA are open pilot risks, not
+silently closed findings.
 
 ## Release rule
 
-Do not deploy automatically. The final regression is green; deploy only the exact
-release-candidate commit when explicitly requested, run production smoke, then
-execute `REAL_DEVICE_QA.md` on 10–20 devices. Do not start Sprint 6.
+The final regression is green and the owner explicitly authorized deployment of
+the exact release-candidate commit when P0=0/P1=0. Run production smoke, delete
+the temporary Auth-gate Supabase project immediately afterward, then execute
+`REAL_DEVICE_QA.md` on 10–20 devices. Do not start Sprint 6.

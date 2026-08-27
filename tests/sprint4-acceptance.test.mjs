@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
-import { retryAuthRateLimit } from "./live-auth-helpers.mjs";
+import { allowPermanentGuestFallback, anonymousSignInCredentials, retryAuthRateLimit, withAuthCaptcha } from "./live-auth-helpers.mjs";
 
 const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
@@ -20,8 +20,8 @@ async function signInOrganizer(prefix) {
     ? { email: organizerEmail, password: organizerPassword, existing: true }
     : { email: `here-sprint4-${prefix}-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!`, existing: false };
   const { data, error } = await retryAuthRateLimit(() => credentials.existing
-    ? organizer.auth.signInWithPassword(credentials)
-    : organizer.auth.signUp(credentials));
+    ? organizer.auth.signInWithPassword(withAuthCaptcha(credentials))
+    : organizer.auth.signUp(withAuthCaptcha(credentials)));
   assert.ifError(error);
   assert.ok(data.user && data.session && !data.user.is_anonymous, `${prefix} organizer must be a permanent authenticated user`);
   return { client: organizer, user: data.user };
@@ -29,12 +29,12 @@ async function signInOrganizer(prefix) {
 
 async function createGuest(name, joinCode) {
   const guest = client();
-  let { data: auth, error: authError } = await guest.auth.signInAnonymously();
-  if (authError && /rate limit/i.test(authError.message)) {
-    const fallback = await retryAuthRateLimit(() => guest.auth.signUp({
+  let { data: auth, error: authError } = await guest.auth.signInAnonymously(anonymousSignInCredentials());
+  if (authError && /rate limit/i.test(authError.message) && allowPermanentGuestFallback()) {
+    const fallback = await retryAuthRateLimit(() => guest.auth.signUp(withAuthCaptcha({
       email: `here-sprint4-guest-${crypto.randomUUID()}@example.com`,
       password: `Here-${crypto.randomUUID()}-Aa1!`,
-    }));
+    })));
     auth = fallback.data;
     authError = fallback.error;
   }

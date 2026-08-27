@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createClient } from "@supabase/supabase-js";
-import { retryAuthRateLimit } from "./live-auth-helpers.mjs";
+import { anonymousSignInCredentials, retryAuthRateLimit, withAuthCaptcha, withAuthCaptchaOptions } from "./live-auth-helpers.mjs";
 
 const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
@@ -17,7 +17,7 @@ async function registerPermanent(label) {
   const authClient = client();
   const email = `here-organizer-${label}-${crypto.randomUUID()}@example.com`;
   const password = `Here-${crypto.randomUUID()}-Aa1!`;
-  const { data, error } = await retryAuthRateLimit(() => authClient.auth.signUp({ email, password }));
+  const { data, error } = await retryAuthRateLimit(() => authClient.auth.signUp(withAuthCaptcha({ email, password })));
   assert.ifError(error);
   assert.ok(data.user);
   assert.notEqual(data.user.is_anonymous, true);
@@ -27,7 +27,7 @@ async function registerPermanent(label) {
 async function fallbackOrganizer() {
   assert.ok(fallbackEmail && fallbackPassword, "Confirmed organizer credentials are required when email confirmation is enabled");
   const authClient = client();
-  const { data, error } = await authClient.auth.signInWithPassword({ email: fallbackEmail, password: fallbackPassword });
+  const { data, error } = await authClient.auth.signInWithPassword(withAuthCaptcha({ email: fallbackEmail, password: fallbackPassword }));
   assert.ifError(error);
   assert.ok(data.user && data.session && !data.user.is_anonymous);
   return { client: authClient, user: data.user, session: data.session };
@@ -58,9 +58,9 @@ test("Organizer self-service Auth live acceptance", { skip: enabled ? false : "S
 
   await t.test("password recovery request accepts only the fixed production organizer redirect", async () => {
     const recoveryProbeEmail = `here.sprint4.recovery+${crypto.randomUUID()}@gmail.com`;
-    const { error } = await first.client.auth.resetPasswordForEmail(recoveryProbeEmail, {
+    const { error } = await first.client.auth.resetPasswordForEmail(recoveryProbeEmail, withAuthCaptchaOptions({
       redirectTo: "https://here-social-room.spriprin.chatgpt.site/organizer?recovery=1",
-    });
+    }));
     assert.ifError(error);
   });
 
@@ -76,7 +76,7 @@ test("Organizer self-service Auth live acceptance", { skip: enabled ? false : "S
   });
 
   const anonymous = client();
-  const { data: guestAuth, error: guestError } = await anonymous.auth.signInAnonymously();
+  const { data: guestAuth, error: guestError } = await anonymous.auth.signInAnonymously(anonymousSignInCredentials());
   assert.ifError(guestError);
   assert.ok(guestAuth.user?.is_anonymous);
 

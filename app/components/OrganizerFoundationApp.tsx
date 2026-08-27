@@ -8,6 +8,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/client";
 import { getSupabaseOrganizerClient, getTrustedApplicationOrigin, organizerAuthRedirect } from "@/lib/supabase/organizer-client";
 import { logDiagnostic, retryRead, userFacingError } from "@/lib/reliability";
 import type { FoundationRoom, OrganizerDrop } from "@/lib/types";
+import { AuthTurnstile, isTurnstileConfigured, type AuthTurnstileHandle } from "./AuthTurnstile";
 import { OrganizerAnalytics } from "./OrganizerAnalytics";
 
 type OrganizerScreen = "loading" | "configuration" | "auth" | "check-email" | "reset-password" | "rooms" | "create";
@@ -35,8 +36,10 @@ export function OrganizerFoundationApp() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState("");
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
+  const [captchaToken, setCaptchaToken] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
   const closingRoom = useRef(false);
+  const turnstileRef = useRef<AuthTurnstileHandle | undefined>(undefined);
 
   const selectedRoom = rooms.find((room) => room.id === selectedId) || rooms[0] || null;
   const origin = useMemo(() => {
@@ -100,6 +103,11 @@ export function OrganizerFoundationApp() {
       const { data, error: userError } = await client.auth.getUser();
       if (userError || !data.user || data.user.is_anonymous) {
         if (data.user?.is_anonymous) await client.auth.signOut({ scope: "local" });
+        if (!recoveryRequested && !isTurnstileConfigured()) {
+          setError("Turnstile is not configured for Auth operations.");
+          setScreen("configuration");
+          return;
+        }
         setScreen(recoveryRequested ? "reset-password" : "auth");
         return;
       }
@@ -147,6 +155,28 @@ export function OrganizerFoundationApp() {
     window.setTimeout(() => setToast(""), 2200);
   }
 
+  function changeAuthMode(nextMode: AuthMode) {
+    setCaptchaToken("");
+    setError("");
+    turnstileRef.current?.reset();
+    setAuthMode(nextMode);
+  }
+
+  function requireCaptchaToken() {
+    if (!isTurnstileConfigured()) throw new Error("Turnstile is not configured for Auth operations.");
+    if (!captchaToken) throw new Error("Complete the quick security check.");
+    return captchaToken;
+  }
+
+  function resetAuthChallenge() {
+    setCaptchaToken("");
+    turnstileRef.current?.reset();
+  }
+
+  function authChallenge(action: string) {
+    return <AuthTurnstile key={`${authMode}:${action}`} action={action} instanceRef={turnstileRef} onSuccess={(token) => { setCaptchaToken(token); setError(""); }} onExpire={() => { setCaptchaToken(""); setError("The quick security check expired. Please try it again."); }} onError={() => { setCaptchaToken(""); setError("The quick security check could not load. Check your connection and try again."); }} />;
+  }
+
   async function signIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -155,7 +185,7 @@ export function OrganizerFoundationApp() {
       const form = new FormData(event.currentTarget);
       const client = getSupabaseOrganizerClient();
       if (!client) throw new Error("Supabase is not configured");
-      const { data, error: signInError } = await client.auth.signInWithPassword({ email: String(form.get("email") || ""), password: String(form.get("password") || "") });
+      const { data, error: signInError } = await client.auth.signInWithPassword({ email: String(form.get("email") || ""), password: String(form.get("password") || ""), options: { captchaToken: requireCaptchaToken() } });
       if (signInError || !data.user) throw new Error("We couldn’t sign you in. Check your details or reset your password.");
       if (data.user.is_anonymous) throw new Error("A permanent organizer account is required");
       setOrganizerId(data.user.id);
@@ -165,6 +195,7 @@ export function OrganizerFoundationApp() {
       logDiagnostic("organizer_sign_in", reason);
       setError(userFacingError(reason, "We couldn’t sign you in. Please try again.", "Too many requests. Please try again in a moment."));
     } finally {
+      resetAuthChallenge();
       setBusy(false);
     }
   }
@@ -184,7 +215,7 @@ export function OrganizerFoundationApp() {
       const { data, error: signUpError } = await client.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: organizerAuthRedirect("/organizer?auth=confirmed", window.location.origin) },
+        options: { captchaToken: requireCaptchaToken(), emailRedirectTo: organizerAuthRedirect("/organizer?auth=confirmed", window.location.origin) },
       });
       if (signUpError) {
         if (signUpError.code === "weak_password") throw new Error("Use a stronger password with at least 8 characters.");
@@ -203,6 +234,7 @@ export function OrganizerFoundationApp() {
       logDiagnostic("organizer_sign_up", reason);
       setError(userFacingError(reason, "We couldn’t create the account. Please try again.", "Too many requests. Please try again in a moment."));
     } finally {
+      resetAuthChallenge();
       setBusy(false);
     }
   }
@@ -217,6 +249,7 @@ export function OrganizerFoundationApp() {
       const client = getSupabaseOrganizerClient();
       if (!client) throw new Error("Supabase is not configured");
       const { error: resetError } = await client.auth.resetPasswordForEmail(email, {
+        captchaToken: requireCaptchaToken(),
         redirectTo: organizerAuthRedirect("/organizer?recovery=1", window.location.origin),
       });
       if (resetError?.status === 429) throw new Error("Too many requests. Please wait a moment and try again.");
@@ -226,6 +259,7 @@ export function OrganizerFoundationApp() {
       logDiagnostic("organizer_password_recovery", reason);
       setError(userFacingError(reason, "We couldn’t send the recovery email. Please try again.", "Too many requests. Please try again in a moment."));
     } finally {
+      resetAuthChallenge();
       setBusy(false);
     }
   }
@@ -323,10 +357,10 @@ export function OrganizerFoundationApp() {
   }
 
   if (screen === "loading") return <OrganizerState title="Opening organizer space…" copy="Checking your permanent organizer session." />;
-  if (screen === "configuration") return <OrganizerState title="Supabase isn’t connected." copy="Add the public Supabase URL and publishable key before creating real Rooms." />;
-  if (screen === "auth") return <main className="organizer-auth"><section><a className="brand" href="/"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></a><span className="eyebrow">REAL EVENT ROOMS</span><h1>Create a Room for your event.</h1><p>Sign in or create a permanent organizer account. Guests still join instantly through the Room QR.</p><small><ShieldCheck size={16} />Organizer accounts and anonymous guest sessions stay separate on this device.</small></section><div className="organizer-auth__panel"><div className="organizer-auth__tabs" role="tablist" aria-label="Organizer authentication"><button type="button" role="tab" aria-selected={authMode === "signin"} onClick={() => { setAuthMode("signin"); setError(""); }}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "signup"} onClick={() => { setAuthMode("signup"); setError(""); }}>Create account</button></div>{authMode === "signin" && <form onSubmit={signIn}><LockKeyhole /><h2>Welcome back.</h2><p>Open your organizer space and manage your own Rooms.</p><label>Email<input type="email" name="email" required autoComplete="email" /></label><label>Password<input type="password" name="password" required minLength={8} autoComplete="current-password" /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--lime button--wide" disabled={busy}>{busy ? "Signing in…" : "Sign in"}<ArrowRight size={18} /></button><button type="button" className="organizer-auth__link" onClick={() => { setAuthMode("forgot"); setError(""); }}>Forgot password?</button></form>}{authMode === "signup" && <form onSubmit={signUp}><KeyRound /><h2>Create organizer account.</h2><p>Your account owns only the Rooms you create.</p><label>Email<input type="email" name="email" required autoComplete="email" /></label><label>Password<input type="password" name="password" required minLength={8} autoComplete="new-password" /></label><label>Confirm password<input type="password" name="confirmPassword" required minLength={8} autoComplete="new-password" /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--lime button--wide" disabled={busy}>{busy ? "Creating account…" : "Create account"}<ArrowRight size={18} /></button></form>}{authMode === "forgot" && <form onSubmit={requestPasswordReset}><MailCheck /><h2>Reset your password.</h2><p>We’ll send recovery instructions if the address can be used.</p><label>Email<input type="email" name="email" required autoComplete="email" /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--lime button--wide" disabled={busy}>{busy ? "Sending…" : "Send recovery email"}<ArrowRight size={18} /></button><button type="button" className="organizer-auth__link" onClick={() => { setAuthMode("signin"); setError(""); }}>Back to sign in</button></form>}</div></main>;
+  if (screen === "configuration") return <OrganizerState title="Organizer Auth isn’t configured." copy={error || "Add the public Supabase settings and Turnstile site key before using organizer authentication."} />;
+  if (screen === "auth") return <main className="organizer-auth"><section><a className="brand" href="/"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></a><span className="eyebrow">REAL EVENT ROOMS</span><h1>Create a Room for your event.</h1><p>Sign in or create a permanent organizer account. Guests still join instantly through the Room QR.</p><small><ShieldCheck size={16} />Organizer accounts and anonymous guest sessions stay separate on this device.</small></section><div className="organizer-auth__panel"><div className="organizer-auth__tabs" role="tablist" aria-label="Organizer authentication"><button type="button" role="tab" aria-selected={authMode === "signin"} onClick={() => changeAuthMode("signin")}>Sign in</button><button type="button" role="tab" aria-selected={authMode === "signup"} onClick={() => changeAuthMode("signup")}>Create account</button></div>{authMode === "signin" && <form onSubmit={signIn}><LockKeyhole /><h2>Welcome back.</h2><p>Open your organizer space and manage your own Rooms.</p><label>Email<input type="email" name="email" required autoComplete="email" /></label><label>Password<input type="password" name="password" required minLength={8} autoComplete="current-password" /></label>{authChallenge("organizer_signin")}{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--lime button--wide" disabled={busy || !captchaToken}>{busy ? "Signing in…" : "Sign in"}<ArrowRight size={18} /></button><button type="button" className="organizer-auth__link" onClick={() => changeAuthMode("forgot")}>Forgot password?</button></form>}{authMode === "signup" && <form onSubmit={signUp}><KeyRound /><h2>Create organizer account.</h2><p>Your account owns only the Rooms you create.</p><label>Email<input type="email" name="email" required autoComplete="email" /></label><label>Password<input type="password" name="password" required minLength={8} autoComplete="new-password" /></label><label>Confirm password<input type="password" name="confirmPassword" required minLength={8} autoComplete="new-password" /></label>{authChallenge("organizer_signup")}{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--lime button--wide" disabled={busy || !captchaToken}>{busy ? "Creating account…" : "Create account"}<ArrowRight size={18} /></button></form>}{authMode === "forgot" && <form onSubmit={requestPasswordReset}><MailCheck /><h2>Reset your password.</h2><p>We’ll send recovery instructions if the address can be used.</p><label>Email<input type="email" name="email" required autoComplete="email" /></label>{authChallenge("organizer_recovery")}{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--lime button--wide" disabled={busy || !captchaToken}>{busy ? "Sending…" : "Send recovery email"}<ArrowRight size={18} /></button><button type="button" className="organizer-auth__link" onClick={() => changeAuthMode("signin")}>Back to sign in</button></form>}</div></main>;
 
-  if (screen === "check-email") return <main className="foundation-state"><a className="brand" href="/"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></a><div className="foundation-state__icon"><MailCheck /></div><span className="eyebrow">CHECK YOUR EMAIL</span><h1>Continue from your inbox.</h1><p>If <strong>{pendingEmail || "this address"}</strong> can be used, we sent the next step. The link returns only to the trusted HERE organizer page.</p><button className="button button--dark" onClick={() => { setAuthMode("signin"); setError(""); setScreen("auth"); }}>Back to sign in</button></main>;
+  if (screen === "check-email") return <main className="foundation-state"><a className="brand" href="/"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></a><div className="foundation-state__icon"><MailCheck /></div><span className="eyebrow">CHECK YOUR EMAIL</span><h1>Continue from your inbox.</h1><p>If <strong>{pendingEmail || "this address"}</strong> can be used, we sent the next step. The link returns only to the trusted HERE organizer page.</p><button className="button button--dark" onClick={() => { changeAuthMode("signin"); setScreen("auth"); }}>Back to sign in</button></main>;
 
   if (screen === "reset-password") return <main className="organizer-auth organizer-auth--single"><section><a className="brand" href="/"><span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span></a><span className="eyebrow">PASSWORD RECOVERY</span><h1>Choose a new password.</h1><p>The recovery link is accepted only by the dedicated organizer session.</p></section><div className="organizer-auth__panel"><form onSubmit={updatePassword}><KeyRound /><h2>New password</h2><label>Password<input type="password" name="password" required minLength={8} autoComplete="new-password" /></label><label>Confirm password<input type="password" name="confirmPassword" required minLength={8} autoComplete="new-password" /></label>{error && <p className="form-error" role="alert">{error}</p>}<button className="button button--lime button--wide" disabled={busy}>{busy ? "Updating…" : "Update password"}<ArrowRight size={18} /></button></form></div></main>;
 

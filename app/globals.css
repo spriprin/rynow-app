@@ -583,6 +583,10 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
 .foundation-age-check strong { font-size: 15px; }
 .foundation-privacy { color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 6px; }
 .returning-card { text-align: center; justify-items: center; }
+.auth-turnstile { width: 100%; min-height: 65px; display: flex; align-items: center; justify-content: center; }
+.auth-turnstile > div { width: 100%; }
+.auth-verification-card__icon { width: 34px; height: 34px; color: #758729; }
+.auth-verification-card__status { color: var(--muted); font-size: 12px; }
 .returning-avatar { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; }
 
 .foundation-room-screen { min-height: 100svh; padding: max(28px, env(safe-area-inset-top)) max(18px, calc((100vw - 1120px) / 2)) max(34px, env(safe-area-inset-bottom)); color: white; background: var(--ink); }

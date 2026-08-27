@@ -47,6 +47,9 @@ export function userFacingError(reason: unknown, fallback: string, rateLimitMess
   const value = errorLike(reason);
   if (isRateLimitError(reason)) return rateLimitMessage;
   if (isNetworkError(reason)) return "Connection lost. Check your signal and try again.";
+  if (value.code === "captcha_failed" || /captcha|security check/i.test(value.message || "")) {
+    return "The quick security check expired. Please try it again.";
+  }
   const safeMessage = value.message || "";
   if (KNOWN_PRODUCT_ERRORS.some((pattern) => pattern.test(safeMessage))) return safeMessage;
   return fallback;

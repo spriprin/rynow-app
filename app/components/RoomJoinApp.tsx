@@ -3,12 +3,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Ban, CalendarDays, Check, Clock3, DoorOpen, Flag, ImagePlus, LockKeyhole, MapPin, MessageCircle, Radio, RefreshCw, Send, ShieldCheck, Sparkles, Users, X } from "lucide-react";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import type { RealtimeChannel, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { logDiagnostic, retryRead, userFacingError } from "@/lib/reliability";
 import type { DropItem, DropItemAction, ExploreItem, ExploreState, FoundationProfile, FoundationRoom, IncomingInterest, MatchMessage, RoomDropState, RoomMatch, RoomPresenceState, RoomWallPerson } from "@/lib/types";
+import { AuthTurnstile, isTurnstileConfigured, type AuthTurnstileHandle } from "./AuthTurnstile";
 
-type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "onboarding" | "ready" | "room" | "error";
+type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "verification" | "onboarding" | "ready" | "room" | "error";
 type OnboardingStep = 1 | 2 | 3;
 type RoomWallRpcRow = { id: string; display_name: string; avatar_path: string; joined_at: string };
 type DropItemRpcRow = { id: string; item_position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
@@ -142,6 +143,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [connectionState, setConnectionState] = useState<ConnectionState>(() => typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online");
   const [recoveryEpoch, setRecoveryEpoch] = useState(0);
   const bootstrapStarted = useRef(false);
+  const anonymousSignInPending = useRef(false);
+  const turnstileRef = useRef<AuthTurnstileHandle | undefined>(undefined);
   const markingSeen = useRef(new Set<string>());
   const markingIncomingOpened = useRef(new Set<string>());
   const zeroRequeryFor = useRef("");
@@ -346,6 +349,37 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     setScreen("room");
   }, [joinCode, loadConnections, loadDiscovery, loadWall]);
 
+  const continueGuestSession = useCallback(async (resolvedRoom: FoundationRoom, session: Session) => {
+    const client = getSupabaseBrowserClient();
+    if (!client) throw new Error("Supabase is not configured");
+    const userId = session.user.id;
+    const { data: savedProfile, error: profileError } = await client.from("profiles").select("id, display_name, avatar_path, age_confirmed_18").eq("id", userId).maybeSingle();
+    if (profileError) throw profileError;
+    if (!savedProfile) {
+      setScreen(resolvedRoom.status === "closed" ? "closed" : "onboarding");
+      return;
+    }
+
+    const typedProfile = savedProfile as FoundationProfile;
+    setProfile(typedProfile);
+    setDisplayName(typedProfile.display_name);
+    const ownUrls = await signedUrlMap([typedProfile.avatar_path]);
+    setOwnAvatarUrl(ownUrls.get(typedProfile.avatar_path) || "");
+    const { data: membership, error: membershipError } = await client.from("room_members").select("room_id").eq("room_id", resolvedRoom.id).eq("user_id", userId).maybeSingle();
+    if (membershipError) throw membershipError;
+    if (resolvedRoom.status === "closed") {
+      if (!membership) {
+        setScreen("closed");
+        return;
+      }
+      await loadConnections(resolvedRoom.id);
+      setScreen("room");
+      return;
+    }
+    if (membership) await enterRoom(resolvedRoom);
+    else setScreen("ready");
+  }, [enterRoom, loadConnections]);
+
   useEffect(() => {
     if (bootstrapStarted.current) return;
     bootstrapStarted.current = true;
@@ -364,39 +398,57 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       setRoom(resolvedRoom);
       if (resolvedRoom.status === "draft") return setScreen("not-open");
 
-      let { data: sessionData } = await client.auth.getSession();
+      const { data: sessionData } = await client.auth.getSession();
       if (!sessionData.session && resolvedRoom.status === "open") {
-        const { data, error: anonymousError } = await client.auth.signInAnonymously();
-        if (anonymousError || !data.session) throw anonymousError || new Error("Could not create guest session");
-        sessionData = { session: data.session };
+        if (!isTurnstileConfigured()) {
+          setError("Guest verification is not configured for new sessions.");
+          setScreen("configuration");
+          return;
+        }
+        setScreen("verification");
+        return;
       }
       if (!sessionData.session) return setScreen("closed");
-      const userId = sessionData.session.user.id;
-      const { data: savedProfile, error: profileError } = await client.from("profiles").select("id, display_name, avatar_path, age_confirmed_18").eq("id", userId).maybeSingle();
-      if (profileError) throw profileError;
-      if (!savedProfile) return setScreen(resolvedRoom.status === "closed" ? "closed" : "onboarding");
-
-      const typedProfile = savedProfile as FoundationProfile;
-      setProfile(typedProfile);
-      setDisplayName(typedProfile.display_name);
-      const ownUrls = await signedUrlMap([typedProfile.avatar_path]);
-      setOwnAvatarUrl(ownUrls.get(typedProfile.avatar_path) || "");
-      const { data: membership, error: membershipError } = await client.from("room_members").select("room_id").eq("room_id", resolvedRoom.id).eq("user_id", userId).maybeSingle();
-      if (membershipError) throw membershipError;
-      if (resolvedRoom.status === "closed") {
-        if (!membership) return setScreen("closed");
-        await loadConnections(resolvedRoom.id);
-        return setScreen("room");
-      }
-      if (membership) await enterRoom(resolvedRoom);
-      else setScreen("ready");
+      await continueGuestSession(resolvedRoom, sessionData.session);
     }
     void bootstrap().catch((reason: unknown) => {
       logDiagnostic("guest_bootstrap", reason);
       setError(userFacingError(reason, "Something went wrong while opening this Room. Please try again."));
       setScreen("error");
     });
-  }, [enterRoom, initialRoom, joinCode, loadConnections]);
+  }, [continueGuestSession, initialRoom, joinCode]);
+
+  const completeAnonymousVerification = useCallback(async (captchaToken: string) => {
+    if (!room || room.status !== "open" || anonymousSignInPending.current) return;
+    anonymousSignInPending.current = true;
+    setBusy(true);
+    setError("");
+    let createdSession: Session | null = null;
+    let resetChallenge = false;
+    try {
+      const client = getSupabaseBrowserClient();
+      if (!client) throw new Error("Supabase is not configured");
+      const { data, error: anonymousError } = await client.auth.signInAnonymously({
+        options: { captchaToken },
+      });
+      if (anonymousError || !data.session) throw anonymousError || new Error("Could not create guest session");
+      createdSession = data.session;
+      setScreen("loading");
+      await continueGuestSession(room, createdSession);
+    } catch (reason) {
+      logDiagnostic("anonymous_guest_verification", reason, { roomId: room.id });
+      setError(userFacingError(reason, "We couldn’t complete the quick security check. Please try again."));
+      if (createdSession) {
+        setScreen("error");
+      } else {
+        resetChallenge = true;
+      }
+    } finally {
+      anonymousSignInPending.current = false;
+      setBusy(false);
+      if (resetChallenge) turnstileRef.current?.reset();
+    }
+  }, [continueGuestSession, room]);
 
   useEffect(() => {
     if (screen !== "room" || !activeRoomId) return;
@@ -870,11 +922,15 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }
 
   if (screen === "loading") return <RoomState icon={<RefreshCw className="spin" />} title="Opening Room…" copy="Checking the event and your guest session." />;
-  if (screen === "configuration") return <RoomState icon={<LockKeyhole />} title="Supabase isn’t connected." copy="This production QR route never falls back to demo people. Add the public Supabase URL and publishable key to continue." />;
+  if (screen === "configuration") return <RoomState icon={<LockKeyhole />} title="Guest access isn’t configured." copy={error || "This production QR route requires the public Supabase settings and Turnstile site key. It never falls back to demo people."} />;
   if (screen === "missing") return <RoomState icon={<LockKeyhole />} eyebrow="ROOM NOT FOUND" title="This link is not valid." copy="Ask the organizer for the current Room QR." />;
   if (screen === "closed") return <RoomState icon={<LockKeyhole />} eyebrow="ROOM CLOSED" title="This Room has ended." copy="New guests can no longer join this event." />;
   if (screen === "not-open") return <RoomState icon={<CalendarDays />} eyebrow="NOT OPEN YET" title="This Room isn’t open." copy="The organizer will open it when the event begins." />;
   if (screen === "error") return <RoomState icon={<LockKeyhole />} title="We couldn’t open the Room." copy={error || "Try the QR again."} actionLabel="Try again" onAction={() => window.location.reload()} />;
+
+  if (screen === "verification" && room) {
+    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card returning-card auth-verification-card"><ShieldCheck className="auth-verification-card__icon" /><span className="eyebrow">QUICK SAFETY CHECK</span><h1>Almost there.</h1><p>This automatic check protects the Room from bots. Most people won’t need to do anything.</p><AuthTurnstile action="guest_anonymous_signup" instanceRef={turnstileRef} onSuccess={(token) => void completeAnonymousVerification(token)} onExpire={() => setError("The quick security check expired. Please try it again.")} onError={() => setError("The quick security check could not load. Check your connection and try again.")} />{busy && <p className="auth-verification-card__status">Opening your guest session…</p>}{error && <p className="form-error" role="alert">{error}</p>}<small className="foundation-privacy"><ShieldCheck size={14} />Existing guest sessions skip this check.</small></section></main>;
+  }
 
   if (screen === "onboarding" && room) {
     return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card"><div className="foundation-progress"><i className={step >= 1 ? "active" : ""} /><i className={step >= 2 ? "active" : ""} /><i className={step >= 3 ? "active" : ""} /></div>{step === 1 && <><span className="eyebrow">STEP 1 OF 3</span><h1>Add your photo.</h1><p>Use the camera or choose one from your gallery.</p><label className={`foundation-photo-picker ${photoPreview ? "has-photo" : ""}`}><span style={photoPreview ? { backgroundImage: `url(${photoPreview})` } : undefined}>{photoPreview ? <Check /> : <ImagePlus />}</span><strong>{photoPreview ? "Photo selected" : "Camera or gallery"}</strong><small>Required · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label>{error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!photoFile} onClick={() => setStep(2)}>Continue <ArrowRight size={18} /></button></>}{step === 2 && <><button className="back-link" onClick={() => setStep(1)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 2 OF 3</span><h1>What’s your name?</h1><p>This is the only profile detail people in the Room will see.</p><label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label><button className="button button--lime button--wide" disabled={displayName.trim().length < 2} onClick={() => setStep(3)}>Continue <ArrowRight size={18} /></button></>}{step === 3 && <><button className="back-link" onClick={() => setStep(2)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 3 OF 3</span><h1>One last check.</h1><p>HERE is currently available only to adults.</p><label className="foundation-age-check"><input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} /><span><Check size={18} /></span><strong>I am 18 or older</strong></label>{error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!ageConfirmed || busy} onClick={finishOnboarding}>{busy ? "Joining…" : "Enter the Room"}<ArrowRight size={18} /></button><small className="foundation-privacy"><ShieldCheck size={14} />Your session and profile stay on this device.</small></>}</section></main>;

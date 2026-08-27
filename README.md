@@ -29,29 +29,67 @@ than outcomes.
   adaptive budgets and aggregate Explore analytics are implemented, migrated and
   functionally live-verified, not published.
 - Organizer self-service Auth and the current-product landing/demo: implemented as a new local release candidate, not published.
+- Official Supabase Auth CAPTCHA client integration is implemented locally with
+  Cloudflare Turnstile for fresh anonymous guests and organizer Auth operations.
+  The production widget is restricted to `here-social-room.spriprin.chatgpt.site`,
+  its public site key is present in Sites environment revision 2, and the provider
+  secret is stored only in Supabase Auth. Existing valid guest sessions bypass
+  the widget.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
 - Public frontend is still Sites version 8 from commit `ab8891e` (Sprint 1). A successful local build is not a deployment.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
-- Product release status: **PRE-PILOT RELEASE BLOCKED BY AUTH CAPACITY**. No
-  publication was performed and no Sprint 6 work was started.
+- Product release status: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
+  Publication to the existing URL is authorized and is the next operation. No
+  Sprint 6 work was started.
 
-On 24 August 2026 the dedicated PP functional suite passed 10/10 test groups,
-including PP-A–PP-O and PP-S/PP-T. A controlled same-egress Auth run then
-attempted 100 genuinely fresh anonymous sessions in ten-request bursts every
-1.5 seconds: **1 succeeded and 99 returned HTTP 429 in 15.094 seconds**.
-Observed request latency was 103–384 ms (median 123 ms, p95 240 ms). Therefore
-PP-P and PP-Q fail, PP-R is not satisfied because the public Auth settings expose
-anonymous signup but no configured CAPTCHA/Turnstile protection, and this
-release is not pilot-ready. The task's publication gate explicitly forbids
-deployment in this state.
+The authorized temporary Supabase Branch attempt failed without charge because
+Branching requires Pro. The owner then authorized a separate temporary Free
+project, `HERE Auth Gate Temporary 20260826` (`rgenouyngkgfurrffcgw`,
+`eu-west-1`, quoted at $0/month). It received the complete migration chain,
+test-only email auto-confirm, the inspected 1800/hour/IP anonymous limit and
+Cloudflare's official repeatable Turnstile test configuration. Production was
+not used as a CAPTCHA token farm. The temporary project is retained only until
+the authorized deployment smoke finishes, then must be permanently deleted and
+its absence verified.
 
-Current local verification after the final code/schema changes: typecheck PASS,
-lint PASS, static/render/security contracts 12/12 PASS, production build PASS,
-local production route smoke PASS, and credential-value scan PASS. The live
-functional PP suite passed 10/10 groups. A fresh full Sprint 1–5 identity-heavy
-rerun was not claimed after the capacity test because the project Auth bucket is
-now demonstrably rate-limited; the previously green live regression ledger
-remains historical evidence, not a substitute for the required post-fix rerun.
+On 27 August 2026 the isolated post-fix Auth gate passed. AUTH-P1 created
+100/100 genuinely fresh, distinct anonymous users from one NAT over 588.973
+seconds (0 HTTP 429, 0 other failures, p95 473 ms). After a clean refill,
+AUTH-P2 created 50/50 fresh, distinct users in 49.487 seconds (0 HTTP 429,
+0 other failures, p95 336 ms). The official always-fail and always-pass
+Turnstile configurations both passed their independent API phases; production
+PP-R rejected missing and malformed proof without 429. Earlier real-widget
+evidence remains valid: one production token was accepted once, replay was
+rejected with CAPTCHA-specific HTTP 400, and an existing valid session bypassed
+the widget after refresh. The earlier 1/100 depleted-bucket run remains only
+historical negative evidence and is not used as capacity proof.
+
+The authenticated Dashboard inspection found the actual Free-plan project value
+`rate_limit_anonymous_users = 30/hour/IP`, with IP forwarding disabled. The field
+is supported and editable on this project. On 24 August 2026 it accepted and,
+after a full reload, persisted the pilot target `1800/hour/IP`. Supabase's fixed
+bucket capacity remains 30; the change raises refill to 30/minute and does not
+spoof or forward IPs. A Cloudflare Managed Turnstile widget was then created and
+Supabase Auth persisted CAPTCHA as enabled with provider `Turnstile by Cloudflare`.
+The secret was transferred directly between the provider dashboards and never
+written to this repository or a browser build variable.
+
+Current verification after the final code/schema changes: typecheck PASS, lint
+PASS, Auth harness 7/7, static/render/security contracts 13/13, production build
+PASS and `git diff --check` PASS. The controlled live release runner passed all
+92/92 tests with 0 fail and 0 skip: Organizer Auth, Sprint 1 A–G, Sprint 2,
+Sprint 3, Sprint 4, the real 602-second Sprint 5 presence run, and Sprint 5.1.
+The closed-Room compatibility fix was transaction-dry-run, applied as the 16th
+migration to both isolated verification and production, then rechecked with
+authenticated-only execute privileges and 0 advisor ERROR findings.
+
+The local candidate passes the CAPTCHA token only through the supported Supabase
+Auth `captchaToken` option. The browser contains the public Turnstile site key
+only; the Turnstile secret belongs exclusively in hosted Supabase Auth settings.
+Because Supabase CAPTCHA is project-wide, organizer password sign-in, signup and
+recovery also obtain a Turnstile token. A downstream failure after anonymous
+session creation cannot trigger a second identity: refresh resumes the newly
+persisted session and skips CAPTCHA.
 
 The current release candidate includes permanent organizer account creation,
 sign-in, sign-out and password recovery plus the Sprint 4 aggregate dashboard. Organizer
@@ -187,7 +225,7 @@ to the canonical migration history without replaying their SQL. The operation
 and the first hardening migration were atomic. A follow-up migration separated
 generic internal membership checks from self-bound RLS wrappers after live
 Sprint 2 regression testing exposed that distinction. The connected migration
-API now reports fifteen applied versions. Sprint 4–5 migrations were created with the
+API now reports sixteen applied versions. Sprint 4–5 migrations were created with the
 official Supabase CLI 2.115.0, transaction-dry-run against the linked database,
 then applied through the connected Supabase integration, which remains the live
 schema/history authority. Sprint 5.1 was applied only through new additive
@@ -209,15 +247,19 @@ Local migration order:
 12. `20260824093231_pre_pilot_core_revision.sql`;
 13. `20260824094220_fix_explore_replacement_position.sql`;
 14. `20260824094426_fix_left_presence_state.sql`;
-15. `20260824095156_pre_pilot_fk_indexes.sql`.
+15. `20260824095156_pre_pilot_fk_indexes.sql`;
+16. `20260827163024_restore_closed_room_error_precedence.sql`.
 
-All fifteen versions are present in remote migration history. Files 1–5 were
+All sixteen versions are present in production migration history. Files 1–5 were
 baselined only after live catalog and behavior comparison; files 6–7 were
 applied live during Phase 0; files 8–10 were applied live and verified by the
 Sprint 4 suite and the complete Sprint 1–3 regression set. File 11 was dry-run
 inside a rollback transaction, applied live through the connected integration,
 and verified by the dedicated Sprint 5 suite. Files 12–15 are the pre-pilot
 feature migration, two live-acceptance edge-case fixes and covering FK indexes.
+File 16 restores the established closed-Room error precedence in
+`claim_your_drop` and `send_interest` without changing eligibility, data access,
+RLS or Match/chat persistence.
 
 ## Pre-pilot presence and discovery model
 
@@ -233,7 +275,7 @@ feature migration, two live-acceptance edge-case fixes and covering FK indexes.
 - Read operations retry at most twice with jitter. Non-idempotent mutations are never blindly retried.
 - Message and Report retries use stable client action UUIDs and database uniqueness/advisory locking.
 - Private avatar URLs are cached below their signed lifetime, re-signed once after image failure, then fall back to initials without making the bucket public.
-- Auth 429 has a dedicated friendly state, but retry UX is not a capacity solution. The current project fails the required same-NAT capacity gate.
+- Auth 429 has a dedicated friendly state, but retry UX is not a capacity solution. The configured 1800/hour/IP limit passed the required 100-user sustained and 50-user burst same-NAT gates with zero 429.
 - Diagnostics log only operation/category/status and resource IDs where appropriate; they exclude chat bodies, report details, profile data and credentials.
 
 Actual physical iOS/Android device QA has not been performed. A 390×844 browser
@@ -288,9 +330,30 @@ must fail rather than silently substituting a permanent test user.
 
 `tests/pre-pilot-acceptance.test.mjs` covers PP functional/security behavior.
 `tests/auth-capacity.test.mjs` is deliberately gated by
-`HERE_TEST_AUTH_CAPACITY=true`; it creates no fallbacks and fails unless at least
-50/100 fresh anonymous sessions succeed. Do not run it casually immediately
-before an event because it intentionally consumes hosted Auth quota.
+`HERE_TEST_AUTH_CAPACITY=true`; AUTH-P1 creates 100 distinct fresh sessions in
+10-request batches over about 10 minutes and AUTH-P2 creates 50 distinct fresh
+sessions over about one minute. It fails on any Auth 429, other failure, reused
+identity or missing exact inspected refill setting. Before each pattern it waits
+for one full 30-token bucket through natural refill derived from
+`HERE_TEST_AUTH_ANONYMOUS_RATE_PER_HOUR`. Do not run it casually immediately
+before an event because it intentionally creates hosted Auth users.
+
+`tests/auth-captcha.test.mjs` provides the API half of PP-R in a dedicated
+Supabase environment. Run its `accept` phase with Cloudflare's official
+repeatable always-pass test configuration and its `reject` phase with the
+official always-fail test configuration; both require the exact official dummy
+token `XXXX.DUMMY.TOKEN.XXXX`, explicit isolated flags, and a non-production
+Supabase host. `production-negative` is the only phase allowed against HERE
+production and never accepts a reusable test token. The real provider probe has
+already shown one-use token acceptance, replay rejection, and existing-session
+bypass; exact deployed-host smoke remains mandatory after publication.
+
+`HERE_REQUIRE_RELEASE_GATES=true` makes the combined live runner fail before any
+suite when AUTH-P1/P2 or the CAPTCHA accept phase would otherwise be skipped or
+misconfigured. It also requires a generated/credentialed organizer source,
+`HERE_TEST_FAST_RECHECK=false`, and explicit evidence flags for the separate
+CAPTCHA reject, production-negative, and real-browser checks. Release mode uses
+TAP output and fails on every `# SKIP`; a skipped test is never release evidence.
 
 `tests/organizer-auth-acceptance.test.mjs` verifies permanent signup and Room
 ownership, rejects anonymous and cross-organizer attacks, preserves the separate
