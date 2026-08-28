@@ -21,26 +21,27 @@ than outcomes.
 ## Current status
 
 - Sprint 1 foundation: implemented, verified against live Supabase and published.
-- Sprint 2 Drops/Interests: implemented and live-verified, not published.
-- Sprint 3 Match/Chat/Safety: implemented and functionally live-verified, not published.
-- Sprint 4 privacy-safe Room analytics: implemented, migrated and live-verified, not published.
-- Sprint 5 pilot reliability hardening: implemented, migrated and live-verified, not published.
+- Sprint 2 Drops/Interests: implemented, live-verified and published.
+- Sprint 3 Match/Chat/Safety: implemented, functionally live-verified and published.
+- Sprint 4 privacy-safe Room analytics: implemented, migrated, live-verified and published.
+- Sprint 5 pilot reliability hardening: implemented, migrated, live-verified and published.
 - Sprint 5.1 Pre-Pilot Core Revision: Explore, split presence, Leave/Rejoin,
   adaptive budgets and aggregate Explore analytics are implemented, migrated and
-  functionally live-verified, not published.
-- Organizer self-service Auth and the current-product landing/demo: implemented as a new local release candidate, not published.
-- Official Supabase Auth CAPTCHA client integration is implemented locally with
+  functionally live-verified and published.
+- Organizer self-service Auth and the current-product landing/demo are implemented
+  and published.
+- Official Supabase Auth CAPTCHA client integration is deployed with
   Cloudflare Turnstile for fresh anonymous guests and organizer Auth operations.
   The production widget is restricted to `here-social-room.spriprin.chatgpt.site`,
   its public site key is present in Sites environment revision 2, and the provider
   secret is stored only in Supabase Auth. Existing valid guest sessions bypass
   the widget.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
-- Public frontend is still Sites version 8 from commit `ab8891e` (Sprint 1). A successful local build is not a deployment.
+- Public frontend is Sites version 9, deployed from verified application commit
+  `9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365` with Sites environment revision 2.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
 - Product release status: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
-  Publication to the existing URL is authorized and is the next operation. No
-  Sprint 6 work was started.
+  The verified release is deployed to the existing URL. Sprint 6 was not started.
 
 The authorized temporary Supabase Branch attempt failed without charge because
 Branching requires Pro. The owner then authorized a separate temporary Free
@@ -48,9 +49,9 @@ project, `HERE Auth Gate Temporary 20260826` (`rgenouyngkgfurrffcgw`,
 `eu-west-1`, quoted at $0/month). It received the complete migration chain,
 test-only email auto-confirm, the inspected 1800/hour/IP anonymous limit and
 Cloudflare's official repeatable Turnstile test configuration. Production was
-not used as a CAPTCHA token farm. The temporary project is retained only until
-the authorized deployment smoke finishes, then must be permanently deleted and
-its absence verified.
+not used as a CAPTCHA token farm. The temporary project is still retained only
+for the authorized Auth/regression work and must be permanently deleted, with its
+absence verified, immediately after the remaining human-browser production smoke.
 
 On 27 August 2026 the isolated post-fix Auth gate passed. AUTH-P1 created
 100/100 genuinely fresh, distinct anonymous users from one NAT over 588.973
@@ -74,7 +75,8 @@ Supabase Auth persisted CAPTCHA as enabled with provider `Turnstile by Cloudflar
 The secret was transferred directly between the provider dashboards and never
 written to this repository or a browser build variable.
 
-Current verification after the final code/schema changes: typecheck PASS, lint
+Verification of the deployed application commit after the final code/schema
+changes: typecheck PASS, lint
 PASS, Auth harness 7/7, static/render/security contracts 13/13, production build
 PASS and `git diff --check` PASS. The controlled live release runner passed all
 92/92 tests with 0 fail and 0 skip: Organizer Auth, Sprint 1 A–G, Sprint 2,
@@ -83,7 +85,7 @@ The closed-Room compatibility fix was transaction-dry-run, applied as the 16th
 migration to both isolated verification and production, then rechecked with
 authenticated-only execute privileges and 0 advisor ERROR findings.
 
-The local candidate passes the CAPTCHA token only through the supported Supabase
+The deployed release passes the CAPTCHA token only through the supported Supabase
 Auth `captchaToken` option. The browser contains the public Turnstile site key
 only; the Turnstile secret belongs exclusively in hosted Supabase Auth settings.
 Because Supabase CAPTCHA is project-wide, organizer password sign-in, signup and
@@ -91,7 +93,7 @@ recovery also obtain a Turnstile token. A downstream failure after anonymous
 session creation cannot trigger a second identity: refresh resumes the newly
 persisted session and skips CAPTCHA.
 
-The current release candidate includes permanent organizer account creation,
+The deployed release includes permanent organizer account creation,
 sign-in, sign-out and password recovery plus the Sprint 4 aggregate dashboard. Organizer
 Auth uses a dedicated persisted browser cookie, separate from the anonymous guest
 identity. The live project currently has email auto-confirm enabled, so a new
@@ -346,7 +348,9 @@ token `XXXX.DUMMY.TOKEN.XXXX`, explicit isolated flags, and a non-production
 Supabase host. `production-negative` is the only phase allowed against HERE
 production and never accepts a reusable test token. The real provider probe has
 already shown one-use token acceptance, replay rejection, and existing-session
-bypass; exact deployed-host smoke remains mandatory after publication.
+bypass. The deployed-host smoke verified the widget's fail-closed rendering;
+completing a fresh organizer and two-guest flow still requires an ordinary human
+browser that Cloudflare permits to solve the Managed challenge.
 
 `HERE_REQUIRE_RELEASE_GATES=true` makes the combined live runner fail before any
 suite when AUTH-P1/P2 or the CAPTCHA accept phase would otherwise be skipped or
@@ -359,7 +363,7 @@ TAP output and fails on every `# SKIP`; a skipped test is never release evidence
 ownership, rejects anonymous and cross-organizer attacks, preserves the separate
 anonymous identity, restores the organizer session and signs it out locally. The
 password-recovery UI and its trusted redirect are covered by static/render tests;
-the live email-click path must also be included in the production smoke test.
+the live email-click path remains an ordinary-browser smoke item with a real inbox.
 
 ## Documentation rule
 

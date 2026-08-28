@@ -1,8 +1,8 @@
 # HERE — Sprint 5 verification report
 
-Original Sprint 5 run: 22 August 2026. Final pre-pilot gate addendum: 27 August
-2026. Status before this release operation: exact candidate verified and
-owner-authorized for deployment; not yet deployed.
+Original Sprint 5 run: 22 August 2026. Final pre-pilot gate addendum: 28 August
+2026. Sites version 9 successfully deployed the verified application commit
+`9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365` with environment revision 2.
 
 ## Architecture and presence
 
@@ -26,7 +26,8 @@ owner-authorized for deployment; not yet deployed.
 - Friendly offline, reconnect, generic retry and Auth 429 UX; raw backend errors are not shown.
 - Privacy-safe diagnostics exclude message bodies, Interest pairs, report details, profile data and credentials.
 - Direct membership timestamp UPDATE privilege is revoked from product roles.
-- Post-DDL advisors: 0 ERROR; security 47 reviewed notices, performance 14 INFO notices.
+- Final production advisors: 0 ERROR; security 6 INFO / 51 WARN and performance
+  18 INFO. WARN/INFO findings were reviewed and are not represented as errors.
 
 ## Dedicated Sprint 5 live acceptance
 
@@ -85,6 +86,12 @@ The additive migration chain is reconciled at 16/16 through
 
 - Actual physical devices: **not tested**.
 - Browser emulation at 390×844: **EMULATED PASS** for landing, organizer Auth, isolated demo and a closed real QR Room.
+- Deployed-host smoke: **PARTIAL**. Landing/current product, full isolated `/demo`,
+  closed-Room no-write behavior, organizer route/widget fail-closed behavior and
+  the credential scan of all nine deployed JavaScript bundles passed. A fresh
+  organizer/Room/two-guest path remains pending because two automated in-app
+  Browser contexts received no legitimate Managed Turnstile proof; no request or
+  data was created and CAPTCHA was not bypassed.
 - No horizontal overflow on checked screens; checked interactive controls are at least 44 px after the mobile sanity fixes.
 - Camera/gallery, iOS Safari keyboard/safe-area behavior and Android Chrome backgrounding remain physical-device QA items.
 
@@ -98,8 +105,8 @@ The additive migration chain is reconciled at 16/16 through
 - During peak test load, Realtime logs reported only 9 available database connections when 12 were required. Bounded reconnect and Postgres-history fallback recovered, but connection headroom should be monitored or increased for the event.
 - Leaked-password protection is not enabled for organizer Auth.
 - Hosted password-recovery email/click has not been smoke-tested with a real inbox.
-- Before this release operation, the public URL still serves the old Sprint 1
-  frontend; the live database and verified release candidate are newer.
+- The production URL serves Sites version 9 with the full verified Sprint 1–5.1
+  release. The ordinary-browser fresh-user smoke described above remains open.
 - Physical iOS Safari/Android Chrome QA is pending.
 
 Bug classification at handoff: `P0 = 0`, `P1 = 0` in all completed live
@@ -108,7 +115,8 @@ silently closed findings.
 
 ## Release rule
 
-The final regression is green and the owner explicitly authorized deployment of
-the exact release-candidate commit when P0=0/P1=0. Run production smoke, delete
-the temporary Auth-gate Supabase project immediately afterward, then execute
+The final regression is green, P0=0/P1=0, and Sites version 9 successfully
+deployed the exact verified application commit. Complete the remaining fresh-user
+production smoke in an ordinary human browser, delete and verify removal of the
+temporary Auth-gate Supabase project immediately afterward, then execute
 `REAL_DEVICE_QA.md` on 10–20 devices. Do not start Sprint 6.

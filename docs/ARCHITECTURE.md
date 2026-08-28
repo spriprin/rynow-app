@@ -10,8 +10,9 @@ With owner authorization, a separate temporary Free project,
 at $0/month), was created for the destructive Auth-capacity and repeatable
 CAPTCHA phases. It received the complete migration chain and test-only Auth
 configuration. Production was not used as an automated CAPTCHA token farm. The
-temporary project is retained only through the authorized production smoke and
-must then be permanently deleted and verified absent.
+temporary project remains retained only until the human-browser portion of the
+authorized production smoke is complete, then must be permanently deleted and
+verified absent.
 
 ## Identity and event presence
 
@@ -291,7 +292,7 @@ against a depleted token bucket and remains only historical negative evidence;
 it is not used as capacity proof. No retry, spoofed forwarding,
 secret-in-browser or RLS weakening was used as a fix.
 
-The Auth-capacity release candidate now integrates Cloudflare Turnstile through
+The deployed Auth-capacity release integrates Cloudflare Turnstile through
 Supabase's supported CAPTCHA contract. A fresh open-Room guest first resolves the
 Room, checks `getSession()`, and only when no valid session exists obtains a token
 for `signInAnonymously({ options: { captchaToken } })`. Existing sessions continue
@@ -329,20 +330,29 @@ Production PP-R rejected missing and malformed proof 3/3 without 429. AUTH-P1
 then created 100/100 genuinely fresh users from one NAT over 588.973 seconds
 with 0 HTTP 429 and p95 latency 473 ms. After a clean refill, AUTH-P2 created
 50/50 fresh users over 49.487 seconds with 0 HTTP 429 and p95 latency 336 ms.
-The deployed exact-hostname smoke remains the final browser-side verification.
+The exact deployed hostname now renders the real widget fail-closed. Production
+smoke passed for the landing/current product, the full isolated `/demo`, closed
+Room behavior with unchanged Auth-user and membership counts, and all nine local
+JavaScript bundles with no service-role, Supabase secret or Turnstile secret.
+In two independent automated in-app Browser contexts Cloudflare did not issue a
+fresh Managed-challenge token, so no organizer request or test identity was
+created. The remaining fresh organizer and two-guest path must be performed in
+an ordinary human browser; CAPTCHA must not be bypassed or disabled for it.
 
 ## Release boundary
 
-Before this release operation, the public Sites deployment remains version 8 /
-commit `ab8891e` from Sprint 1 while Sprint 2–5.1 source and the live schema are
-newer. The release candidate has a reconciled sixteen-version migration history,
-supported Turnstile protection and the verified 1800/hour/IP anonymous setting.
+The verified application was published as Sites version 9 from commit
+`9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365`, using Sites environment revision 2,
+on the existing production URL. It has a reconciled sixteen-version migration
+history, supported Turnstile protection and the verified 1800/hour/IP anonymous
+setting.
 AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
 strict final live runner passed 92/92 tests with 0 fail and 0 skip across
 Organizer Auth, Sprint 1–5 and Sprint 5.1, including the real 603-second presence
 test. Typecheck, lint, Auth harness, static/render/security contracts and the
-production build are also green (20/20 local tests). P0=0 and P1=0, so the
-owner-authorized publication condition is met. The remaining release operations
-are exact-commit Sites deployment, production smoke on the deployed hostname and
-immediate verified deletion of the temporary Supabase project. Sprint 6 is out
-of scope.
+production build are also green (20/20 local tests). P0=0 and P1=0, and the
+owner-authorized publication completed successfully. Production smoke passed for
+the read-only and negative-security cases above. The new organizer/Room/two-guest
+live path remains blocked only on obtaining a legitimate Managed-challenge proof
+in an ordinary human browser. After that path, the temporary Supabase project
+must be deleted and verified absent. Sprint 6 is out of scope.
