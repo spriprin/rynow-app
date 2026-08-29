@@ -102,6 +102,10 @@ The additive migration chain is reconciled at 18/18 through
   user, owner-bound exact-object Storage cleanup confirmation and stable
   identity/18+/membership state. New uploads and signed tokens use a five-minute
   TTL; a browser-cached legacy upload can retain its prior one-hour TTL.
+  The published editor then passed human production verification in real Room
+  `Test2`: the same UUID changed `Pavel` to `Rooney` and replaced its avatar,
+  retained 18+ and Test1 membership, joined Test2 exactly once, persisted after
+  refresh, and left only the new Storage object.
   Second-guest/social-loop smoke remains.
 - Version 10 post-deploy static smoke returned HTTP 200 for `/`, `/organizer`,
   `/demo` and the real `Test1` join route. All 13 referenced browser bundles

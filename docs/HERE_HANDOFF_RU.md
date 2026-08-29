@@ -60,7 +60,11 @@ organizer и два fresh guest должны пройти оставшуюся �
 строка открыта, exact `/r/f190cd5feeb6b808e4625921` отвечает HTTP 200. Первый
 returning guest использовал Auth identity/profile от 19 августа, создал ровно
 один active membership, а refresh через 209 секунд обновил `last_seen_at` без
-дубля identity/profile/member. Остались второй fresh guest и social-loop smoke.
+дубля identity/profile/member. Затем тот же телефон открыл реальную Room `Test2`
+и через опубликованный Welcome Back editor поменял `Pavel` на `Rooney` и фото.
+Production сохранил тот же UUID, 18+ и Test1 membership, создал ровно один Test2
+membership и обновил presence после refresh. Старый Storage object удалён,
+остался только новый avatar. Остались второй fresh guest и social-loop smoke.
 
 Отдельный isolated live-тест profile edit прошёл 1/1: собственные имя и фото
 обновились, UUID/18+/membership не изменились, новый путь подписался, заменённый

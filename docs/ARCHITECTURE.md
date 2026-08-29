@@ -377,7 +377,11 @@ live path remains blocked only on obtaining a legitimate Managed-challenge proof
 in an ordinary human browser. The human-browser run has since created the real
 open Room `Test1`; one returning guest reused a nine-day-old identity/profile,
 created one active membership and refreshed presence 209 seconds after join
-without duplication. The second fresh guest and
+without duplication. The same identity then opened real Room `Test2`, updated
+its name and avatar through the deployed Welcome Back editor, retained its UUID,
+18+ flag and Test1 membership, joined Test2 exactly once, and persisted after
+refresh. The old Storage object was removed and only the new avatar remains.
+The second fresh guest and
 two-person social loop remain open. After that path, the temporary Supabase project
 must be deleted and verified absent. Sprint 6 is out of scope.
 

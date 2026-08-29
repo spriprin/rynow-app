@@ -63,6 +63,11 @@ with join code `f190cd5feeb6b808e4625921`. The exact join URL returns HTTP 200.
 Its first returning guest reused an Auth identity/profile created on 19 August,
 created exactly one active membership, and advanced `last_seen_at` 209 seconds
 after join without creating a duplicate identity, profile or member.
+The same phone then opened organizer-owned Room `Test2`, used the deployed
+Welcome Back editor and changed `Pavel` to `Rooney` plus a new photo. Production
+kept the same profile UUID and 18+ confirmation, preserved the Test1 membership,
+created exactly one Test2 membership and advanced Test2 presence after refresh.
+Storage contains the new avatar object only; the replaced object was removed.
 The second fresh guest and two-person interaction checks remain open.
 The version 10 production smoke returned HTTP 200 for `/`, `/organizer`, `/demo`
 and the real `Test1` join route. All 13 referenced browser bundles loaded, the
