@@ -54,9 +54,12 @@ project, `HERE Auth Gate Temporary 20260826` (`rgenouyngkgfurrffcgw`,
 `eu-west-1`, quoted at $0/month). It received the complete migration chain,
 test-only email auto-confirm, the inspected 1800/hour/IP anonymous limit and
 Cloudflare's official repeatable Turnstile test configuration. Production was
-not used as a CAPTCHA token farm. The temporary project is still retained only
-for the authorized Auth/regression work and must be permanently deleted, with its
-absence verified, immediately after the remaining human-browser production smoke.
+not used as a CAPTCHA token farm. The temporary project was retained only for
+the authorized Auth/regression work. On 29 August the owner ended the
+remaining device smoke because no second phone was available; the project was
+then permanently deleted with the official CLI. Its absence was confirmed by
+both CLI and the connected Supabase project list, and the one-time CLI session
+was removed locally.
 
 The human-browser production smoke has now created organizer-owned Room `Test1`
 with join code `f190cd5feeb6b808e4625921`. The exact join URL returns HTTP 200.
@@ -68,7 +71,9 @@ Welcome Back editor and changed `Pavel` to `Rooney` plus a new photo. Production
 kept the same profile UUID and 18+ confirmation, preserved the Test1 membership,
 created exactly one Test2 membership and advanced Test2 presence after refresh.
 Storage contains the new avatar object only; the replaced object was removed.
-The second fresh guest and two-person interaction checks remain open.
+The second fresh guest and two-person interaction checks were not executed on a
+physical second device because none was available; reused sessions were not used
+as false evidence.
 The version 10 production smoke returned HTTP 200 for `/`, `/organizer`, `/demo`
 and the real `Test1` join route. All 13 referenced browser bundles loaded, the
 deployed bundle contains `Edit profile`, and scans found no service-role key,
@@ -310,9 +315,12 @@ TTL expires.
 - Auth 429 has a dedicated friendly state, but retry UX is not a capacity solution. The configured 1800/hour/IP limit passed the required 100-user sustained and 50-user burst same-NAT gates with zero 429.
 - Diagnostics log only operation/category/status and resource IDs where appropriate; they exclude chat bodies, report details, profile data and credentials.
 
-Actual physical iOS/Android device QA has not been performed. A 390×844 browser
-emulation pass covered landing, organizer Auth, isolated demo and closed QR Room,
-including horizontal overflow and 44 px touch targets. Status: **EMULATED PASS**.
+One physical phone completed QR → returning profile → Test1, then Welcome Back
+profile edit → Test2 → refresh. A second physical device was unavailable, so the
+two-device guest/Room Wall/social-loop smoke remains **NOT EXECUTED**, not failed
+or simulated. A 390×844 browser emulation pass covered landing, organizer Auth,
+isolated demo and closed QR Room, including horizontal overflow and 44 px touch
+targets. Status: **ONE-PHONE PASS + EMULATED PASS**.
 Use `docs/REAL_DEVICE_QA.md` for the required 10–20 device stage.
 
 ## Analytics formulas and privacy boundary

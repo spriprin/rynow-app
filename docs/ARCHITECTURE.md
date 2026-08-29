@@ -10,9 +10,10 @@ With owner authorization, a separate temporary Free project,
 at $0/month), was created for the destructive Auth-capacity and repeatable
 CAPTCHA phases. It received the complete migration chain and test-only Auth
 configuration. Production was not used as an automated CAPTCHA token farm. The
-temporary project remains retained only until the human-browser portion of the
-authorized production smoke is complete, then must be permanently deleted and
-verified absent.
+temporary project was permanently deleted on 29 August after the owner ended the
+remaining two-device smoke because no second phone was available. Both the
+official CLI and connected Supabase project list verified its absence; the
+one-time local CLI session was removed afterward.
 
 ## Identity and event presence
 
@@ -381,9 +382,10 @@ without duplication. The same identity then opened real Room `Test2`, updated
 its name and avatar through the deployed Welcome Back editor, retained its UUID,
 18+ flag and Test1 membership, joined Test2 exactly once, and persisted after
 refresh. The old Storage object was removed and only the new avatar remains.
-The second fresh guest and
-two-person social loop remain open. After that path, the temporary Supabase project
-must be deleted and verified absent. Sprint 6 is out of scope.
+The second fresh guest and two-person social loop were not executed on a physical
+second device because none was available; reused sessions were not counted as
+evidence. The temporary Supabase project has been deleted and verified absent.
+Sprint 6 is out of scope.
 
 Version 10 post-deploy checks returned HTTP 200 for the landing page, organizer,
 isolated demo and real `Test1` join route. All 13 referenced browser bundles

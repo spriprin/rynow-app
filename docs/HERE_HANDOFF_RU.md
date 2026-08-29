@@ -39,8 +39,10 @@ or above`. Branch не была создана и списаний не было
 `HERE Auth Gate Temporary 20260826` (`rgenouyngkgfurrffcgw`, `eu-west-1`,
 $0/month). В него применена полная migration chain и test-only Auth/CAPTCHA
 конфигурация. Production не использовался как CAPTCHA token farm. Временный
-проект сохраняется только до оставшейся human-browser части production smoke,
-после чего должен быть сразу безвозвратно удалён, а его отсутствие — проверено.
+проект 29 августа безвозвратно удалён официальным CLI после решения владельца
+закончить оставшийся двухтелефонный smoke из-за отсутствия второго телефона.
+Его отсутствие подтверждено и CLI, и подключённым Supabase project list;
+одноразовая локальная CLI session затем удалена.
 
 27 августа обязательный isolated same-NAT gate прошёл. AUTH-P1 создал 100/100
 действительно новых distinct anonymous users за 588,973 секунды: 0 HTTP 429,
@@ -54,8 +56,9 @@ token принят production anonymous Auth один раз, replay откло�
 HTTP 400; существующая guest session после refresh вошла в Room без widget.
 На exact hostname подтверждены widget/fail-closed поведение и отсутствие обхода.
 Два независимых автоматизированных in-app Browser контекста не получили новый
-Managed-challenge token, поэтому запрос и тестовые данные не создавались. Fresh
-organizer и два fresh guest должны пройти оставшуюся проверку в обычном браузере.
+Managed-challenge token, поэтому запрос и тестовые данные не создавались. Этот
+этап был продолжен на одном реальном телефоне; двухтелефонная часть завершена со
+статусом NOT EXECUTED из-за отсутствия второго устройства.
 После этого обычный браузер успешно создал organizer Room `Test1`; production
 строка открыта, exact `/r/f190cd5feeb6b808e4625921` отвечает HTTP 200. Первый
 returning guest использовал Auth identity/profile от 19 августа, создал ровно
@@ -64,7 +67,9 @@ returning guest использовал Auth identity/profile от 19 авгус�
 и через опубликованный Welcome Back editor поменял `Pavel` на `Rooney` и фото.
 Production сохранил тот же UUID, 18+ и Test1 membership, создал ровно один Test2
 membership и обновил presence после refresh. Старый Storage object удалён,
-остался только новый avatar. Остались второй fresh guest и social-loop smoke.
+остался только новый avatar. Второй fresh guest и двухтелефонный social-loop не
+выполнялись, потому что второго устройства нет; reused sessions не выдавались за
+fresh-user evidence.
 
 Отдельный isolated live-тест profile edit прошёл 1/1: собственные имя и фото
 обновились, UUID/18+/membership не изменились, новый путь подписался, заменённый
@@ -321,14 +326,15 @@ Destructive database operations требуют отдельного подтве
 
 ## Следующий приоритет
 
-1. В обычном Chrome/Safari завершить production smoke: fresh organizer создаёт
-   реальную Room/QR, затем два fresh guest проходят Turnstile/onboarding; проверить
-   refresh/session, Room Wall, Explore + Drop, Interest → Match → Chat,
-   block/report и aggregate analytics.
-2. Сразу после smoke безвозвратно удалить временный Free Supabase project
-   `rgenouyngkgfurrffcgw` и подтвердить его отсутствие.
+1. При наличии 10–20 пилотных устройств выполнить двухустройственный production
+   smoke: fresh guests, Room Wall, Explore + Drop, Interest → Match → Chat,
+   block/report и aggregate analytics. Текущий статус этой части — NOT EXECUTED,
+   а не PASS/FAIL.
+2. **DONE 29 августа:** временный Free Supabase project
+   `rgenouyngkgfurrffcgw` безвозвратно удалён; отсутствие подтверждено двумя
+   независимыми project listings.
 3. Уже подтверждено на production: landing, полный isolated `/demo`, closed Room
    без новой identity/membership, organizer route с fail-closed Turnstile и scan
-   всех девяти browser bundles без service-role/secret credentials.
+   всех 13 browser bundles version 10 без service-role/secret credentials.
 4. Провести 10–20 physical-device QA, затем только blocking bug fixes и closed pilot.
 5. Не начинать Sprint 6, growth, monetization, notifications или новые product features до pilot data.

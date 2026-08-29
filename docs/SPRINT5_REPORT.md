@@ -84,7 +84,8 @@ The additive migration chain is reconciled at 18/18 through
 
 ## Browser/device status
 
-- Actual physical devices: **not tested**.
+- Physical device status: **ONE-PHONE PASS** for real Test1/Test2 QR, returning
+  session, profile edit and refresh. A second phone was unavailable.
 - Browser emulation at 390×844: **EMULATED PASS** for landing, organizer Auth, isolated demo and a closed real QR Room.
 - Deployed-host smoke: **PARTIAL**. Landing/current product, full isolated `/demo`,
   closed-Room no-write behavior, organizer route/widget fail-closed behavior and
@@ -106,7 +107,8 @@ The additive migration chain is reconciled at 18/18 through
   `Test2`: the same UUID changed `Pavel` to `Rooney` and replaced its avatar,
   retained 18+ and Test1 membership, joined Test2 exactly once, persisted after
   refresh, and left only the new Storage object.
-  Second-guest/social-loop smoke remains.
+  Second-guest/social-loop smoke is **NOT EXECUTED** because no second physical
+  device was available; it was not replaced with reused-session evidence.
 - Version 10 post-deploy static smoke returned HTTP 200 for `/`, `/organizer`,
   `/demo` and the real `Test1` join route. All 13 referenced browser bundles
   loaded; `Edit profile` is present and no service-role key, Supabase secret key
@@ -125,7 +127,8 @@ The additive migration chain is reconciled at 18/18 through
 - Leaked-password protection is not enabled for organizer Auth.
 - Hosted password-recovery email/click has not been smoke-tested with a real inbox.
 - The production URL serves Sites version 10 with the full verified Sprint 1–5.1
-  release. The ordinary-browser fresh-user smoke described above remains open.
+  release. The two-device ordinary-browser fresh-user smoke is recorded as not
+  executed because a second physical device was unavailable.
 - Physical iOS Safari/Android Chrome QA is pending.
 
 Bug classification at handoff: `P0 = 0`, `P1 = 0` in all completed live
@@ -135,7 +138,8 @@ silently closed findings.
 ## Release rule
 
 The final regression is green, P0=0/P1=0, and Sites version 10 successfully
-deployed the exact verified application commit. Complete the remaining fresh-user
-production smoke in an ordinary human browser, delete and verify removal of the
-temporary Auth-gate Supabase project immediately afterward, then execute
-`REAL_DEVICE_QA.md` on 10–20 devices. Do not start Sprint 6.
+deployed the exact verified application commit. The owner ended the remaining
+two-device smoke because no second phone was available. The temporary Auth-gate
+Supabase project was permanently deleted and verified absent through both CLI and
+the connected project list; the one-time local CLI session was removed. Execute
+`REAL_DEVICE_QA.md` when 10–20 pilot devices are available. Do not start Sprint 6.
