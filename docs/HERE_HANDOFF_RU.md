@@ -15,8 +15,8 @@
 - Self-service регистрация organizer и актуальные landing/demo опубликованы.
 - Подготовлен узкий pre-pilot UX patch: на Welcome Back экране существующий guest
   может изменить имя и фото перед входом в новую Room. Session, profile ID, 18+
-  confirmation и memberships при этом не пересоздаются. Patch ожидает ближайшей
-  Sites публикации и не является Sprint 6. Его RLS hardening уже применён как
+  confirmation и memberships при этом не пересоздаются. Patch опубликован в
+  Sites version 10 и не является Sprint 6. Его RLS hardening уже применён как
   production migrations 17–18/18: для постороннего пользователя подписывается
   только актуальный `avatar_path`, а owner SELECT сохранён для штатного Storage
   cleanup старого объекта.
@@ -26,8 +26,8 @@
   production Managed widget создан для публичного hostname, public site key
   добавлен в Sites environment revision 2, а secret хранится только в Supabase
   Auth. CAPTCHA включена.
-- Public URL: `https://here-social-room.spriprin.chatgpt.site` — Sites version 9,
-  проверенный application commit `9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365`,
+- Public URL: `https://here-social-room.spriprin.chatgpt.site` — Sites version 10,
+  проверенный application commit `25d6613ece09ccaf8268fdb3fd0b45a0b2908dd8`,
   Sites environment revision 2.
 - Текущий статус: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
   Точный release опубликован на существующем URL; Sprint 6 не начинался.
@@ -70,6 +70,10 @@ Storage API для последовательности SELECT → DELETE. Но�
 tokens имеют TTL пять минут. Уже закэшированная в браузере legacy-фотография
 может сохраняться до прежнего TTL в один час. Потерянный ответ UPDATE теперь
 сверяется повторным чтением перед rollback; cleanup использует bounded retry.
+Production smoke version 10 получил HTTP 200 для `/`, `/organizer`, `/demo` и
+реального `Test1` join route. Все 13 browser bundles загрузились, `Edit profile`
+присутствует в deployed bundle, service-role/Supabase secret/database credentials
+не обнаружены.
 
 Authenticated Dashboard показал фактическое значение Free-project:
 `rate_limit_anonymous_users = 30/hour/IP`; поле доступно для редактирования, IP

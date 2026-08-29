@@ -32,9 +32,9 @@ than outcomes.
   and published.
 - A pre-pilot returning-profile UX patch now lets a guest change the existing
   display name or photo from the Welcome Back screen without creating a new Auth
-  session, profile or Room membership. It is the only application change pending
-  the next Sites publication. Its path-aware avatar-read and owner-cleanup
-  hardening are already production migrations 17–18.
+  session, profile or Room membership. It is published in Sites version 10. Its
+  path-aware avatar-read and owner-cleanup hardening are production migrations
+  17–18.
 - Official Supabase Auth CAPTCHA client integration is deployed with
   Cloudflare Turnstile for fresh anonymous guests and organizer Auth operations.
   The production widget is restricted to `here-social-room.spriprin.chatgpt.site`,
@@ -42,8 +42,8 @@ than outcomes.
   secret is stored only in Supabase Auth. Existing valid guest sessions bypass
   the widget.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
-- Public frontend is Sites version 9, deployed from verified application commit
-  `9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365` with Sites environment revision 2.
+- Public frontend is Sites version 10, deployed from verified application commit
+  `25d6613ece09ccaf8268fdb3fd0b45a0b2908dd8` with Sites environment revision 2.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
 - Product release status: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
   The verified release is deployed to the existing URL. Sprint 6 was not started.
@@ -64,6 +64,10 @@ Its first returning guest reused an Auth identity/profile created on 19 August,
 created exactly one active membership, and advanced `last_seen_at` 209 seconds
 after join without creating a duplicate identity, profile or member.
 The second fresh guest and two-person interaction checks remain open.
+The version 10 production smoke returned HTTP 200 for `/`, `/organizer`, `/demo`
+and the real `Test1` join route. All 13 referenced browser bundles loaded, the
+deployed bundle contains `Edit profile`, and scans found no service-role key,
+Supabase secret key or database credential.
 
 On 27 August 2026 the isolated post-fix Auth gate passed. AUTH-P1 created
 100/100 genuinely fresh, distinct anonymous users from one NAT over 588.973

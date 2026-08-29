@@ -361,8 +361,8 @@ an ordinary human browser; CAPTCHA must not be bypassed or disabled for it.
 
 ## Release boundary
 
-The verified application was published as Sites version 9 from commit
-`9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365`, using Sites environment revision 2,
+The verified application was published as Sites version 10 from commit
+`25d6613ece09ccaf8268fdb3fd0b45a0b2908dd8`, using Sites environment revision 2,
 on the existing production URL. It has a reconciled eighteen-version migration
 history, supported Turnstile protection and the verified 1800/hour/IP anonymous
 setting.
@@ -370,7 +370,7 @@ AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
 strict final live runner passed 92/92 tests with 0 fail and 0 skip across
 Organizer Auth, Sprint 1–5 and Sprint 5.1, including the real 603-second presence
 test. Typecheck, lint, Auth harness, static/render/security contracts and the
-production build are also green (20/20 local tests). P0=0 and P1=0, and the
+production build are also green (22/22 local tests). P0=0 and P1=0, and the
 owner-authorized publication completed successfully. Production smoke passed for
 the read-only and negative-security cases above. The new organizer/Room/two-guest
 live path remains blocked only on obtaining a legitimate Managed-challenge proof
@@ -380,3 +380,8 @@ created one active membership and refreshed presence 209 seconds after join
 without duplication. The second fresh guest and
 two-person social loop remain open. After that path, the temporary Supabase project
 must be deleted and verified absent. Sprint 6 is out of scope.
+
+Version 10 post-deploy checks returned HTTP 200 for the landing page, organizer,
+isolated demo and real `Test1` join route. All 13 referenced browser bundles
+loaded successfully; `Edit profile` is present in the deployed bundle and no
+service-role key, Supabase secret key or database credential was found.

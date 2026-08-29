@@ -1,8 +1,8 @@
 # HERE — Sprint 5 verification report
 
-Original Sprint 5 run: 22 August 2026. Final pre-pilot gate addendum: 28 August
-2026. Sites version 9 successfully deployed the verified application commit
-`9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365` with environment revision 2.
+Original Sprint 5 run: 22 August 2026. Final pre-pilot gate addendum: 29 August
+2026. Sites version 10 successfully deployed the verified application commit
+`25d6613ece09ccaf8268fdb3fd0b45a0b2908dd8` with environment revision 2.
 
 ## Architecture and presence
 
@@ -96,13 +96,17 @@ The additive migration chain is reconciled at 18/18 through
   join URL returns HTTP 200. One returning guest reused a nine-day-old identity
   and profile, created exactly one active membership and advanced presence 209
   seconds after join without duplication. A
-  returning-profile name/photo editor is implemented as a narrow pre-pilot patch
-  and awaits the next Sites publication. Its isolated live mutation/storage test
+  returning-profile name/photo editor is implemented and published as a narrow
+  pre-pilot patch. Its isolated live mutation/storage test
   passed 1/1, including denial of the replaced path to an unrelated authenticated
   user, owner-bound exact-object Storage cleanup confirmation and stable
   identity/18+/membership state. New uploads and signed tokens use a five-minute
   TTL; a browser-cached legacy upload can retain its prior one-hour TTL.
   Second-guest/social-loop smoke remains.
+- Version 10 post-deploy static smoke returned HTTP 200 for `/`, `/organizer`,
+  `/demo` and the real `Test1` join route. All 13 referenced browser bundles
+  loaded; `Edit profile` is present and no service-role key, Supabase secret key
+  or database credential was found.
 - No horizontal overflow on checked screens; checked interactive controls are at least 44 px after the mobile sanity fixes.
 - Camera/gallery, iOS Safari keyboard/safe-area behavior and Android Chrome backgrounding remain physical-device QA items.
 
@@ -116,7 +120,7 @@ The additive migration chain is reconciled at 18/18 through
 - During peak test load, Realtime logs reported only 9 available database connections when 12 were required. Bounded reconnect and Postgres-history fallback recovered, but connection headroom should be monitored or increased for the event.
 - Leaked-password protection is not enabled for organizer Auth.
 - Hosted password-recovery email/click has not been smoke-tested with a real inbox.
-- The production URL serves Sites version 9 with the full verified Sprint 1–5.1
+- The production URL serves Sites version 10 with the full verified Sprint 1–5.1
   release. The ordinary-browser fresh-user smoke described above remains open.
 - Physical iOS Safari/Android Chrome QA is pending.
 
@@ -126,7 +130,7 @@ silently closed findings.
 
 ## Release rule
 
-The final regression is green, P0=0/P1=0, and Sites version 9 successfully
+The final regression is green, P0=0/P1=0, and Sites version 10 successfully
 deployed the exact verified application commit. Complete the remaining fresh-user
 production smoke in an ordinary human browser, delete and verify removal of the
 temporary Auth-gate Supabase project immediately afterward, then execute
