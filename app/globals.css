@@ -583,6 +583,8 @@ legend { margin-bottom: 12px; font-size: 12px; font-weight: 720; }
 .foundation-age-check strong { font-size: 15px; }
 .foundation-privacy { color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 6px; }
 .returning-card { text-align: center; justify-items: center; }
+.returning-actions { width: 100%; display: grid; gap: 10px; }
+.returning-actions .button { width: 100%; }
 .auth-turnstile { width: 100%; min-height: 65px; display: flex; align-items: center; justify-content: center; }
 .auth-turnstile > div { width: 100%; }
 .auth-verification-card__icon { width: 34px; height: 34px; color: #758729; }

@@ -38,6 +38,24 @@ rooms 1:N private instrumentation and validated safety attribution
 
 `profiles` never stores `current_room_id`. A browser identity can reuse one minimal profile across many Rooms; event presence is the canonical `(room_id, user_id)` membership.
 
+When a valid returning session has a profile but no membership in the scanned
+Room, the Welcome Back boundary offers either explicit Room join or profile edit.
+The editor revalidates the current user with `auth.getUser()`, updates only the
+row whose ID is that user, optionally uploads a new avatar under that user's
+private Storage folder, and preserves the profile ID, anonymous session, 18+
+confirmation and all memberships. Replaced or failed-upload avatar objects are
+removed with bounded retries. Migration
+`20260828092916_restrict_replaced_avatar_reads` permits non-owner signing only for
+the avatar path currently referenced by `profiles`. Follow-up migration
+`20260829125141_allow_owner_avatar_cleanup` retains owner SELECT on objects in the
+owner's own folder because Supabase Storage resolves an object through SELECT
+before DELETE. This lets supported client cleanup remove the stale object without
+making it signable by unrelated users. New uploads set a five-minute response
+cache TTL and signed avatar tokens also last five minutes. Successful deletion
+invalidates CDN copies after propagation; a browser that already cached a legacy
+upload can keep that local response until its former one-hour TTL expires.
+Database and Storage RLS remain the authorization boundary.
+
 ## Split presence model
 
 Membership, recent activity and discovery eligibility are intentionally distinct.
@@ -242,14 +260,16 @@ the official CLI, transaction-dry-run, applied live and verified. Sprint 5.1
 added one core revision plus three narrow follow-ups, each transaction-dry-run
 before application. A final compatibility migration restored the established
 closed-Room error precedence without changing eligibility or access. Remote
-history now contains sixteen ordered versions through
-`20260827163024_restore_closed_room_error_precedence`:
+history now contains eighteen ordered versions through
+`20260829125141_allow_owner_avatar_cleanup`:
 
 - `20260824093231_pre_pilot_core_revision`;
 - `20260824094220_fix_explore_replacement_position`;
 - `20260824094426_fix_left_presence_state`;
 - `20260824095156_pre_pilot_fk_indexes`;
-- `20260827163024_restore_closed_room_error_precedence`.
+- `20260827163024_restore_closed_room_error_precedence`;
+- `20260828092916_restrict_replaced_avatar_reads`;
+- `20260829125141_allow_owner_avatar_cleanup`.
 
 The generic `is_room_member(room, user)` and
 `shares_active_room(viewer, target)` functions remain available only to trusted
@@ -343,7 +363,7 @@ an ordinary human browser; CAPTCHA must not be bypassed or disabled for it.
 
 The verified application was published as Sites version 9 from commit
 `9f7b7ba4f61f6104f4af36dbd4b3c8d9f98fe365`, using Sites environment revision 2,
-on the existing production URL. It has a reconciled sixteen-version migration
+on the existing production URL. It has a reconciled eighteen-version migration
 history, supported Turnstile protection and the verified 1800/hour/IP anonymous
 setting.
 AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
@@ -354,5 +374,9 @@ production build are also green (20/20 local tests). P0=0 and P1=0, and the
 owner-authorized publication completed successfully. Production smoke passed for
 the read-only and negative-security cases above. The new organizer/Room/two-guest
 live path remains blocked only on obtaining a legitimate Managed-challenge proof
-in an ordinary human browser. After that path, the temporary Supabase project
+in an ordinary human browser. The human-browser run has since created the real
+open Room `Test1`; one returning guest reused a nine-day-old identity/profile,
+created one active membership and refreshed presence 209 seconds after join
+without duplication. The second fresh guest and
+two-person social loop remain open. After that path, the temporary Supabase project
 must be deleted and verified absent. Sprint 6 is out of scope.

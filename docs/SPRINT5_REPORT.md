@@ -79,8 +79,8 @@ Final strict post-Auth-gate rerun: Organizer Auth + Sprint 1–5 + Sprint 5.1
 passed 92/92 with 0 fail and 0 skip. It included the real 603-second presence
 expiry, 20 concurrent joins, 10 concurrent Drop claims and exposure variance 2.
 Local typecheck/lint/Auth/static/render/security/build verification passed 20/20.
-The additive migration chain is reconciled at 16/16 through
-`20260827163024_restore_closed_room_error_precedence`.
+The additive migration chain is reconciled at 18/18 through
+`20260829125141_allow_owner_avatar_cleanup`.
 
 ## Browser/device status
 
@@ -92,6 +92,17 @@ The additive migration chain is reconciled at 16/16 through
   organizer/Room/two-guest path remains pending because two automated in-app
   Browser contexts received no legitimate Managed Turnstile proof; no request or
   data was created and CAPTCHA was not bypassed.
+- Human-browser continuation: organizer Room `Test1` is real/open and its exact
+  join URL returns HTTP 200. One returning guest reused a nine-day-old identity
+  and profile, created exactly one active membership and advanced presence 209
+  seconds after join without duplication. A
+  returning-profile name/photo editor is implemented as a narrow pre-pilot patch
+  and awaits the next Sites publication. Its isolated live mutation/storage test
+  passed 1/1, including denial of the replaced path to an unrelated authenticated
+  user, owner-bound exact-object Storage cleanup confirmation and stable
+  identity/18+/membership state. New uploads and signed tokens use a five-minute
+  TTL; a browser-cached legacy upload can retain its prior one-hour TTL.
+  Second-guest/social-loop smoke remains.
 - No horizontal overflow on checked screens; checked interactive controls are at least 44 px after the mobile sanity fixes.
 - Camera/gallery, iOS Safari keyboard/safe-area behavior and Android Chrome backgrounding remain physical-device QA items.
 

@@ -30,6 +30,11 @@ than outcomes.
   functionally live-verified and published.
 - Organizer self-service Auth and the current-product landing/demo are implemented
   and published.
+- A pre-pilot returning-profile UX patch now lets a guest change the existing
+  display name or photo from the Welcome Back screen without creating a new Auth
+  session, profile or Room membership. It is the only application change pending
+  the next Sites publication. Its path-aware avatar-read and owner-cleanup
+  hardening are already production migrations 17–18.
 - Official Supabase Auth CAPTCHA client integration is deployed with
   Cloudflare Turnstile for fresh anonymous guests and organizer Auth operations.
   The production widget is restricted to `here-social-room.spriprin.chatgpt.site`,
@@ -52,6 +57,13 @@ Cloudflare's official repeatable Turnstile test configuration. Production was
 not used as a CAPTCHA token farm. The temporary project is still retained only
 for the authorized Auth/regression work and must be permanently deleted, with its
 absence verified, immediately after the remaining human-browser production smoke.
+
+The human-browser production smoke has now created organizer-owned Room `Test1`
+with join code `f190cd5feeb6b808e4625921`. The exact join URL returns HTTP 200.
+Its first returning guest reused an Auth identity/profile created on 19 August,
+created exactly one active membership, and advanced `last_seen_at` 209 seconds
+after join without creating a duplicate identity, profile or member.
+The second fresh guest and two-person interaction checks remain open.
 
 On 27 August 2026 the isolated post-fix Auth gate passed. AUTH-P1 created
 100/100 genuinely fresh, distinct anonymous users from one NAT over 588.973
@@ -227,7 +239,7 @@ to the canonical migration history without replaying their SQL. The operation
 and the first hardening migration were atomic. A follow-up migration separated
 generic internal membership checks from self-bound RLS wrappers after live
 Sprint 2 regression testing exposed that distinction. The connected migration
-API now reports sixteen applied versions. Sprint 4–5 migrations were created with the
+API now reports eighteen applied versions. Sprint 4–5 migrations were created with the
 official Supabase CLI 2.115.0, transaction-dry-run against the linked database,
 then applied through the connected Supabase integration, which remains the live
 schema/history authority. Sprint 5.1 was applied only through new additive
@@ -250,9 +262,11 @@ Local migration order:
 13. `20260824094220_fix_explore_replacement_position.sql`;
 14. `20260824094426_fix_left_presence_state.sql`;
 15. `20260824095156_pre_pilot_fk_indexes.sql`;
-16. `20260827163024_restore_closed_room_error_precedence.sql`.
+16. `20260827163024_restore_closed_room_error_precedence.sql`;
+17. `20260828092916_restrict_replaced_avatar_reads.sql`;
+18. `20260829125141_allow_owner_avatar_cleanup.sql`.
 
-All sixteen versions are present in production migration history. Files 1–5 were
+All eighteen versions are present in production migration history. Files 1–5 were
 baselined only after live catalog and behavior comparison; files 6–7 were
 applied live during Phase 0; files 8–10 were applied live and verified by the
 Sprint 4 suite and the complete Sprint 1–3 regression set. File 11 was dry-run
@@ -261,7 +275,14 @@ and verified by the dedicated Sprint 5 suite. Files 12–15 are the pre-pilot
 feature migration, two live-acceptance edge-case fixes and covering FK indexes.
 File 16 restores the established closed-Room error precedence in
 `claim_your_drop` and `send_interest` without changing eligibility, data access,
-RLS or Match/chat persistence.
+RLS or Match/chat persistence. File 17 restricts non-owner signed-avatar reads to
+the profile's current `avatar_path`. File 18 retains an owner's SELECT access to
+their own folder because the supported Storage delete operation resolves the
+object through SELECT before DELETE; unrelated users still cannot sign a replaced
+path. New uploads and signed avatar URLs use a five-minute browser/token TTL.
+Physical deletion invalidates CDN copies (with propagation), while a browser that
+already cached a legacy one-hour upload may retain its local copy until that older
+TTL expires.
 
 ## Pre-pilot presence and discovery model
 

@@ -1,6 +1,6 @@
 # HERE — краткий handoff
 
-Актуально на 28 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
+Актуально на 29 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
 
 ## Состояние
 
@@ -13,6 +13,13 @@
   always-on Explore, разделённое presence, Leave/Rejoin, adaptive Interest Budget
   и aggregate Explore analytics. Функциональный PP-набор зелёный, frontend опубликован.
 - Self-service регистрация organizer и актуальные landing/demo опубликованы.
+- Подготовлен узкий pre-pilot UX patch: на Welcome Back экране существующий guest
+  может изменить имя и фото перед входом в новую Room. Session, profile ID, 18+
+  confirmation и memberships при этом не пересоздаются. Patch ожидает ближайшей
+  Sites публикации и не является Sprint 6. Его RLS hardening уже применён как
+  production migrations 17–18/18: для постороннего пользователя подписывается
+  только актуальный `avatar_path`, а owner SELECT сохранён для штатного Storage
+  cleanup старого объекта.
 - В production добавлена официальная Supabase Auth CAPTCHA-интеграция с Cloudflare
   Turnstile для новых anonymous sessions и organizer Auth. Существующая session
   не получает повторный challenge. Live anonymous limit уже безопасно настроен;
@@ -49,6 +56,20 @@ HTTP 400; существующая guest session после refresh вошла �
 Два независимых автоматизированных in-app Browser контекста не получили новый
 Managed-challenge token, поэтому запрос и тестовые данные не создавались. Fresh
 organizer и два fresh guest должны пройти оставшуюся проверку в обычном браузере.
+После этого обычный браузер успешно создал organizer Room `Test1`; production
+строка открыта, exact `/r/f190cd5feeb6b808e4625921` отвечает HTTP 200. Первый
+returning guest использовал Auth identity/profile от 19 августа, создал ровно
+один active membership, а refresh через 209 секунд обновил `last_seen_at` без
+дубля identity/profile/member. Остались второй fresh guest и social-loop smoke.
+
+Отдельный isolated live-тест profile edit прошёл 1/1: собственные имя и фото
+обновились, UUID/18+/membership не изменились, новый путь подписался, заменённый
+сразу перестал подписываться посторонним пользователем, а Storage подтвердил
+удаление точного старого object path. Owner SELECT до удаления необходим самому
+Storage API для последовательности SELECT → DELETE. Новые uploads и signed
+tokens имеют TTL пять минут. Уже закэшированная в браузере legacy-фотография
+может сохраняться до прежнего TTL в один час. Потерянный ответ UPDATE теперь
+сверяется повторным чтением перед rollback; cleanup использует bounded retry.
 
 Authenticated Dashboard показал фактическое значение Free-project:
 `rate_limit_anonymous_users = 30/hour/IP`; поле доступно для редактирования, IP
@@ -249,11 +270,16 @@ live Sprint 2 regression run. Затем применены три additive Spri
 20260824094426_fix_left_presence_state.sql
 20260824095156_pre_pilot_fk_indexes.sql
 20260827163024_restore_closed_room_error_precedence.sql
+20260828092916_restrict_replaced_avatar_reads.sql
+20260829125141_allow_owner_avatar_cleanup.sql
 ```
 
-Remote migration API видит все шестнадцать версий. Последняя additive migration
-восстанавливает контракт ошибки `This Room has ended.` в `claim_your_drop` и
-`send_interest`, не меняя eligibility, RLS, данные или сохранение Match/chat.
+Remote migration API видит все восемнадцать версий. Две последние additive
+migrations ограничивают non-owner avatar reads актуальным `avatar_path` и
+сохраняют owner SELECT, необходимый штатному Storage cleanup; чужая папка по-
+прежнему недоступна. Предыдущая compatibility migration восстанавливает контракт
+ошибки `This Room has ended.` в `claim_your_drop` и `send_interest`, не меняя
+eligibility, данные или сохранение Match/chat.
 Sprint 4–5.1 SQL сначала проверен в транзакции с rollback, затем применён live.
 Применённые migration-файлы неизменяемы.
 

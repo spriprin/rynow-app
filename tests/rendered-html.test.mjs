@@ -168,6 +168,20 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[4], /NEXT_PUBLIC_TURNSTILE_SITE_KEY/);
   assert.doesNotMatch(files[4], /secret|service[_-]?role/i);
   assert.match(files[0], /join_room_by_code/);
+  assert.match(files[0], />Edit profile</);
+  assert.match(files[0], /setScreen\("edit-profile"\)/);
+  const returningProfileEdit = files[0].match(/async function saveReturningProfile\(\) \{[\s\S]*?\n {2}\}\n\n {2}async function joinReturningGuest/)?.[0] || "";
+  assert.match(returningProfileEdit, /getUser\(\)/);
+  assert.match(returningProfileEdit, /userData\.user\.id !== profile\.id/);
+  assert.match(returningProfileEdit, /update\(\{ display_name: expectedDisplayName, avatar_path: expectedAvatarPath \}\)[\s\S]*\.eq\("id", userData\.user\.id\)/);
+  assert.match(returningProfileEdit, /storage\.from\("avatars"\)\.upload\(expectedAvatarPath/);
+  assert.match(returningProfileEdit, /reconciliationError[\s\S]*reconciled\?\.display_name === expectedDisplayName[\s\S]*reconciled\.avatar_path === expectedAvatarPath/);
+  assert.match(returningProfileEdit, /removeAvatarWithRetry[\s\S]*attempt <= 3/);
+  assert.doesNotMatch(returningProfileEdit, /signInAnonymously|room_members|join_room_by_code/);
+  assert.match(files[0], /SIGNED_AVATAR_SECONDS = 300/);
+  assert.match(files[0], /SIGNED_AVATAR_CACHE_MS = 4 \* 60 \* 1000/);
+  assert.equal((files[0].match(/cacheControl: "300"/g) || []).length, 2);
+  assert.match(files[0], /previously opened link can remain cached for up to one hour \(new uploads: five minutes\)/);
   assert.match(files[3], /NEXT_PUBLIC_APP_URL/);
   assert.match(files[1], /margin: 4/);
   assert.match(files[1], /Open join link/);
@@ -177,6 +191,27 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[0], /Interested in You/i);
   assert.match(files[0], /new Date\(target\)\.getTime\(\) > nowMs/);
   assert.match(files[0], /aria-expanded=\{incomingOpen\}/);
+});
+
+test("replaced avatar paths cannot receive new non-owner signed URLs before physical cleanup", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260828092916_restrict_replaced_avatar_reads.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /function public\.can_current_user_read_current_avatar\([\s\S]*security definer[\s\S]*set search_path = ''/i);
+  assert.match(migration, /from public\.profiles p[\s\S]*p\.id = target[\s\S]*p\.avatar_path = object_name/i);
+  assert.match(migration, /alter policy avatars_read_owner_or_shared_room on storage\.objects[\s\S]*can_current_user_read_current_avatar/i);
+  assert.match(migration, /revoke all on function public\.can_current_user_read_avatar\(uuid\)[\s\S]*authenticated/i);
+});
+
+test("avatar owners retain only the read access required for exact Storage cleanup", async () => {
+  const migration = await readFile(
+    new URL("../supabase/migrations/20260829125141_allow_owner_avatar_cleanup.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(migration, /alter policy avatars_read_owner_or_shared_room on storage\.objects/i);
+  assert.match(migration, /storage\.foldername\(name\)[\s\S]*auth\.uid\(\)[\s\S]*owner_id[\s\S]*auth\.uid\(\)/i);
+  assert.match(migration, /or public\.can_current_user_read_current_avatar/i);
 });
 
 test("Auth release gates are isolated, complete and skip-intolerant", async () => {

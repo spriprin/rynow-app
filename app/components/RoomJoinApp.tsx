@@ -9,7 +9,7 @@ import { logDiagnostic, retryRead, userFacingError } from "@/lib/reliability";
 import type { DropItem, DropItemAction, ExploreItem, ExploreState, FoundationProfile, FoundationRoom, IncomingInterest, MatchMessage, RoomDropState, RoomMatch, RoomPresenceState, RoomWallPerson } from "@/lib/types";
 import { AuthTurnstile, isTurnstileConfigured, type AuthTurnstileHandle } from "./AuthTurnstile";
 
-type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "verification" | "onboarding" | "ready" | "room" | "error";
+type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "verification" | "onboarding" | "ready" | "edit-profile" | "room" | "error";
 type OnboardingStep = 1 | 2 | 3;
 type RoomWallRpcRow = { id: string; display_name: string; avatar_path: string; joined_at: string };
 type DropItemRpcRow = { id: string; item_position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
@@ -23,8 +23,8 @@ type ConnectionState = "online" | "offline" | "recovering";
 const REPORT_REASONS = ["Harassment", "Fake profile", "Inappropriate behavior", "Spam", "Safety concern", "Other"] as const;
 const PRESENCE_HEARTBEAT_MS = 60_000;
 const ROOM_POLL_MS = 15_000;
-const SIGNED_AVATAR_SECONDS = 3600;
-const SIGNED_AVATAR_CACHE_MS = 50 * 60 * 1000;
+const SIGNED_AVATAR_SECONDS = 300;
+const SIGNED_AVATAR_CACHE_MS = 4 * 60 * 1000;
 const avatarUrlCache = new Map<string, { url: string; refreshAfter: number }>();
 
 function initialScreenFor(room: FoundationRoom | null | undefined): Screen {
@@ -157,6 +157,10 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const selectedMatchId = selectedMatch?.id || "";
   const activeRoomId = room?.id || "";
   const activeRoomStatus = room?.status;
+
+  useEffect(() => () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+  }, [photoPreview]);
 
   const loadWall = useCallback(async (roomId: string) => {
     const client = getSupabaseBrowserClient();
@@ -627,7 +631,6 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     if (!file) return;
     if (!file.type.startsWith("image/")) return setError("Choose an image file.");
     if (file.size > 5 * 1024 * 1024) return setError("Photo must be smaller than 5 MB.");
-    if (photoPreview) URL.revokeObjectURL(photoPreview);
     setPhotoFile(file); setPhotoPreview(URL.createObjectURL(file)); setError("");
   }
 
@@ -640,18 +643,125 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       const { data: userData, error: userError } = await client.auth.getUser();
       if (userError || !userData.user) throw userError || new Error("Guest session not found");
       const avatarPath = `${userData.user.id}/avatar-${crypto.randomUUID()}.${extensionFor(photoFile)}`;
-      const { error: uploadError } = await client.storage.from("avatars").upload(avatarPath, photoFile, { contentType: photoFile.type, upsert: false });
+      const { error: uploadError } = await client.storage.from("avatars").upload(avatarPath, photoFile, { contentType: photoFile.type, cacheControl: "300", upsert: false });
       if (uploadError) throw uploadError;
       const nextProfile: FoundationProfile = { id: userData.user.id, display_name: displayName.trim(), avatar_path: avatarPath, age_confirmed_18: true };
       const { error: profileError } = await client.from("profiles").upsert(nextProfile);
       if (profileError) throw profileError;
       setProfile(nextProfile);
       const ownUrls = await signedUrlMap([avatarPath], true);
-      setOwnAvatarUrl(ownUrls.get(avatarPath) || photoPreview);
+      const signedAvatarUrl = ownUrls.get(avatarPath) || "";
+      setOwnAvatarUrl(signedAvatarUrl || photoPreview);
+      setPhotoFile(null);
+      if (signedAvatarUrl) setPhotoPreview("");
       await enterRoom(room);
     } catch (reason) {
       logDiagnostic("finish_onboarding", reason, { roomId: room.id });
       setError(userFacingError(reason, "We couldn’t finish your profile. Try again."));
+    }
+    finally { setBusy(false); }
+  }
+
+  function openProfileEditor() {
+    if (!profile) return;
+    setPhotoFile(null);
+    setPhotoPreview("");
+    setDisplayName(profile.display_name);
+    setError("");
+    setScreen("edit-profile");
+  }
+
+  function cancelProfileEditor() {
+    if (!profile) return;
+    setPhotoFile(null);
+    setPhotoPreview("");
+    setDisplayName(profile.display_name);
+    setError("");
+    setScreen("ready");
+  }
+
+  async function saveReturningProfile() {
+    if (!profile || displayName.trim().length < 2) return;
+    const client = getSupabaseBrowserClient();
+    if (!client) return setError("Profile editing isn’t configured.");
+    const profileClient = client;
+    setBusy(true); setError("");
+    let uploadedPath = "";
+    const expectedDisplayName = displayName.trim();
+    let expectedAvatarPath = profile.avatar_path;
+
+    async function removeAvatarWithRetry(path: string, diagnostic: string) {
+      let lastError: unknown = null;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const { error: removeError } = await profileClient.storage.from("avatars").remove([path]);
+        if (!removeError) return null;
+        lastError = removeError;
+        if (attempt < 3) await new Promise((resolve) => window.setTimeout(resolve, attempt * 250));
+      }
+      logDiagnostic(diagnostic, lastError);
+      return lastError;
+    }
+
+    async function applySavedProfile(savedProfile: FoundationProfile) {
+      const ownUrls = await signedUrlMap([savedProfile.avatar_path], true);
+      if (savedProfile.avatar_path !== profile!.avatar_path) avatarUrlCache.delete(profile!.avatar_path);
+      setProfile(savedProfile);
+      setDisplayName(savedProfile.display_name);
+      setOwnAvatarUrl(ownUrls.get(savedProfile.avatar_path) || (savedProfile.avatar_path === profile!.avatar_path ? ownAvatarUrl : ""));
+      setPhotoFile(null);
+      setPhotoPreview("");
+      setScreen("ready");
+    }
+
+    try {
+      const { data: userData, error: userError } = await client.auth.getUser();
+      if (userError || !userData.user || userData.user.id !== profile.id) throw userError || new Error("Guest session not found");
+
+      if (photoFile) {
+        expectedAvatarPath = `${userData.user.id}/avatar-${crypto.randomUUID()}.${extensionFor(photoFile)}`;
+        const { error: uploadError } = await client.storage.from("avatars").upload(expectedAvatarPath, photoFile, { contentType: photoFile.type, cacheControl: "300", upsert: false });
+        if (uploadError) throw uploadError;
+        uploadedPath = expectedAvatarPath;
+      }
+
+      const { data: savedProfile, error: profileError } = await client.from("profiles")
+        .update({ display_name: expectedDisplayName, avatar_path: expectedAvatarPath })
+        .eq("id", userData.user.id)
+        .select("id, display_name, avatar_path, age_confirmed_18")
+        .single();
+      if (profileError || !savedProfile) throw profileError || new Error("Profile could not be saved");
+
+      const nextProfile = savedProfile as FoundationProfile;
+      let cleanupError: unknown = null;
+      if (uploadedPath && profile.avatar_path !== uploadedPath) {
+        cleanupError = await removeAvatarWithRetry(profile.avatar_path, "remove_replaced_avatar");
+      }
+      await applySavedProfile(nextProfile);
+      if (cleanupError) setError("Profile updated. We couldn't remove the previous stored photo yet. A previously opened link can remain cached for up to one hour (new uploads: five minutes).");
+    } catch (reason) {
+      const { data: currentProfile, error: reconciliationError } = await client.from("profiles")
+        .select("id, display_name, avatar_path, age_confirmed_18")
+        .eq("id", profile.id)
+        .maybeSingle();
+      const reconciled = currentProfile as FoundationProfile | null;
+
+      if (!reconciliationError && reconciled?.display_name === expectedDisplayName && reconciled.avatar_path === expectedAvatarPath) {
+        let cleanupError: unknown = null;
+        if (uploadedPath && profile.avatar_path !== uploadedPath) {
+          cleanupError = await removeAvatarWithRetry(profile.avatar_path, "remove_replaced_avatar_after_reconciliation");
+        }
+        await applySavedProfile(reconciled);
+        if (cleanupError) setError("Profile updated. We couldn't remove the previous stored photo yet. A previously opened link can remain cached for up to one hour (new uploads: five minutes).");
+        return;
+      }
+
+      if (reconciliationError) {
+        logDiagnostic("reconcile_profile_update", reconciliationError);
+      } else if (uploadedPath && reconciled?.avatar_path !== uploadedPath) {
+        await removeAvatarWithRetry(uploadedPath, "rollback_profile_avatar");
+      }
+      logDiagnostic("edit_profile", reason);
+      setError(userFacingError(reason, "We couldn’t update your profile. Try again."));
     }
     finally { setBusy(false); }
   }
@@ -937,7 +1047,12 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }
 
   if (screen === "ready" && room && profile) {
-    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card returning-card"><ResilientAvatar className="returning-avatar" path={profile.avatar_path} url={ownAvatarUrl} name={profile.display_name} /><span className="eyebrow">WELCOME BACK</span><h1>Hi, {profile.display_name}.</h1><p>Your profile is ready. Join this event’s Room?</p>{error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={busy} onClick={joinReturningGuest}>{busy ? "Joining…" : "Join Room"}<ArrowRight size={18} /></button></section></main>;
+    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card returning-card"><ResilientAvatar className="returning-avatar" path={profile.avatar_path} url={ownAvatarUrl} name={profile.display_name} /><span className="eyebrow">WELCOME BACK</span><h1>Hi, {profile.display_name}.</h1><p>Your profile is ready. Join this event’s Room?</p>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={busy} onClick={joinReturningGuest}>{busy ? "Joining…" : "Join Room"}<ArrowRight size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={openProfileEditor}>Edit profile</button></div></section></main>;
+  }
+
+  if (screen === "edit-profile" && room && profile) {
+    const editPhotoUrl = photoPreview || ownAvatarUrl;
+    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card"><button className="back-link" disabled={busy} onClick={cancelProfileEditor}><ArrowLeft size={17} />Back</button><span className="eyebrow">YOUR PROFILE</span><h1>Update your profile.</h1><p>Change the name or photo people at this event will see.</p><label className="foundation-photo-picker has-photo"><span style={editPhotoUrl ? { backgroundImage: `url(${editPhotoUrl})` } : undefined}>{photoFile ? <Check /> : <ImagePlus />}</span><strong>{photoFile ? "New photo selected" : "Change photo"}</strong><small>Camera or gallery · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label><label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={displayName.trim().length < 2 || busy} onClick={saveReturningProfile}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={cancelProfileEditor}>Cancel</button></div><small className="foundation-privacy"><ShieldCheck size={14} />Your guest identity and 18+ confirmation stay unchanged.</small></section></main>;
   }
 
   if (screen === "room" && room) {
