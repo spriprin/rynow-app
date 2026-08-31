@@ -28,8 +28,10 @@ than outcomes.
 - Sprint 5.1 Pre-Pilot Core Revision: Explore, split presence, Leave/Rejoin,
   adaptive budgets and aggregate Explore analytics are implemented, migrated and
   functionally live-verified and published.
-- Organizer self-service Auth and the current-product landing/demo are implemented
-  and published.
+- Organizer self-service Auth and the current-product demo are implemented and
+  published. An organizer-first rewrite of the public landing is implemented and
+  locally verified; production remains Sites version 10 until explicit publication
+  approval.
 - A pre-pilot returning-profile UX patch now lets a guest change the existing
   display name or photo from the Welcome Back screen without creating a new Auth
   session, profile or Room membership. It is published in Sites version 10. Its
@@ -169,16 +171,20 @@ internal checks they need. Trigger helpers are also no longer client-executable.
 
 | Route | Behavior |
 | --- | --- |
-| `/` | Current HERE product landing and links to demo, organizer signup and sign-in |
+| `/` | Organizer-first public landing: event value, guest flow, privacy, aggregate analytics, demo and Room creation |
 | `/r/{join_code}` | Real Supabase guest flow; never falls back to fake users |
 | `/organizer` | Self-service permanent organizer signup/sign-in, Rooms, QR, Drops and owner-only aggregate analytics |
 | `/demo` | Isolated in-memory current-product demo with Explore + optional Drops; no Supabase reads or writes |
 
-The landing and demo no longer use the rejected `Hidden`, `Open to Meet`,
-`Selective`, full-catalogue or blind-mutual model. The demo presents Explore as
-the primary all-evening action and Drops as optional synchronized moments, then
-walks through Interest, Interested Too, Match, chat and safety. It uses sample
-state only and is explicitly distinguished from a real Room.
+The public landing explains HERE as a social layer for real-life events: one QR,
+browser entry, limited same-event discovery, private Interest, mutual Match,
+chat, IRL meeting and aggregate-only organizer analytics. Internal mechanics do
+not lead the page. The demo remains a deeper product walkthrough: Explore is the
+primary all-evening action and Drops are optional synchronized moments, followed
+by Interest, Interested Too, Match, chat and safety. It uses sample state only
+and is explicitly distinguished from a real Room. Neither surface uses the
+rejected `Hidden`, `Open to Meet`, `Selective`, full-catalogue or blind-mutual
+model.
 
 ## Product contract
 

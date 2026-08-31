@@ -1,14 +1,38 @@
 /* eslint-disable @next/next/no-img-element -- remote sample portraits are part of the marketing preview. */
 
-import { ArrowRight, Heart, MessageCircle, Radio, ScanLine, Sparkles, Users } from "lucide-react";
+import { ArrowRight, BarChart3, Heart, MessageCircle, Radio, ScanLine, ShieldCheck, Sparkles } from "lucide-react";
+
+const organizerBenefits = [
+  [Heart, "Make the first move easier", "Guests can find out whether interest is mutual before approaching someone."],
+  [ScanLine, "Works inside your existing event", "One QR. No app installation. HERE adds a social layer without replacing the event itself."],
+  [Sparkles, "Create moments of interaction", "Discovery stays available throughout the night. Optional Drops bring guests back for shared moments with fresh people to discover."],
+  [BarChart3, "Understand engagement", "See aggregate participation, interest, match and conversation metrics — never private interests or messages."],
+] as const;
 
 const steps = [
-  ["01", "Scan the Room QR", "Join the event Room in seconds — no email or password for guests."],
-  ["02", "See the Room come alive", "A limited Room Wall shows that real people are here without becoming a catalogue."],
-  ["03", "Explore who’s here", "Explore works all evening with small, fair, server-selected batches — never a full catalogue."],
-  ["04", "Send a limited Interest", "An adaptive Interest Budget makes every signal intentional and limits spam."],
-  ["05", "Join Drop moments", "Optional scheduled Drops create synchronized bursts of fresh discovery without blocking Explore."],
-  ["06", "Match, say hi and meet", "Interested Too creates a Match and opens realtime chat so both people can meet in the room."],
+  ["01", "Put the HERE QR at your event", "Create a Room and place the QR on screens, posters, tables or event materials."],
+  ["02", "Guests join in seconds", "They open HERE in their browser, add a name and photo and enter the event Room. No download or email/password signup required."],
+  ["03", "They discover people at the same event", "HERE shows small selections of real participants instead of a full attendee catalogue."],
+  ["04", "Someone catches their attention", "They can privately show interest."],
+  ["05", "Mutual interest creates a Match", "The other person can respond. If both are interested, they can message each other."],
+  ["06", "They are already in the same place", "The point is to move from a Match to a real conversation at the event."],
+] as const;
+
+const privacyPoints = [
+  "No full attendee list.",
+  "An interest is visible only to the person who receives it.",
+  "Organizers cannot see private interests or chat messages.",
+  "Guests can block and report other participants.",
+  "HERE uses the event Room — not GPS tracking — to establish who is at the event.",
+] as const;
+
+const analyticsMetrics = [
+  "Guests joined",
+  "People who explored",
+  "Interests sent",
+  "Response and acceptance rates",
+  "Matches created",
+  "Matches that started a conversation",
 ] as const;
 
 export function ProductLanding() {
@@ -19,27 +43,29 @@ export function ProductLanding() {
           <span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span>
         </a>
         <div className="current-landing__nav-links">
+          <a href="#why">Why HERE</a>
           <a href="#how">How it works</a>
-          <a href="#demo-or-real">Demo or real Room?</a>
+          <a href="#privacy">Privacy</a>
         </div>
         <a className="button button--ghost button--small" href="/organizer?mode=signin">Organizer sign in</a>
       </nav>
 
       <section className="current-hero" id="top">
         <div className="current-hero__copy">
-          <span className="eyebrow"><i className="live-pulse" />LIVE SOCIAL ROOMS</span>
+          <span className="eyebrow"><i className="live-pulse" />A SOCIAL LAYER FOR REAL-LIFE EVENTS</span>
           <h1>Real people.<br />Same place.<br /><em>Right now.</em></h1>
-          <p>HERE turns one event QR into a focused path from a lively Room Wall to always-on curated Explore, a mutual Match and a real hello across the room.</p>
+          <h2>Turn your event into a place where meeting someone new is easier.</h2>
+          <p>Guests scan one QR, see a limited selection of people who are at the same event, show interest and match if it’s mutual — then meet in real life. No app download required.</p>
           <div className="button-row">
-            <a className="button button--lime" href="/demo">Try the product demo <ArrowRight size={18} /></a>
+            <a className="button button--lime" href="#how">See how HERE works <ArrowRight size={18} /></a>
             <a className="button button--ghost" href="/organizer?mode=signup">Create a Room</a>
           </div>
-          <small><ScanLine size={16} /> Room QR and membership — no GPS tracking.</small>
+          <small><ScanLine size={16} /> One event QR · Browser-based · No GPS tracking</small>
         </div>
 
         <div className="current-hero__product" aria-label="HERE product flow preview">
           <div className="current-hero__wall">
-            <div><span>ROOM WALL</span><strong>74 people here</strong></div>
+            <div><span>AT THIS EVENT</span><strong>74 people joined</strong></div>
             <div className="current-avatar-row" aria-hidden="true">
               {[
                 "photo-1494790108377-be9c29b29330",
@@ -51,8 +77,8 @@ export function ProductLanding() {
             </div>
           </div>
           <article className="current-drop-card">
-            <span>EXPLORE · 4 INTERESTS LEFT</span>
-            <div className="current-drop-card__photo" role="img" aria-label="Sample Explore profile" />
+            <span>SOMEONE AT THIS EVENT</span>
+            <div className="current-drop-card__photo" role="img" aria-label="Sample guest profile" />
             <div><strong>Sofia, 26</strong><small>Here tonight</small></div>
             <div className="current-drop-card__actions"><span>Next</span><b><Heart size={15} />Interested</b></div>
           </article>
@@ -60,33 +86,63 @@ export function ProductLanding() {
         </div>
       </section>
 
-      <section className="current-principles">
-        <article><Users /><strong>Room Wall creates abundance.</strong></article>
-        <article><Sparkles /><strong>Explore works all evening.</strong></article>
-        <article><Heart /><strong>Drops create shared moments.</strong></article>
-        <article><MessageCircle /><strong>Chat helps people meet IRL.</strong></article>
+      <section className="current-value" id="why">
+        <header>
+          <span>WHY ORGANIZERS USE HERE</span>
+          <h2>Give people another reason to connect at your event.</h2>
+        </header>
+        <div className="current-value__grid">
+          {organizerBenefits.map(([Icon, title, copy]) => (
+            <article key={title}><Icon /><h3>{title}</h3><p>{copy}</p></article>
+          ))}
+        </div>
       </section>
 
       <section className="current-how" id="how">
-        <header><span>THE CURRENT HERE FLOW</span><h2>Less browsing.<br />More meeting.</h2></header>
+        <header><span>HOW HERE WORKS</span><h2>From one QR to a real conversation.</h2></header>
         <div className="current-steps">
           {steps.map(([number, title, copy]) => (
             <article key={number}><span>{number}</span><h3>{title}</h3><p>{copy}</p></article>
           ))}
         </div>
+        <p className="current-how__note"><Sparkles size={17} /> Organizers can also schedule optional Drops — shared moments during the night when guests receive fresh people to discover. HERE works throughout the event without them.</p>
+      </section>
+
+      <section className="current-trust" id="privacy">
+        <div className="current-trust__copy">
+          <span>PRIVACY &amp; CONTROL</span>
+          <ShieldCheck size={34} />
+          <h2>Private by design.</h2>
+          <p>HERE helps people connect without turning your event into a public attendee directory.</p>
+        </div>
+        <ul>
+          {privacyPoints.map((point) => <li key={point}><span>✓</span>{point}</li>)}
+        </ul>
+      </section>
+
+      <section className="current-analytics">
+        <header>
+          <span>FOR ORGANIZERS</span>
+          <h2>See how people engaged.</h2>
+          <p>After the event, your dashboard shows aggregate engagement across the Room.</p>
+        </header>
+        <div className="current-analytics__metrics">
+          {analyticsMetrics.map((metric) => <div key={metric}><BarChart3 size={17} /><span>{metric}</span></div>)}
+        </div>
+        <p className="current-analytics__privacy"><ShieldCheck size={18} /> You see engagement, not private conversations or who liked whom.</p>
       </section>
 
       <section className="current-choice" id="demo-or-real">
-        <header><span>CHOOSE YOUR PATH</span><h2>See the product, then make it real.</h2></header>
+        <header><span>SEE IT IN ACTION</span><h2>See the product, then make it real.</h2></header>
         <div>
           <article>
-            <span>PRODUCT DEMO</span><h3>Walk through HERE now.</h3>
-            <p>Sample people and interactions. No account, nothing saved to production.</p>
-            <a className="button button--dark" href="/demo">Try the product demo <ArrowRight size={17} /></a>
+            <span>PRODUCT DEMO</span><h3>See how HERE feels as a guest.</h3>
+            <p>Walk through a sample event with demo profiles and interactions. Nothing is saved to the real event system.</p>
+            <a className="button button--dark" href="/demo">Try the demo <ArrowRight size={17} /></a>
           </article>
           <article>
-            <span>REAL ROOM</span><h3>Bring HERE to your event.</h3>
-            <p>Create a permanent organizer account, generate a real QR and welcome persistent anonymous participants.</p>
+            <span>FOR ORGANIZERS</span><h3>Create HERE for your event.</h3>
+            <p>Create your event Room, get a QR code and invite real guests to join.</p>
             <div className="button-row">
               <a className="button button--lime" href="/organizer?mode=signup">Create a Room</a>
               <a className="button button--ghost" href="/organizer?mode=signin">Organizer sign in</a>
@@ -95,7 +151,7 @@ export function ProductLanding() {
         </div>
       </section>
 
-      <footer><span className="brand">HERE<span className="brand-dot">.</span></span><p>Room Wall → Explore + Drops → Match → meet IRL.</p></footer>
+      <footer><span className="brand">HERE<span className="brand-dot">.</span></span><p>A social layer for real-life events.</p></footer>
     </main>
   );
 }

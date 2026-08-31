@@ -1,6 +1,6 @@
 # HERE — краткий handoff
 
-Актуально на 29 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
+Актуально на 31 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
 
 ## Состояние
 
@@ -13,6 +13,14 @@
   always-on Explore, разделённое presence, Leave/Rejoin, adaptive Interest Budget
   и aggregate Explore analytics. Функциональный PP-набор зелёный, frontend опубликован.
 - Self-service регистрация organizer и актуальные landing/demo опубликованы.
+- Подготовлен organizer-first rewrite публичного `/`: один QR, browser entry,
+  limited same-event discovery, private Interest, mutual Match, IRL-встреча,
+  privacy и aggregate analytics объясняются простым языком без внутренних
+  backend-терминов. Изменение presentation-only: `/demo`, `/organizer`,
+  `/r/{join_code}`, Supabase и product behavior не менялись. TypeScript, lint,
+  production build, 22 локальные проверки и desktop/mobile visual sanity PASS.
+  Production пока остаётся Sites version 10 до отдельного явного разрешения на
+  публикацию этого кандидата.
 - Подготовлен узкий pre-pilot UX patch: на Welcome Back экране существующий guest
   может изменить имя и фото перед входом в новую Room. Session, profile ID, 18+
   confirmation и memberships при этом не пересоздаются. Patch опубликован в
@@ -106,12 +114,16 @@ account сразу получает session; интерфейс также ум�
 Полный hosted email → click → new password нужно окончательно проверить во время
 production smoke с доступом к реальному inbox.
 
-Landing объясняет актуальный flow Room Wall → always-on curated Explore → limited
-Interest → Interested in You → Interested Too → Match → chat → IRL. Scheduled
-Drops остаются опциональными синхронными моментами. `/demo` повторяет
-эту модель на локальных sample data, ничего не читает и не пишет в Supabase и
-явно отличается от настоящей persistent Room. Старые Hidden/Open to Meet/
-Selective, full People catalogue и blind-mutual механика удалены из актуального UI.
+Публичный landing теперь сначала объясняет ценность для organizer: HERE — social
+layer поверх существующего real-life event. Гость сканирует QR, входит в browser,
+видит ограниченный выбор людей на том же событии, отправляет Interest, получает
+mutual Match и может перейти к реальному разговору. Отдельно и прямо объяснены
+privacy/control и aggregate-only organizer analytics. Drops впервые появляются
+только после plain-language контекста и обозначены как optional shared moments.
+`/demo` сохраняет более глубокую актуальную продуктовую модель на локальных
+sample data, ничего не читает и не пишет в Supabase и явно отличается от
+настоящей persistent Room. Старые Hidden/Open to Meet/Selective, full People
+catalogue и blind-mutual механика отсутствуют.
 
 Live acceptance:
 
@@ -146,9 +158,16 @@ join RPC за 249 мс; 10 конкурентных Drop claims за 458 мс; e
 оба true. S5-H Realtime reconnect прошёл с
 восстановлением persisted history и без дубликатов.
 
-Локальная финальная проверка того же кандидата: TypeScript PASS, lint PASS,
-Auth harness 7/7, static/render/security 13/13, production build PASS и
-`git diff --check` PASS. Всего 20/20 локальных тестов без skip.
+Локальная финальная проверка опубликованного version 10 кандидата: TypeScript
+PASS, lint PASS, Auth harness 7/7, static/render/security 13/13, production build
+PASS и `git diff --check` PASS. Всего 20/20 локальных тестов без skip.
+
+Organizer-first landing candidate от 31 августа отдельно прошёл TypeScript,
+lint и production build. Общий локальный набор: 22 PASS, 0 FAIL; 10 live-only
+тестов штатно пропущены без credentials/явных live-флагов. Render-smoke подтвердил
+изолированные `/demo`, `/organizer` и `/r/{join_code}`. Visual sanity выполнен на
+desktop 1440×1000 и mobile 390×844: горизонтального overflow, сломанных картинок
+и обрезанных CTA нет.
 
 Повторные полные прогоны быстро исчерпывают проектные anonymous/signup quotas.
 Test harness теперь создаёт identities небольшими пакетами, делает bounded

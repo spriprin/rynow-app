@@ -23,10 +23,13 @@ test("server-renders the product landing page", async () => {
   const html = await response.text();
   assert.match(html, /Real people/);
   assert.match(html, /Same place/);
-  assert.match(html, /Try the product demo/);
+  assert.match(html, /See how HERE works/);
+  assert.match(html, /Try the demo/);
   assert.match(html, /Create a Room/);
-  assert.match(html, /Room Wall creates abundance/);
-  assert.match(html, /Interested Too/);
+  assert.match(html, /Give people another reason to connect/);
+  assert.match(html, /Private by design/);
+  assert.match(html, /See how people engaged/);
+  assert.match(html, /IT’S MUTUAL/);
   assert.doesNotMatch(html, /Open to meet|Selective/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
@@ -414,8 +417,8 @@ test("Pre-pilot revision makes Explore primary while keeping Drops and explicit 
   for (const contract of ["claim_explore_batch", "mark_explore_item_seen", "send_explore_interest", "Leave event", "Rejoin event", "Explore now", "Interested in You", "Matches"]) {
     assert.match(roomSource, new RegExp(contract, "i"));
   }
-  assert.match(landingSource, /Explore works all evening/i);
-  assert.match(landingSource, /scheduled Drops create synchronized bursts/i);
+  assert.match(landingSource, /HERE works throughout the event without them/i);
+  assert.match(landingSource, /schedule optional Drops — shared moments/i);
   assert.match(organizerSource, /discovery eligible/i);
   assert.match(organizerSource, /Explore started/i);
 });

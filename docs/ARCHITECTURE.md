@@ -360,6 +360,22 @@ fresh Managed-challenge token, so no organizer request or test identity was
 created. The remaining fresh organizer and two-guest path must be performed in
 an ordinary human browser; CAPTCHA must not be bypassed or disabled for it.
 
+## Public landing boundary
+
+The organizer-first public landing rewrite is presentation-only. `/` remains a
+server-rendered marketing surface and does not read or write Supabase. It now
+orders information as product definition → organizer value → six-step guest
+flow → privacy/control → aggregate analytics → demo/Room creation. `Room`,
+`Explore`, `Match` and `Drop` appear only after plain-language context; Drops are
+explicitly optional. The hero composition, profile preview and black/cream/lime
+visual system remain unchanged.
+
+No guest, organizer, Room, Auth, Storage, Realtime, analytics or migration code
+changed. `/demo`, `/organizer` and `/r/{join_code}` remain separate entrypoints.
+Typecheck, lint, production build, rendered route contracts and desktop/mobile
+visual checks passed locally. The production release remains Sites version 10
+until this presentation-only candidate receives explicit publication approval.
+
 ## Release boundary
 
 The verified application was published as Sites version 10 from commit
