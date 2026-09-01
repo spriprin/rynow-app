@@ -364,11 +364,15 @@ an ordinary human browser; CAPTCHA must not be bypassed or disabled for it.
 
 The organizer-first public landing rewrite is presentation-only. `/` remains a
 server-rendered marketing surface and does not read or write Supabase. It now
-orders information as product definition → organizer value → six-step guest
-flow → privacy/control → aggregate analytics → demo/Room creation. `Room`,
+orders information as product definition → demo/Room creation → organizer value
+→ six-step guest flow → privacy/control → aggregate analytics. `Room`,
 `Explore`, `Match` and `Drop` appear only after plain-language context; Drops are
 explicitly optional. The hero composition, profile preview and black/cream/lime
 visual system remain unchanged.
+
+After owner review, the demo/Room creation choice was moved directly below the
+hero, before the organizer-value and explanatory sections. Its routes and card
+behavior are unchanged; only document order changed.
 
 No guest, organizer, Room, Auth, Storage, Realtime, analytics or migration code
 changed. `/demo`, `/organizer` and `/r/{join_code}` remain separate entrypoints.

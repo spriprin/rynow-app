@@ -179,7 +179,9 @@ internal checks they need. Trigger helpers are also no longer client-executable.
 The public landing explains HERE as a social layer for real-life events: one QR,
 browser entry, limited same-event discovery, private Interest, mutual Match,
 chat, IRL meeting and aggregate-only organizer analytics. Internal mechanics do
-not lead the page. The demo remains a deeper product walkthrough: Explore is the
+not lead the page. The demo/Room creation choice appears immediately after the
+hero so organizers can act before reading the deeper explanation. The demo
+remains a deeper product walkthrough: Explore is the
 primary all-evening action and Drops are optional synchronized moments, followed
 by Interest, Interested Too, Match, chat and safety. It uses sample state only
 and is explicitly distinguished from a real Room. Neither surface uses the

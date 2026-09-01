@@ -21,6 +21,9 @@
   production build, 22 локальные проверки и desktop/mobile visual sanity PASS.
   Production пока остаётся Sites version 10 до отдельного явного разрешения на
   публикацию этого кандидата.
+- По visual feedback блок `See the product, then make it real` перенесён из
+  нижней части страницы сразу под hero. Содержимое карточек, CTA и маршруты не
+  изменялись; это только изменение порядка секций organizer-first landing.
 - Подготовлен узкий pre-pilot UX patch: на Welcome Back экране существующий guest
   может изменить имя и фото перед входом в новую Room. Session, profile ID, 18+
   confirmation и memberships при этом не пересоздаются. Patch опубликован в

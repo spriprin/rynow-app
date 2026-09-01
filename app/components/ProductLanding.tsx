@@ -86,6 +86,25 @@ export function ProductLanding() {
         </div>
       </section>
 
+      <section className="current-choice" id="demo-or-real">
+        <header><span>SEE IT IN ACTION</span><h2>See the product, then make it real.</h2></header>
+        <div>
+          <article>
+            <span>PRODUCT DEMO</span><h3>See how HERE feels as a guest.</h3>
+            <p>Walk through a sample event with demo profiles and interactions. Nothing is saved to the real event system.</p>
+            <a className="button button--dark" href="/demo">Try the demo <ArrowRight size={17} /></a>
+          </article>
+          <article>
+            <span>FOR ORGANIZERS</span><h3>Create HERE for your event.</h3>
+            <p>Create your event Room, get a QR code and invite real guests to join.</p>
+            <div className="button-row">
+              <a className="button button--lime" href="/organizer?mode=signup">Create a Room</a>
+              <a className="button button--ghost" href="/organizer?mode=signin">Organizer sign in</a>
+            </div>
+          </article>
+        </div>
+      </section>
+
       <section className="current-value" id="why">
         <header>
           <span>WHY ORGANIZERS USE HERE</span>
@@ -130,25 +149,6 @@ export function ProductLanding() {
           {analyticsMetrics.map((metric) => <div key={metric}><BarChart3 size={17} /><span>{metric}</span></div>)}
         </div>
         <p className="current-analytics__privacy"><ShieldCheck size={18} /> You see engagement, not private conversations or who liked whom.</p>
-      </section>
-
-      <section className="current-choice" id="demo-or-real">
-        <header><span>SEE IT IN ACTION</span><h2>See the product, then make it real.</h2></header>
-        <div>
-          <article>
-            <span>PRODUCT DEMO</span><h3>See how HERE feels as a guest.</h3>
-            <p>Walk through a sample event with demo profiles and interactions. Nothing is saved to the real event system.</p>
-            <a className="button button--dark" href="/demo">Try the demo <ArrowRight size={17} /></a>
-          </article>
-          <article>
-            <span>FOR ORGANIZERS</span><h3>Create HERE for your event.</h3>
-            <p>Create your event Room, get a QR code and invite real guests to join.</p>
-            <div className="button-row">
-              <a className="button button--lime" href="/organizer?mode=signup">Create a Room</a>
-              <a className="button button--ghost" href="/organizer?mode=signin">Organizer sign in</a>
-            </div>
-          </article>
-        </div>
       </section>
 
       <footer><span className="brand">HERE<span className="brand-dot">.</span></span><p>A social layer for real-life events.</p></footer>

@@ -30,6 +30,10 @@ test("server-renders the product landing page", async () => {
   assert.match(html, /Private by design/);
   assert.match(html, /See how people engaged/);
   assert.match(html, /IT’S MUTUAL/);
+  assert.ok(
+    html.indexOf("See the product, then make it real") < html.indexOf("Give people another reason to connect"),
+    "demo/create choice should appear directly after the hero and before the explainer sections",
+  );
   assert.doesNotMatch(html, /Open to meet|Selective/i);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton/i);
 });
