@@ -1,6 +1,6 @@
 # HERE — краткий handoff
 
-Актуально на 31 августа 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
+Актуально на 1 сентября 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
 
 ## Состояние
 
@@ -19,9 +19,8 @@
   backend-терминов. Изменение presentation-only: `/demo`, `/organizer`,
   `/r/{join_code}`, Supabase и product behavior не менялись. TypeScript, lint,
   production build, 22 локальные проверки и desktop/mobile visual sanity PASS.
-  Production пока остаётся Sites version 10 до отдельного явного разрешения на
-  публикацию этого кандидата.
-- По visual feedback блок `See the product, then make it real` перенесён из
+  Кандидат одобрен владельцем и опубликован на существующем production URL.
+  По visual feedback блок `See the product, then make it real` перенесён из
   нижней части страницы сразу под hero. Содержимое карточек, CTA и маршруты не
   изменялись; это только изменение порядка секций organizer-first landing.
 - Подготовлен узкий pre-pilot UX patch: на Welcome Back экране существующий guest
@@ -37,9 +36,8 @@
   production Managed widget создан для публичного hostname, public site key
   добавлен в Sites environment revision 2, а secret хранится только в Supabase
   Auth. CAPTCHA включена.
-- Public URL: `https://here-social-room.spriprin.chatgpt.site` — Sites version 10,
-  проверенный application commit `25d6613ece09ccaf8268fdb3fd0b45a0b2908dd8`,
-  Sites environment revision 2.
+- Public URL: `https://here-social-room.spriprin.chatgpt.site` — опубликованный
+  organizer-first landing с Sites environment revision 2.
 - Текущий статус: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
   Точный release опубликован на существующем URL; Sprint 6 не начинался.
 

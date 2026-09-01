@@ -29,9 +29,8 @@ than outcomes.
   adaptive budgets and aggregate Explore analytics are implemented, migrated and
   functionally live-verified and published.
 - Organizer self-service Auth and the current-product demo are implemented and
-  published. An organizer-first rewrite of the public landing is implemented and
-  locally verified; production remains Sites version 10 until explicit publication
-  approval.
+  published. The organizer-first public landing rewrite is verified and published;
+  its demo/Room creation choice sits directly below the hero.
 - A pre-pilot returning-profile UX patch now lets a guest change the existing
   display name or photo from the Welcome Back screen without creating a new Auth
   session, profile or Room membership. It is published in Sites version 10. Its
@@ -44,8 +43,8 @@ than outcomes.
   secret is stored only in Supabase Auth. Existing valid guest sessions bypass
   the widget.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
-- Public frontend is Sites version 10, deployed from verified application commit
-  `25d6613ece09ccaf8268fdb3fd0b45a0b2908dd8` with Sites environment revision 2.
+- Public frontend includes the verified organizer-first landing refresh and uses
+  Sites environment revision 2.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
 - Product release status: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
   The verified release is deployed to the existing URL. Sprint 6 was not started.

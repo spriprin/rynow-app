@@ -377,8 +377,8 @@ behavior are unchanged; only document order changed.
 No guest, organizer, Room, Auth, Storage, Realtime, analytics or migration code
 changed. `/demo`, `/organizer` and `/r/{join_code}` remain separate entrypoints.
 Typecheck, lint, production build, rendered route contracts and desktop/mobile
-visual checks passed locally. The production release remains Sites version 10
-until this presentation-only candidate receives explicit publication approval.
+visual checks passed locally. The owner approved this presentation-only release
+on 1 September 2026, and it is included in the current production frontend.
 
 ## Release boundary
 
