@@ -180,7 +180,7 @@ test("client bundle source never references a service role key", async () => {
   const returningProfileEdit = files[0].match(/async function saveReturningProfile\(\) \{[\s\S]*?\n {2}\}\n\n {2}async function joinReturningGuest/)?.[0] || "";
   assert.match(returningProfileEdit, /getUser\(\)/);
   assert.match(returningProfileEdit, /userData\.user\.id !== profile\.id/);
-  assert.match(returningProfileEdit, /update\(\{ display_name: expectedDisplayName, avatar_path: expectedAvatarPath \}\)[\s\S]*\.eq\("id", userData\.user\.id\)/);
+  assert.match(returningProfileEdit, /update\(\{[\s\S]*display_name: expectedDisplayName[\s\S]*avatar_path: expectedAvatarPath[\s\S]*gender: expectedGender[\s\S]*discovery_preference: expectedDiscoveryPreference[\s\S]*\.eq\("id", userData\.user\.id\)/);
   assert.match(returningProfileEdit, /storage\.from\("avatars"\)\.upload\(expectedAvatarPath/);
   assert.match(returningProfileEdit, /reconciliationError[\s\S]*reconciled\?\.display_name === expectedDisplayName[\s\S]*reconciled\.avatar_path === expectedAvatarPath/);
   assert.match(returningProfileEdit, /removeAvatarWithRetry[\s\S]*attempt <= 3/);

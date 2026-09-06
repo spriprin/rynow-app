@@ -32,7 +32,7 @@ async function createGuest(name) {
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   const { error: uploadError } = await guest.storage.from("avatars").upload(avatarPath, png, { contentType: "image/png" });
   assert.ifError(uploadError);
-  const { error: profileError } = await guest.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true });
+  const { error: profileError } = await guest.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true, gender: "prefer_not_to_say", discovery_preference: "everyone" });
   assert.ifError(profileError);
   return { client: guest, user: auth.user, session: auth.session, avatarPath, isAnonymous: auth.user.is_anonymous === true };
 }
@@ -72,12 +72,14 @@ test("Acceptance A–G against a configured Supabase project", { skip: enabled ?
   const { error: annaJoinError } = await anna.client.rpc("join_room_by_code", { p_join_code: room.join_code });
   assert.ifError(annaJoinError);
   await t.test("B — anonymous guest creates profile and membership", async () => {
-    const { data: profile, error: profileError } = await anna.client.from("profiles").select("id, display_name, age_confirmed_18").eq("id", anna.user.id).single();
+    const { data: profile, error: profileError } = await anna.client.from("profiles").select("id, display_name, age_confirmed_18, gender, discovery_preference").eq("id", anna.user.id).single();
     const { data: membership, error: membershipError } = await anna.client.from("room_members").select("room_id, user_id").eq("room_id", room.id).eq("user_id", anna.user.id).single();
     assert.ifError(profileError);
     assert.ifError(membershipError);
     assert.equal(profile.id, anna.user.id);
     assert.equal(profile.age_confirmed_18, true);
+    assert.equal(profile.gender, "prefer_not_to_say");
+    assert.equal(profile.discovery_preference, "everyone");
     assert.equal(membership.user_id, anna.user.id);
   });
 

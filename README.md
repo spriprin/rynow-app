@@ -31,6 +31,15 @@ than outcomes.
 - Organizer self-service Auth and the current-product demo are implemented and
   published. The organizer-first public landing rewrite is verified and published;
   its demo/Room creation choice sits directly below the hero.
+- A focused Gender Preferences + Mobile Room Viewport maintenance release is
+  prepared locally as a release candidate. New guests choose `male`, `female`
+  or `prefer_not_to_say`; the default viewer-side Show me value is respectively
+  Women, Men or Everyone and remains editable. Existing identities complete only
+  the missing fields; their UUID, name/photo, memberships, Matches, chats, Blocks
+  and Reports are preserved. Candidate filtering is performed by the server before
+  the existing Fair Exposure ranking and applies only to future assignments.
+  Individual gender/preferences are not returned to organizers and no new gender
+  analytics were added. This candidate is not yet migrated or deployed.
 - A pre-pilot returning-profile UX patch now lets a guest change the existing
   display name or photo from the Welcome Back screen without creating a new Auth
   session, profile or Room membership. It is published in Sites version 10. Its
@@ -43,11 +52,14 @@ than outcomes.
   secret is stored only in Supabase Auth. Existing valid guest sessions bypass
   the widget.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site`.
+- Current production frontend: Sites version 13, commit
+  `3f5f4603356506a200f3f5dba125cfe92d356051`.
 - Public frontend includes the verified organizer-first landing refresh and uses
   Sites environment revision 2.
 - Supabase project `xwycdnyxuluuhylcnnjh` is connected through the Supabase integration and can be queried or migrated directly.
-- Product release status: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
-  The verified release is deployed to the existing URL. Sprint 6 was not started.
+- Current production status: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
+  The Gender Preferences + Mobile Viewport candidate is held before the coordinated
+  migration/deployment gate pending explicit owner approval. Sprint 6 was not started.
 
 The authorized temporary Supabase Branch attempt failed without charge because
 Branching requires Pro. The owner then authorized a separate temporary Free
@@ -285,7 +297,9 @@ Local migration order:
 15. `20260824095156_pre_pilot_fk_indexes.sql`;
 16. `20260827163024_restore_closed_room_error_precedence.sql`;
 17. `20260828092916_restrict_replaced_avatar_reads.sql`;
-18. `20260829125141_allow_owner_avatar_cleanup.sql`.
+18. `20260829125141_allow_owner_avatar_cleanup.sql`;
+19. `20260903161156_gender_preferences_mobile_viewport.sql` — release candidate,
+    transaction-dry-run only; not yet applied to production.
 
 All eighteen versions are present in production migration history. Files 1–5 were
 baselined only after live catalog and behavior comparison; files 6–7 were
@@ -305,6 +319,15 @@ Physical deletion invalidates CDN copies (with propagation), while a browser tha
 already cached a legacy one-hour upload may retain its local copy until that older
 TTL expires.
 
+Migration 19 was created with official Supabase CLI 2.116.0 and is additive: it adds nullable constrained `gender` and
+`discovery_preference` fields for a non-breaking existing-user completion path and
+updates only the narrow join/Explore/Drop functions involved in profile completeness
+and candidate selection. The official CLI dry-run could not authenticate because no
+local Supabase access token is retained; the exact migration and focused GP-A–GP-I
+acceptance SQL both passed against the connected production database inside a single
+rollback-only transaction. Production migration history therefore intentionally
+remains at 18 versions until the frontend and backend can be released together.
+
 ## Pre-pilot presence and discovery model
 
 - Presence heartbeat: 60 seconds, visible/online tabs only.
@@ -321,6 +344,40 @@ TTL expires.
 - Private avatar URLs are cached below their signed lifetime, re-signed once after image failure, then fall back to initials without making the bucket public.
 - Auth 429 has a dedicated friendly state, but retry UX is not a capacity solution. The configured 1800/hour/IP limit passed the required 100-user sustained and 50-user burst same-NAT gates with zero 429.
 - Diagnostics log only operation/category/status and resource IDs where appropriate; they exclude chat bodies, report details, profile data and credentials.
+
+## Gender preferences maintenance release candidate
+
+- `profiles.gender`: `male | female | prefer_not_to_say`; existing rows remain
+  nullable until the one-time lightweight completion screen is submitted.
+- `profiles.discovery_preference`: `male | female | everyone`. Defaults are
+  `male → female`, `female → male`, `prefer_not_to_say → everyone`, and the user
+  can change the explicit value later from Profile.
+- Filtering is viewer-side only. A candidate must have a complete profile, but the
+  candidate's own Show me value is not treated as reciprocal compatibility and no
+  sexual-orientation inference is made.
+- Same Room, presence eligibility, self/Block exclusions and preference compatibility
+  are resolved before Fair Exposure. Ranking still uses only delivered impressions,
+  pending reservations, exposure bands, small randomness and newcomer behavior.
+- Existing Explore/Drop assignments do not reroll when a preference changes. Future
+  assignment fills use the new value. Incoming Interests, Matches and chats remain
+  visible and unchanged.
+- Organizer analytics receives no individual gender, Show me value, pair-level
+  preference or new gender aggregate.
+- Mobile uses the framework viewport contract `width=device-width, initial-scale=1`
+  without disabling accessibility zoom. Mobile text controls are at least 16px;
+  Room/card/header/modal flex children are width-constrained; main Room overflow is
+  contained while intentional incoming-avatar carousels remain scrollable. Existing
+  top/bottom safe-area rules are preserved.
+- Local GP-A–GP-I database acceptance passed in a rollback-only transaction. GP-J–GP-L
+  passed in browser emulation across 360/375/390/412/430px for Room home/Wall,
+  Explore, Incoming, Matches, Drop, chat, Profile, Leave and Safety states. Focused
+  fields stayed at 16px with visual scale 1 and no main horizontal overflow. Physical
+  iOS Safari and Android Chrome remain explicitly unexecuted until post-deployment QA.
+- Candidate verification: typecheck, lint and production build pass; the local suite
+  reports 24 pass, 0 fail and 10 explicitly gated live-only skips. The built browser
+  bundle contains no credential-shaped Supabase secret, service-role credential,
+  database URL/password or Turnstile secret. The final maintenance P0/P1 and live
+  regression status remain gated on the coordinated migration/deployment smoke.
 
 One physical phone completed QR → returning profile → Test1, then Welcome Back
 profile edit → Test2 → refresh. A second physical device was unavailable, so the

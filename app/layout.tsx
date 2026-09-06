@@ -1,5 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export function generateMetadata(): Metadata {
   const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://here-social-room.spriprin.chatgpt.site").origin;

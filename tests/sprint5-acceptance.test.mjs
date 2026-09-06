@@ -76,7 +76,7 @@ async function actor(name, joinCode, { deferJoin = false } = {}) {
   assert.ok(auth.user && auth.session);
   const avatarPath = `${auth.user.id}/sprint5-${crypto.randomUUID()}.png`;
   assert.ifError((await value.storage.from("avatars").upload(avatarPath, tinyPng, { contentType: "image/png" })).error);
-  assert.ifError((await value.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true })).error);
+  assert.ifError((await value.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true, gender: "prefer_not_to_say", discovery_preference: "everyone" })).error);
   if (!deferJoin) assert.ifError((await value.rpc("join_room_by_code", { p_join_code: joinCode })).error);
   return { client: value, user: auth.user, avatarPath };
 }

@@ -2,15 +2,15 @@
 /* eslint-disable @next/next/no-img-element -- avatars are short-lived signed Supabase Storage URLs. */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, Ban, CalendarDays, Check, Clock3, DoorOpen, Flag, ImagePlus, LockKeyhole, MapPin, MessageCircle, Radio, RefreshCw, Send, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, CalendarDays, Check, Clock3, DoorOpen, Flag, ImagePlus, LockKeyhole, MapPin, MessageCircle, Radio, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, X } from "lucide-react";
 import type { RealtimeChannel, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { logDiagnostic, retryRead, userFacingError } from "@/lib/reliability";
-import type { DropItem, DropItemAction, ExploreItem, ExploreState, FoundationProfile, FoundationRoom, IncomingInterest, MatchMessage, RoomDropState, RoomMatch, RoomPresenceState, RoomWallPerson } from "@/lib/types";
+import type { DiscoveryPreference, DropItem, DropItemAction, ExploreItem, ExploreState, FoundationProfile, FoundationRoom, Gender, IncomingInterest, MatchMessage, RoomDropState, RoomMatch, RoomPresenceState, RoomWallPerson } from "@/lib/types";
 import { AuthTurnstile, isTurnstileConfigured, type AuthTurnstileHandle } from "./AuthTurnstile";
 
-type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "verification" | "onboarding" | "ready" | "edit-profile" | "room" | "error";
-type OnboardingStep = 1 | 2 | 3;
+type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "verification" | "onboarding" | "profile-completion" | "ready" | "edit-profile" | "room" | "error";
+type OnboardingStep = 1 | 2 | 3 | 4;
 type RoomWallRpcRow = { id: string; display_name: string; avatar_path: string; joined_at: string };
 type DropItemRpcRow = { id: string; item_position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
 type ExploreItemRpcRow = { id: string; position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
@@ -21,11 +21,32 @@ type SafetyTarget = { userId: string; displayName: string; matchId: string | nul
 type ConnectionState = "online" | "offline" | "recovering";
 
 const REPORT_REASONS = ["Harassment", "Fake profile", "Inappropriate behavior", "Spam", "Safety concern", "Other"] as const;
+const PROFILE_SELECT = "id, display_name, avatar_path, age_confirmed_18, gender, discovery_preference";
+const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "prefer_not_to_say", label: "Prefer not to say" },
+];
+const DISCOVERY_OPTIONS: Array<{ value: DiscoveryPreference; label: string }> = [
+  { value: "female", label: "Women" },
+  { value: "male", label: "Men" },
+  { value: "everyone", label: "Everyone" },
+];
 const PRESENCE_HEARTBEAT_MS = 60_000;
 const ROOM_POLL_MS = 15_000;
 const SIGNED_AVATAR_SECONDS = 300;
 const SIGNED_AVATAR_CACHE_MS = 4 * 60 * 1000;
 const avatarUrlCache = new Map<string, { url: string; refreshAfter: number }>();
+
+function defaultDiscoveryPreference(gender: Gender): DiscoveryPreference {
+  if (gender === "male") return "female";
+  if (gender === "female") return "male";
+  return "everyone";
+}
+
+function hasCompletedDiscoveryProfile(profile: FoundationProfile) {
+  return profile.gender !== null && profile.discovery_preference !== null;
+}
 
 function initialScreenFor(room: FoundationRoom | null | undefined): Screen {
   if (room === null) return "missing";
@@ -136,6 +157,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState("");
   const [displayName, setDisplayName] = useState("");
+  const [gender, setGender] = useState<Gender | "">("");
+  const [discoveryPreference, setDiscoveryPreference] = useState<DiscoveryPreference | "">("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -154,6 +177,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const messageAttempt = useRef<{ matchId: string; body: string; id: string } | null>(null);
   const submittingReport = useRef(false);
   const reportAttempt = useRef<{ fingerprint: string; id: string } | null>(null);
+  const profileCompletionHasMembership = useRef(false);
+  const profileEditorReturn = useRef<"ready" | "room">("ready");
   const selectedMatchId = selectedMatch?.id || "";
   const activeRoomId = room?.id || "";
   const activeRoomStatus = room?.status;
@@ -357,7 +382,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     const client = getSupabaseBrowserClient();
     if (!client) throw new Error("Supabase is not configured");
     const userId = session.user.id;
-    const { data: savedProfile, error: profileError } = await client.from("profiles").select("id, display_name, avatar_path, age_confirmed_18").eq("id", userId).maybeSingle();
+    const { data: savedProfile, error: profileError } = await client.from("profiles").select(PROFILE_SELECT).eq("id", userId).maybeSingle();
     if (profileError) throw profileError;
     if (!savedProfile) {
       setScreen(resolvedRoom.status === "closed" ? "closed" : "onboarding");
@@ -367,6 +392,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     const typedProfile = savedProfile as FoundationProfile;
     setProfile(typedProfile);
     setDisplayName(typedProfile.display_name);
+    setGender(typedProfile.gender || "");
+    setDiscoveryPreference(typedProfile.discovery_preference || (typedProfile.gender ? defaultDiscoveryPreference(typedProfile.gender) : ""));
     const ownUrls = await signedUrlMap([typedProfile.avatar_path]);
     setOwnAvatarUrl(ownUrls.get(typedProfile.avatar_path) || "");
     const { data: membership, error: membershipError } = await client.from("room_members").select("room_id").eq("room_id", resolvedRoom.id).eq("user_id", userId).maybeSingle();
@@ -378,6 +405,11 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       }
       await loadConnections(resolvedRoom.id);
       setScreen("room");
+      return;
+    }
+    if (!hasCompletedDiscoveryProfile(typedProfile)) {
+      profileCompletionHasMembership.current = Boolean(membership);
+      setScreen("profile-completion");
       return;
     }
     if (membership) await enterRoom(resolvedRoom);
@@ -635,7 +667,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }
 
   async function finishOnboarding() {
-    if (!room || !photoFile || displayName.trim().length < 2 || !ageConfirmed) return;
+    if (!room || !photoFile || displayName.trim().length < 2 || !gender || !ageConfirmed) return;
     setBusy(true); setError("");
     try {
       const client = getSupabaseBrowserClient();
@@ -645,7 +677,14 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       const avatarPath = `${userData.user.id}/avatar-${crypto.randomUUID()}.${extensionFor(photoFile)}`;
       const { error: uploadError } = await client.storage.from("avatars").upload(avatarPath, photoFile, { contentType: photoFile.type, cacheControl: "300", upsert: false });
       if (uploadError) throw uploadError;
-      const nextProfile: FoundationProfile = { id: userData.user.id, display_name: displayName.trim(), avatar_path: avatarPath, age_confirmed_18: true };
+      const nextProfile: FoundationProfile = {
+        id: userData.user.id,
+        display_name: displayName.trim(),
+        avatar_path: avatarPath,
+        age_confirmed_18: true,
+        gender,
+        discovery_preference: discoveryPreference || defaultDiscoveryPreference(gender),
+      };
       const { error: profileError } = await client.from("profiles").upsert(nextProfile);
       if (profileError) throw profileError;
       setProfile(nextProfile);
@@ -662,11 +701,42 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     finally { setBusy(false); }
   }
 
-  function openProfileEditor() {
+  async function finishProfileCompletion() {
+    if (!room || !profile || !gender) return;
+    setBusy(true); setError("");
+    try {
+      const client = getSupabaseBrowserClient();
+      if (!client) throw new Error("Supabase is not configured");
+      const { data: userData, error: userError } = await client.auth.getUser();
+      if (userError || !userData.user || userData.user.id !== profile.id) throw userError || new Error("Guest session not found");
+      const preference = discoveryPreference || defaultDiscoveryPreference(gender);
+      const { data: savedProfile, error: profileError } = await client.from("profiles")
+        .update({ gender, discovery_preference: preference })
+        .eq("id", userData.user.id)
+        .select(PROFILE_SELECT)
+        .single();
+      if (profileError || !savedProfile) throw profileError || new Error("Profile could not be saved");
+      const nextProfile = savedProfile as FoundationProfile;
+      setProfile(nextProfile);
+      setGender(nextProfile.gender || "");
+      setDiscoveryPreference(nextProfile.discovery_preference || "");
+      if (profileCompletionHasMembership.current) await enterRoom(room);
+      else setScreen("ready");
+    } catch (reason) {
+      logDiagnostic("complete_profile_preferences", reason, { roomId: room.id });
+      setError(userFacingError(reason, "We couldn’t update your profile. Try again."));
+    }
+    finally { setBusy(false); }
+  }
+
+  function openProfileEditor(returnTo: "ready" | "room") {
     if (!profile) return;
+    profileEditorReturn.current = returnTo;
     setPhotoFile(null);
     setPhotoPreview("");
     setDisplayName(profile.display_name);
+    setGender(profile.gender || "");
+    setDiscoveryPreference(profile.discovery_preference || (profile.gender ? defaultDiscoveryPreference(profile.gender) : ""));
     setError("");
     setScreen("edit-profile");
   }
@@ -676,12 +746,14 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     setPhotoFile(null);
     setPhotoPreview("");
     setDisplayName(profile.display_name);
+    setGender(profile.gender || "");
+    setDiscoveryPreference(profile.discovery_preference || (profile.gender ? defaultDiscoveryPreference(profile.gender) : ""));
     setError("");
-    setScreen("ready");
+    setScreen(profileEditorReturn.current);
   }
 
   async function saveReturningProfile() {
-    if (!profile || displayName.trim().length < 2) return;
+    if (!profile || displayName.trim().length < 2 || !gender || !discoveryPreference) return;
     const client = getSupabaseBrowserClient();
     if (!client) return setError("Profile editing isn’t configured.");
     const profileClient = client;
@@ -689,6 +761,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     let uploadedPath = "";
     const expectedDisplayName = displayName.trim();
     let expectedAvatarPath = profile.avatar_path;
+    const expectedGender = gender;
+    const expectedDiscoveryPreference = discoveryPreference;
 
     async function removeAvatarWithRetry(path: string, diagnostic: string) {
       let lastError: unknown = null;
@@ -707,10 +781,15 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       if (savedProfile.avatar_path !== profile!.avatar_path) avatarUrlCache.delete(profile!.avatar_path);
       setProfile(savedProfile);
       setDisplayName(savedProfile.display_name);
+      setGender(savedProfile.gender || "");
+      setDiscoveryPreference(savedProfile.discovery_preference || "");
       setOwnAvatarUrl(ownUrls.get(savedProfile.avatar_path) || (savedProfile.avatar_path === profile!.avatar_path ? ownAvatarUrl : ""));
       setPhotoFile(null);
       setPhotoPreview("");
-      setScreen("ready");
+      setScreen(profileEditorReturn.current);
+      if (profileEditorReturn.current === "room" && room?.status === "open") {
+        void loadDiscovery(room.id).catch((reason: unknown) => logDiagnostic("refresh_discovery_after_profile_edit", reason, { roomId: room.id }));
+      }
     }
 
     try {
@@ -725,9 +804,14 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       }
 
       const { data: savedProfile, error: profileError } = await client.from("profiles")
-        .update({ display_name: expectedDisplayName, avatar_path: expectedAvatarPath })
+        .update({
+          display_name: expectedDisplayName,
+          avatar_path: expectedAvatarPath,
+          gender: expectedGender,
+          discovery_preference: expectedDiscoveryPreference,
+        })
         .eq("id", userData.user.id)
-        .select("id, display_name, avatar_path, age_confirmed_18")
+        .select(PROFILE_SELECT)
         .single();
       if (profileError || !savedProfile) throw profileError || new Error("Profile could not be saved");
 
@@ -740,12 +824,16 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       if (cleanupError) setError("Profile updated. We couldn't remove the previous stored photo yet. A previously opened link can remain cached for up to one hour (new uploads: five minutes).");
     } catch (reason) {
       const { data: currentProfile, error: reconciliationError } = await client.from("profiles")
-        .select("id, display_name, avatar_path, age_confirmed_18")
+        .select(PROFILE_SELECT)
         .eq("id", profile.id)
         .maybeSingle();
       const reconciled = currentProfile as FoundationProfile | null;
 
-      if (!reconciliationError && reconciled?.display_name === expectedDisplayName && reconciled.avatar_path === expectedAvatarPath) {
+      if (!reconciliationError
+        && reconciled?.display_name === expectedDisplayName
+        && reconciled.avatar_path === expectedAvatarPath
+        && reconciled.gender === expectedGender
+        && reconciled.discovery_preference === expectedDiscoveryPreference) {
         let cleanupError: unknown = null;
         if (uploadedPath && profile.avatar_path !== uploadedPath) {
           cleanupError = await removeAvatarWithRetry(profile.avatar_path, "remove_replaced_avatar_after_reconciliation");
@@ -1043,16 +1131,55 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }
 
   if (screen === "onboarding" && room) {
-    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card"><div className="foundation-progress"><i className={step >= 1 ? "active" : ""} /><i className={step >= 2 ? "active" : ""} /><i className={step >= 3 ? "active" : ""} /></div>{step === 1 && <><span className="eyebrow">STEP 1 OF 3</span><h1>Add your photo.</h1><p>Use the camera or choose one from your gallery.</p><label className={`foundation-photo-picker ${photoPreview ? "has-photo" : ""}`}><span style={photoPreview ? { backgroundImage: `url(${photoPreview})` } : undefined}>{photoPreview ? <Check /> : <ImagePlus />}</span><strong>{photoPreview ? "Photo selected" : "Camera or gallery"}</strong><small>Required · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label>{error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!photoFile} onClick={() => setStep(2)}>Continue <ArrowRight size={18} /></button></>}{step === 2 && <><button className="back-link" onClick={() => setStep(1)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 2 OF 3</span><h1>What’s your name?</h1><p>This is the only profile detail people in the Room will see.</p><label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label><button className="button button--lime button--wide" disabled={displayName.trim().length < 2} onClick={() => setStep(3)}>Continue <ArrowRight size={18} /></button></>}{step === 3 && <><button className="back-link" onClick={() => setStep(2)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 3 OF 3</span><h1>One last check.</h1><p>HERE is currently available only to adults.</p><label className="foundation-age-check"><input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} /><span><Check size={18} /></span><strong>I am 18 or older</strong></label>{error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!ageConfirmed || busy} onClick={finishOnboarding}>{busy ? "Joining…" : "Enter the Room"}<ArrowRight size={18} /></button><small className="foundation-privacy"><ShieldCheck size={14} />Your session and profile stay on this device.</small></>}</section></main>;
+    return <main className="foundation-onboarding">
+      <FoundationRoomHeader room={room} />
+      <section className="foundation-form-card">
+        <div className="foundation-progress"><i className={step >= 1 ? "active" : ""} /><i className={step >= 2 ? "active" : ""} /><i className={step >= 3 ? "active" : ""} /><i className={step >= 4 ? "active" : ""} /></div>
+        {step === 1 && <>
+          <span className="eyebrow">STEP 1 OF 4</span><h1>Add your photo.</h1><p>Use the camera or choose one from your gallery.</p>
+          <label className={`foundation-photo-picker ${photoPreview ? "has-photo" : ""}`}><span style={photoPreview ? { backgroundImage: `url(${photoPreview})` } : undefined}>{photoPreview ? <Check /> : <ImagePlus />}</span><strong>{photoPreview ? "Photo selected" : "Camera or gallery"}</strong><small>Required · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label>
+          {error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!photoFile} onClick={() => setStep(2)}>Continue <ArrowRight size={18} /></button>
+        </>}
+        {step === 2 && <>
+          <button className="back-link" onClick={() => setStep(1)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 2 OF 4</span><h1>What’s your name?</h1><p>This is the profile name people in the Room will see.</p>
+          <label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label>
+          <button className="button button--lime button--wide" disabled={displayName.trim().length < 2} onClick={() => setStep(3)}>Continue <ArrowRight size={18} /></button>
+        </>}
+        {step === 3 && <>
+          <button className="back-link" onClick={() => setStep(2)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 3 OF 4</span><h1>How do you identify?</h1><p>This sets a simple starting preference. You can change who you want to see from your profile. Organizers do not receive your individual answer.</p>
+          <ProfileChoices name="onboarding-gender" label="Gender" value={gender} options={GENDER_OPTIONS} onChange={(value) => { setGender(value); setDiscoveryPreference(defaultDiscoveryPreference(value)); }} />
+          <button className="button button--lime button--wide" disabled={!gender} onClick={() => setStep(4)}>Continue <ArrowRight size={18} /></button>
+        </>}
+        {step === 4 && <>
+          <button className="back-link" onClick={() => setStep(3)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 4 OF 4</span><h1>One last check.</h1><p>HERE is currently available only to adults.</p>
+          <label className="foundation-age-check"><input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} /><span><Check size={18} /></span><strong>I am 18 or older</strong></label>
+          {error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!ageConfirmed || busy} onClick={finishOnboarding}>{busy ? "Joining…" : "Enter the Room"}<ArrowRight size={18} /></button><small className="foundation-privacy"><ShieldCheck size={14} />Your profile is saved for your next HERE event.</small>
+        </>}
+      </section>
+    </main>;
+  }
+
+  if (screen === "profile-completion" && room && profile) {
+    return <main className="foundation-onboarding">
+      <FoundationRoomHeader room={room} />
+      <section className="foundation-form-card returning-card profile-completion-card">
+        <ResilientAvatar className="returning-avatar" path={profile.avatar_path} url={ownAvatarUrl} name={profile.display_name} />
+        <span className="eyebrow">ONE QUICK THING</span><h1>How do you identify?</h1><p>We added a simple discovery preference. Choose once, then continue with your existing profile. Organizers do not receive your individual answer.</p>
+        <ProfileChoices name="returning-gender" label="Gender" value={gender} options={GENDER_OPTIONS} onChange={(value) => { setGender(value); setDiscoveryPreference(defaultDiscoveryPreference(value)); }} />
+        {error && <p className="form-error">{error}</p>}
+        <button className="button button--lime button--wide" disabled={!gender || busy} onClick={finishProfileCompletion}>{busy ? "Saving…" : "Continue"}<ArrowRight size={18} /></button>
+        <small className="foundation-privacy"><ShieldCheck size={14} />Your name, photo, connections and guest identity stay unchanged.</small>
+      </section>
+    </main>;
   }
 
   if (screen === "ready" && room && profile) {
-    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card returning-card"><ResilientAvatar className="returning-avatar" path={profile.avatar_path} url={ownAvatarUrl} name={profile.display_name} /><span className="eyebrow">WELCOME BACK</span><h1>Hi, {profile.display_name}.</h1><p>Your profile is ready. Join this event’s Room?</p>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={busy} onClick={joinReturningGuest}>{busy ? "Joining…" : "Join Room"}<ArrowRight size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={openProfileEditor}>Edit profile</button></div></section></main>;
+    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card returning-card"><ResilientAvatar className="returning-avatar" path={profile.avatar_path} url={ownAvatarUrl} name={profile.display_name} /><span className="eyebrow">WELCOME BACK</span><h1>Hi, {profile.display_name}.</h1><p>Your profile is ready. Join this event’s Room?</p>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={busy} onClick={joinReturningGuest}>{busy ? "Joining…" : "Join Room"}<ArrowRight size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={() => openProfileEditor("ready")}>Edit profile</button></div></section></main>;
   }
 
   if (screen === "edit-profile" && room && profile) {
     const editPhotoUrl = photoPreview || ownAvatarUrl;
-    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card"><button className="back-link" disabled={busy} onClick={cancelProfileEditor}><ArrowLeft size={17} />Back</button><span className="eyebrow">YOUR PROFILE</span><h1>Update your profile.</h1><p>Change the name or photo people at this event will see.</p><label className="foundation-photo-picker has-photo"><span style={editPhotoUrl ? { backgroundImage: `url(${editPhotoUrl})` } : undefined}>{photoFile ? <Check /> : <ImagePlus />}</span><strong>{photoFile ? "New photo selected" : "Change photo"}</strong><small>Camera or gallery · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label><label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={displayName.trim().length < 2 || busy} onClick={saveReturningProfile}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={cancelProfileEditor}>Cancel</button></div><small className="foundation-privacy"><ShieldCheck size={14} />Your guest identity and 18+ confirmation stay unchanged.</small></section></main>;
+    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card profile-editor-card"><button className="back-link" disabled={busy} onClick={cancelProfileEditor}><ArrowLeft size={17} />Back</button><span className="eyebrow">YOUR PROFILE</span><h1>Update your profile.</h1><p>Change what people see and who appears in your future Explore and Drops.</p><label className="foundation-photo-picker has-photo"><span style={editPhotoUrl ? { backgroundImage: `url(${editPhotoUrl})` } : undefined}>{photoFile ? <Check /> : <ImagePlus />}</span><strong>{photoFile ? "New photo selected" : "Change photo"}</strong><small>Camera or gallery · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label><label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label><ProfileChoices name="profile-gender" label="Gender" value={gender} options={GENDER_OPTIONS} onChange={setGender} /><ProfileChoices name="profile-discovery" label="Show me" value={discoveryPreference} options={DISCOVERY_OPTIONS} onChange={setDiscoveryPreference} /><small className="profile-choice-note">Changes apply to future selections. Existing cards, incoming Interests, Matches and chats stay unchanged. Organizers do not receive your individual gender or Show me setting.</small>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={displayName.trim().length < 2 || !gender || !discoveryPreference || busy} onClick={saveReturningProfile}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={cancelProfileEditor}>Cancel</button></div><small className="foundation-privacy"><ShieldCheck size={14} />Your guest identity and 18+ confirmation stay unchanged.</small></section></main>;
   }
 
   if (screen === "room" && room) {
@@ -1092,7 +1219,10 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       <main className="foundation-room-screen">
         <header>
           <span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span>
-          <span className={`foundation-live ${room.status === "closed" ? "foundation-live--ended" : ""}`}><i />{room.status === "closed" ? "ROOM ENDED" : "ROOM OPEN"}</span>
+          <div className="foundation-room-actions">
+            {profile && <button className="room-profile-button" type="button" onClick={() => openProfileEditor("room")} aria-label="Edit profile"><UserRound size={16} /><span>Profile</span></button>}
+            <span className={`foundation-live ${room.status === "closed" ? "foundation-live--ended" : ""}`}><i />{room.status === "closed" ? "ROOM ENDED" : "ROOM OPEN"}</span>
+          </div>
         </header>
         <ConnectionBanner state={connectionState} onRetry={() => {
           realtimeReconnectAttempts.current = 0;
@@ -1242,6 +1372,22 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }
 
   return null;
+}
+
+function ProfileChoices<T extends string>({ name, label, value, options, onChange }: {
+  name: string;
+  label: string;
+  value: T | "";
+  options: Array<{ value: T; label: string }>;
+  onChange: (value: T) => void;
+}) {
+  return <fieldset className="profile-choice-group">
+    <legend>{label}</legend>
+    <div>{options.map((option) => <label className={value === option.value ? "selected" : ""} key={option.value}>
+      <input type="radio" name={name} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />
+      <span>{option.label}</span><Check size={16} />
+    </label>)}</div>
+  </fieldset>;
 }
 
 function FoundationRoomHeader({ room }: { room: FoundationRoom }) {

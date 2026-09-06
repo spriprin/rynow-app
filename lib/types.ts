@@ -34,6 +34,8 @@ export interface ChatMessage {
 }
 
 export type FoundationRoomStatus = "draft" | "open" | "closed";
+export type Gender = "male" | "female" | "prefer_not_to_say";
+export type DiscoveryPreference = "male" | "female" | "everyone";
 
 export interface FoundationRoom {
   id: string;
@@ -52,6 +54,8 @@ export interface FoundationProfile {
   display_name: string;
   avatar_path: string;
   age_confirmed_18: boolean;
+  gender: Gender | null;
+  discovery_preference: DiscoveryPreference | null;
 }
 
 export interface RoomWallPerson {

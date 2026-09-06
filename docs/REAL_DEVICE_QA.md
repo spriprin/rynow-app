@@ -20,7 +20,12 @@ Include at least:
 - [ ] Anonymous join shows no email/password/Google guest screen.
 - [ ] Camera avatar input works.
 - [ ] Gallery avatar input works.
-- [ ] Name and 18+ onboarding completes once.
+- [ ] Name, gender and 18+ onboarding completes once; default Show me is Women for
+      male, Men for female and Everyone for prefer-not-to-say.
+- [ ] Existing pre-migration profile sees only the lightweight gender completion;
+      UUID, name/photo, membership, Matches and chat remain unchanged.
+- [ ] Profile edit changes name/photo/gender/Show me; existing assigned cards and
+      Incoming Interests stay visible, while the next assignment uses the new value.
 - [ ] Refresh keeps the same profile and membership.
 - [ ] Room Wall count and limited real avatar sample load.
 - [ ] Drop countdown follows server state and reaches ready/forming correctly.
@@ -37,6 +42,10 @@ Include at least:
 - [ ] Report and Report and Block complete once on double tap.
 - [ ] Organizer closes Room; new discovery stops while existing Match/chat remains.
 - [ ] Safe areas, modals, scroll, countdown and destructive actions remain usable.
+- [ ] Repeat Room home/Wall, Explore, Incoming, Matches, Drop, chat, Profile, Leave
+      and Safety at 360/375/390/412/430px-equivalent widths: no main horizontal scroll.
+- [ ] Focus onboarding name, Profile name, chat, organizer, report select/textarea:
+      no unintended iOS auto-zoom; browser pinch zoom remains available.
 
 ## Result template
 

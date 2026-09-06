@@ -35,6 +35,8 @@ test("returning guest can replace only the current persisted profile fields", { 
     display_name: "Before Edit",
     avatar_path: oldAvatarPath,
     age_confirmed_18: true,
+    gender: "male",
+    discovery_preference: "female",
   })).error);
   const oldSignedBefore = await client.storage.from("avatars").createSignedUrl(oldAvatarPath, 600);
   assert.ifError(oldSignedBefore.error);
@@ -42,9 +44,9 @@ test("returning guest can replace only the current persisted profile fields", { 
 
   assert.ifError((await client.storage.from("avatars").upload(newAvatarPath, png, { contentType: "image/png", cacheControl: "300" })).error);
   const { data: updated, error: updateError } = await client.from("profiles")
-    .update({ display_name: "After Edit", avatar_path: newAvatarPath })
+    .update({ display_name: "After Edit", avatar_path: newAvatarPath, gender: "male", discovery_preference: "everyone" })
     .eq("id", userId)
-    .select("id, display_name, avatar_path, age_confirmed_18")
+    .select("id, display_name, avatar_path, age_confirmed_18, gender, discovery_preference")
     .single();
   assert.ifError(updateError);
   assert.deepEqual(updated, {
@@ -52,6 +54,8 @@ test("returning guest can replace only the current persisted profile fields", { 
     display_name: "After Edit",
     avatar_path: newAvatarPath,
     age_confirmed_18: true,
+    gender: "male",
+    discovery_preference: "everyone",
   });
 
   const oldSigned = await client.storage.from("avatars").createSignedUrl(oldAvatarPath, 60);

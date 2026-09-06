@@ -34,7 +34,7 @@ async function createGuest(name, joinCode) {
   const avatarPath = `${auth.user.id}/sprint3-${crypto.randomUUID()}.png`;
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=", "base64");
   assert.ifError((await guest.storage.from("avatars").upload(avatarPath, png, { contentType: "image/png" })).error);
-  assert.ifError((await guest.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true })).error);
+  assert.ifError((await guest.from("profiles").insert({ id: auth.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true, gender: "prefer_not_to_say", discovery_preference: "everyone" })).error);
   assert.ifError((await guest.rpc("join_room_by_code", { p_join_code: joinCode })).error);
   return { client: guest, user: auth.user, name };
 }

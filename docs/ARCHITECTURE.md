@@ -39,6 +39,15 @@ rooms 1:N private instrumentation and validated safety attribution
 
 `profiles` never stores `current_room_id`. A browser identity can reuse one minimal profile across many Rooms; event presence is the canonical `(room_id, user_id)` membership.
 
+The Gender Preferences maintenance candidate adds two nullable constrained profile
+fields: `gender` (`male | female | prefer_not_to_say`) and
+`discovery_preference` (`male | female | everyone`). Null is a deliberate migration
+state for existing profiles, not a usable discovery value. On the next relevant open
+Room visit, an existing identity updates only these missing fields through its
+existing self-only profile RLS path. New profiles submit them with name, photo and
+18+ confirmation. Organizers receive neither raw field through analytics or any
+organizer RPC, and this release adds no gender aggregates.
+
 When a valid returning session has a profile but no membership in the scanned
 Room, the Welcome Back boundary offers either explicit Room join or profile edit.
 The editor revalidates the current user with `auth.getUser()`, updates only the
@@ -185,7 +194,18 @@ Eligibility is applied before ranking:
 2. complete 18+ profile;
 3. not self;
 4. pair is not blocked;
-5. candidate has not previously been seen by this viewer.
+5. candidate gender matches the viewer's explicit `discovery_preference`;
+6. candidate has not previously been seen by this viewer and is not already reserved.
+
+The compatibility rule is intentionally viewer-side. Candidate profile completeness
+is required, but the candidate's own preference is not checked against the viewer;
+this is not an orientation or reciprocal-compatibility model. The filter is inside
+`claim_explore_batch`, `explore_state`, `claim_your_drop` and `room_drop_state`
+before exposure ranking, so the browser never receives the unfiltered pool. Existing
+valid `explore_items` and `drop_items` are returned unchanged after an edit; only
+future item insertion/fill uses the new preference. The incoming-Interest RPC is not
+filtered, preserving prior direct Interests when either participant later edits a
+preference.
 
 Explore and Drops share one opportunity calculation: actual delivered impressions
 (`first_seen_at`) plus pending reservations across both modes. A small
@@ -261,7 +281,7 @@ the official CLI, transaction-dry-run, applied live and verified. Sprint 5.1
 added one core revision plus three narrow follow-ups, each transaction-dry-run
 before application. A final compatibility migration restored the established
 closed-Room error precedence without changing eligibility or access. Remote
-history now contains eighteen ordered versions through
+history currently contains eighteen ordered versions through
 `20260829125141_allow_owner_avatar_cleanup`:
 
 - `20260824093231_pre_pilot_core_revision`;
@@ -271,6 +291,16 @@ history now contains eighteen ordered versions through
 - `20260827163024_restore_closed_room_error_precedence`;
 - `20260828092916_restrict_replaced_avatar_reads`;
 - `20260829125141_allow_owner_avatar_cleanup`.
+
+The additive release-candidate file
+`20260903161156_gender_preferences_mobile_viewport.sql` is intentionally not yet in
+remote history. Official Supabase CLI 2.116.0 created it. CLI `db push --dry-run` could not
+authenticate because no persistent CLI token is stored, so no success was claimed.
+The connected Supabase integration instead executed the exact migration plus focused
+GP-A–GP-I acceptance in a transaction and rolled everything back; SQL/DDL and the
+behavioral assertions passed with no production mutation. It must be applied only in
+the same approved release window as its frontend because the new server completeness
+contract and the new one-time UI step are coupled.
 
 The generic `is_room_member(room, user)` and
 `shares_active_room(viewer, target)` functions remain available only to trusted
@@ -360,6 +390,32 @@ fresh Managed-challenge token, so no organizer request or test identity was
 created. The remaining fresh organizer and two-guest path must be performed in
 an ordinary human browser; CAPTCHA must not be bypassed or disabled for it.
 
+## Mobile viewport boundary
+
+The root layout now owns an explicit framework `Viewport` export with
+`width=device-width` and `initialScale=1`; no maximum scale or `user-scalable=no` is
+used. The prior form inheritance allowed Room/Profile/chat controls to inherit the
+12px label size, which is an iOS Safari auto-zoom trigger. All mobile input, textarea
+and select controls are now explicitly at least 16px. Room roots are constrained to
+the viewport, flex/grid children use `min-width: 0` where their content may be long,
+headings wrap safely, and fixed sheets remain within the viewport. Existing
+`safe-area-inset-top`/`safe-area-inset-bottom` behavior is preserved for Room chrome,
+chat composer and bottom sheets.
+
+Browser-emulated GP-J–GP-L coverage exercised widths 360, 375, 390, 412 and 430px
+across Room home/Wall, Explore/Drop cards, Incoming, Matches, chat, Profile, Leave and
+Safety. Main document width never exceeded the effective viewport, visible fields
+computed to 16px and focus retained visual scale 1. This is an emulation result;
+physical iOS/Android testing remains a separate post-deployment gate.
+
+The maintenance candidate passes typecheck, lint, production build, 24/24 runnable
+local contracts and the rollback-only database acceptance; 10 credential-gated live
+tests remain explicitly skipped before the coordinated release. The browser bundle
+has no credential-shaped Supabase secret/service-role key, database credential or
+Turnstile secret. This is not yet a final production P0/P1 claim: migration application,
+remote advisor/history verification, live regression and production smoke must follow
+the same explicitly approved release window.
+
 ## Public landing boundary
 
 The organizer-first public landing rewrite is presentation-only. `/` remains a
@@ -382,11 +438,12 @@ on 1 September 2026, and it is included in the current production frontend.
 
 ## Release boundary
 
-The verified application was published as Sites version 10 from commit
-`25d6613ece09ccaf8268fdb3fd0b45a0b2908dd8`, using Sites environment revision 2,
-on the existing production URL. It has a reconciled eighteen-version migration
-history, supported Turnstile protection and the verified 1800/hour/IP anonymous
-setting.
+The current production frontend is Sites version 13 from commit
+`3f5f4603356506a200f3f5dba125cfe92d356051`, using Sites environment revision 2
+on the existing production URL. Version 10 introduced the verified returning-profile
+release; versions 11–13 contain the approved organizer-first landing and section-order
+updates. Production has a reconciled eighteen-version migration history, supported
+Turnstile protection and the verified 1800/hour/IP anonymous setting.
 AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
 strict final live runner passed 92/92 tests with 0 fail and 0 skip across
 Organizer Auth, Sprint 1–5 and Sprint 5.1, including the real 603-second presence

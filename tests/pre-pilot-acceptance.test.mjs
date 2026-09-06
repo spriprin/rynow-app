@@ -55,7 +55,7 @@ async function actor(name) {
   assert.ok(result.data.user && result.data.session);
   const avatarPath = `${result.data.user.id}/pp-${crypto.randomUUID()}.png`;
   assert.ifError((await value.storage.from("avatars").upload(avatarPath, tinyPng, { contentType: "image/png" })).error);
-  assert.ifError((await value.from("profiles").insert({ id: result.data.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true })).error);
+  assert.ifError((await value.from("profiles").insert({ id: result.data.user.id, display_name: name, avatar_path: avatarPath, age_confirmed_18: true, gender: "prefer_not_to_say", discovery_preference: "everyone" })).error);
   return { client: value, user: result.data.user, avatarPath };
 }
 
