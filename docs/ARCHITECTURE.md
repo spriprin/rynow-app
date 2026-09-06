@@ -280,9 +280,10 @@ Phase 0 hardening migrations were then applied normally. Three additive Sprint
 the official CLI, transaction-dry-run, applied live and verified. Sprint 5.1
 added one core revision plus three narrow follow-ups, each transaction-dry-run
 before application. A final compatibility migration restored the established
-closed-Room error precedence without changing eligibility or access. Remote
-history currently contains eighteen ordered versions through
-`20260829125141_allow_owner_avatar_cleanup`:
+closed-Room error precedence without changing eligibility or access. The focused
+maintenance migration was then applied in the coordinated version 14 release.
+Remote history currently contains nineteen ordered versions through
+`20260906125841_gender_preferences_mobile_viewport`:
 
 - `20260824093231_pre_pilot_core_revision`;
 - `20260824094220_fix_explore_replacement_position`;
@@ -290,17 +291,18 @@ history currently contains eighteen ordered versions through
 - `20260824095156_pre_pilot_fk_indexes`;
 - `20260827163024_restore_closed_room_error_precedence`;
 - `20260828092916_restrict_replaced_avatar_reads`;
-- `20260829125141_allow_owner_avatar_cleanup`.
+- `20260829125141_allow_owner_avatar_cleanup`;
+- `20260906125841_gender_preferences_mobile_viewport`.
 
-The additive release-candidate file
-`20260903161156_gender_preferences_mobile_viewport.sql` is intentionally not yet in
-remote history. Official Supabase CLI 2.116.0 created it. CLI `db push --dry-run` could not
-authenticate because no persistent CLI token is stored, so no success was claimed.
-The connected Supabase integration instead executed the exact migration plus focused
-GP-A–GP-I acceptance in a transaction and rolled everything back; SQL/DDL and the
-behavioral assertions passed with no production mutation. It must be applied only in
-the same approved release window as its frontend because the new server completeness
-contract and the new one-time UI step are coupled.
+The additive maintenance migration is now
+`20260906125841_gender_preferences_mobile_viewport.sql` in both local and remote
+history. Official Supabase CLI 2.116.0 created the original SQL. Before release, the
+connected Supabase integration executed the exact migration plus focused GP-A–GP-I
+acceptance in a transaction and rolled everything back; SQL/DDL and behavioral
+assertions passed with no production mutation. On 6 September 2026 the owner approved
+the coupled release: the integration applied the migration, Sites version 14 was
+published immediately afterward, and GP-A–GP-I passed again against the live schema
+inside a rollback-only transaction. No GP test profiles were retained.
 
 The generic `is_room_member(room, user)` and
 `shares_active_room(viewer, target)` functions remain available only to trusted
@@ -324,8 +326,8 @@ Current advisor classification:
 - the advisor's composite-FK notice for `(drop_id, room_id)` is covered for equality lookups by the existing `(room_id, drop_id)` index and leading `drop_id` primary-key column; a duplicate index was not added;
 - unused-index notices are expected immediately after adding safety/instrumentation indexes to a new test-heavy workload.
 
-The post-fix production advisor run reports no ERROR findings. Security has 6
-INFO and 51 WARN notices; Performance has 18 INFO and no ERROR. The categories
+The post-release production advisor run reports no ERROR findings. Security has 6
+INFO and 51 WARN notices; Performance has 17 INFO and no ERROR. The categories
 are intentional deny-all/RPC-only tables, reviewed identity-bound product RPCs,
 the intentional anonymous guest model and the existing leaked-password-protection
 setting. Performance advisor suggestions
@@ -406,15 +408,20 @@ Browser-emulated GP-J–GP-L coverage exercised widths 360, 375, 390, 412 and 43
 across Room home/Wall, Explore/Drop cards, Incoming, Matches, chat, Profile, Leave and
 Safety. Main document width never exceeded the effective viewport, visible fields
 computed to 16px and focus retained visual scale 1. This is an emulation result;
-physical iOS/Android testing remains a separate post-deployment gate.
+physical iOS/Android testing remains a separate post-deployment gate. The production
+v14 smoke repeated the 390×844 geometry check on landing, demo, organizer and Room
+states: scale stayed 1, organizer/Room fields computed to 16px and no main horizontal
+overflow was found.
 
-The maintenance candidate passes typecheck, lint, production build, 24/24 runnable
-local contracts and the rollback-only database acceptance; 10 credential-gated live
-tests remain explicitly skipped before the coordinated release. The browser bundle
-has no credential-shaped Supabase secret/service-role key, database credential or
-Turnstile secret. This is not yet a final production P0/P1 claim: migration application,
-remote advisor/history verification, live regression and production smoke must follow
-the same explicitly approved release window.
+The maintenance release passes typecheck, lint, production build, 24/24 runnable local
+contracts and the rollback-only live database acceptance; 10 credential-gated tests
+remain explicitly skipped in the ordinary local command. Remote history, constraints,
+function grants and advisors were verified after application. The production v14 scan
+loaded 10 observed Room-route assets and found no credential-shaped Supabase secret,
+service-role key, database URL/password or Turnstile secret. The historical strict
+Sprint 1–5 + 5.1 live runner remains 92/92 with 0 fail and 0 skip; it was not repeated
+against production after the authorized isolated CAPTCHA project was deleted. The
+focused live maintenance suite and non-live regression are green, with P0=0 and P1=0.
 
 ## Public landing boundary
 
@@ -438,21 +445,23 @@ on 1 September 2026, and it is included in the current production frontend.
 
 ## Release boundary
 
-The current production frontend is Sites version 13 from commit
-`3f5f4603356506a200f3f5dba125cfe92d356051`, using Sites environment revision 2
+The current production frontend is Sites version 14 from commit
+`796796b24139222b0af402f8e7c05647ee1c8751`, using Sites environment revision 2
 on the existing production URL. Version 10 introduced the verified returning-profile
 release; versions 11–13 contain the approved organizer-first landing and section-order
-updates. Production has a reconciled eighteen-version migration history, supported
-Turnstile protection and the verified 1800/hour/IP anonymous setting.
+updates; version 14 adds gender preferences and the mobile Room viewport correction.
+Production has a reconciled nineteen-version migration history, supported Turnstile
+protection and the verified 1800/hour/IP anonymous setting.
 AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
 strict final live runner passed 92/92 tests with 0 fail and 0 skip across
 Organizer Auth, Sprint 1–5 and Sprint 5.1, including the real 603-second presence
 test. Typecheck, lint, Auth harness, static/render/security contracts and the
-production build are also green (22/22 local tests). P0=0 and P1=0, and the
-owner-authorized publication completed successfully. Production smoke passed for
-the read-only and negative-security cases above. The new organizer/Room/two-guest
-live path remains blocked only on obtaining a legitimate Managed-challenge proof
-in an ordinary human browser. The human-browser run has since created the real
+production build are also green. The current maintenance suite reports 24 pass,
+0 fail and 10 explicit live-only skips. P0=0 and P1=0, and the owner-authorized
+version 14 publication completed successfully. Production smoke passed for `/`,
+`/demo`, `/organizer`, open Room resolution/onboarding/session refresh, closed Room
+rejection, invalid Room handling, mobile geometry and browser-secret scanning. The
+human-browser run had previously created the real
 open Room `Test1`; one returning guest reused a nine-day-old identity/profile,
 created one active membership and refreshed presence 209 seconds after join
 without duplication. The same identity then opened real Room `Test2`, updated
@@ -468,3 +477,12 @@ Version 10 post-deploy checks returned HTTP 200 for the landing page, organizer,
 isolated demo and real `Test1` join route. All 13 referenced browser bundles
 loaded successfully; `Edit profile` is present in the deployed bundle and no
 service-role key, Supabase secret key or database credential was found.
+
+Version 14 post-deploy checks resolved real Room `Test2`, created one fresh anonymous
+identity through the Managed widget, reached step 1 of the four-step onboarding and
+reused that identity after refresh. No profile or membership was created before the
+required photo/name/gender/18+ completion. A closed Room returned `This Room has
+ended.` with zero new membership, and an invalid code returned the intended not-found
+state. The 10 observed assets loaded successfully and contained only the expected
+publishable Supabase key shape; no secret/service-role/Turnstile-secret/database URL
+was present. Physical-device and two-device interaction QA remain NOT EXECUTED.

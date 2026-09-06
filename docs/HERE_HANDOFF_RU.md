@@ -13,15 +13,15 @@
   always-on Explore, разделённое presence, Leave/Rejoin, adaptive Interest Budget
   и aggregate Explore analytics. Функциональный PP-набор зелёный, frontend опубликован.
 - Self-service регистрация organizer и актуальные landing/demo опубликованы.
-- Подготовлен, но ещё не опубликован focused maintenance RC Gender Preferences +
-  Mobile Room Viewport. Новый guest выбирает `male`, `female` или
+- Focused maintenance release Gender Preferences + Mobile Room Viewport применён
+  в live Supabase и опубликован как Sites version 14. Новый guest выбирает `male`, `female` или
   `prefer_not_to_say`; default Show me соответственно Women, Men или Everyone и
   затем редактируется в Profile. Existing guest проходит только короткий
   `One quick thing`, не пересоздавая UUID, имя/фото, memberships, Matches, chats,
   Blocks или Reports. Server фильтрует будущие Explore/Drop assignments до Fair
   Exposure; текущие карточки не reroll, Incoming Interests не скрываются.
   Organizer не получает raw gender/preferences, pair-level данные или новую gender
-  analytics. Sprint 6 не начат.
+  analytics. Production smoke и focused live acceptance прошли; Sprint 6 не начат.
 - Подготовлен organizer-first rewrite публичного `/`: один QR, browser entry,
   limited same-event discovery, private Interest, mutual Match, IRL-встреча,
   privacy и aggregate analytics объясняются простым языком без внутренних
@@ -47,12 +47,11 @@
   Auth. CAPTCHA включена.
 - Public URL: `https://here-social-room.spriprin.chatgpt.site` — опубликованный
   organizer-first landing с Sites environment revision 2.
-- Текущий production frontend — Sites version 13, commit
-  `3f5f4603356506a200f3f5dba125cfe92d356051`; maintenance RC пока локальный.
+- Текущий production frontend — Sites version 14, commit
+  `796796b24139222b0af402f8e7c05647ee1c8751`.
 - Статус текущего production: **PRE-PILOT RELEASE GATES PASS (P0=0, P1=0)**.
-  Gender Preferences + Mobile Viewport RC проходит отдельный pre-deploy gate и
-  ожидает явного разрешения на согласованное migration+frontend обновление.
-  Sprint 6 не начинался.
+  Gender Preferences + Mobile Viewport release согласованно мигрирован, опубликован
+  и проверен 6 сентября 2026 года. Sprint 6 не начинался.
 
 24 августа была предпринята разрешённая попытка создать временную Supabase
 Branch, но Management API вернул: `Branching is supported only on the Pro plan
@@ -105,6 +104,15 @@ Production smoke version 10 получил HTTP 200 для `/`, `/organizer`, `/
 реального `Test1` join route. Все 13 browser bundles загрузились, `Edit profile`
 присутствует в deployed bundle, service-role/Supabase secret/database credentials
 не обнаружены.
+
+Production smoke version 14 повторно проверил `/`, `/demo`, `/organizer`, open
+`Test2`, closed Room и invalid Room на 390×844. `Test2` дошёл до нового шага 1/4;
+refresh использовал ту же единственную anonymous identity, не создавая profile или
+membership до завершения обязательных photo/name/gender/18+. Closed Room показал
+`This Room has ended.` и не создал membership; invalid code показал штатный not-found.
+Scale остался 1, поля были 16px, main horizontal overflow отсутствовал. Все 10
+наблюдавшихся ресурсов Room route загрузились; secret/service-role/Turnstile-secret/
+database URL не обнаружены, ожидаемый publishable key присутствует.
 
 Authenticated Dashboard показал фактическое значение Free-project:
 `rate_limit_anonymous_users = 30/hour/IP`; поле доступно для редактирования, IP
@@ -216,7 +224,7 @@ demo и closed QR Room. Горизонтального overflow нет, пров
 не меньше 44 px. Физические iOS Safari/Android Chrome ещё не тестировались;
 чеклист готов в `docs/REAL_DEVICE_QA.md`.
 
-Для maintenance RC мобильная матрица расширена до 360/375/390/412/430×844 и
+Для maintenance release мобильная матрица расширена до 360/375/390/412/430×844 и
 покрывает Room home/Wall, Explore, Drop, Interested in You, Matches, chat, Profile,
 Leave и Safety. Во всех 30 сочетаниях main document не шире effective viewport,
 видимые text inputs/select/textarea имеют 16px, а focus сохраняет visual scale 1.
@@ -328,10 +336,11 @@ live Sprint 2 regression run. Затем применены три additive Spri
 20260827163024_restore_closed_room_error_precedence.sql
 20260828092916_restrict_replaced_avatar_reads.sql
 20260829125141_allow_owner_avatar_cleanup.sql
+20260906125841_gender_preferences_mobile_viewport.sql
 ```
 
-Remote migration API видит все восемнадцать версий. Две последние additive
-migrations ограничивают non-owner avatar reads актуальным `avatar_path` и
+Remote migration API видит все девятнадцать версий. Миграции 17–18
+ограничивают non-owner avatar reads актуальным `avatar_path` и
 сохраняют owner SELECT, необходимый штатному Storage cleanup; чужая папка по-
 прежнему недоступна. Предыдущая compatibility migration восстанавливает контракт
 ошибки `This Room has ended.` в `claim_your_drop` и `send_interest`, не меняя
@@ -340,34 +349,37 @@ Sprint 4–5.1 SQL сначала проверен в транзакции с ro
 Применённые migration-файлы неизменяемы.
 
 Новая additive migration
-`20260903161156_gender_preferences_mobile_viewport.sql` создана официальным CLI,
-но production ещё не меняет: history намеренно остаётся 18 версий до
-согласованного frontend+backend release. Локальный CLI dry-run не прошёл Auth из-за
-отсутствия сохранённого access token — это не было выдано за PASS. Вместо этого
-подключённый Supabase выполнил exact migration и GP-A–GP-I SQL внутри одной
-транзакции с `ROLLBACK`: DDL и behavioral assertions PASS, постоянных schema/data
-изменений нет. Применять migration отдельно от нового frontend нельзя, потому что
-новый join/discovery completeness contract требует одновременно доступный UI
-completion step.
+`20260906125841_gender_preferences_mobile_viewport.sql` создана официальным CLI и
+6 сентября применена подключённой Supabase integration в том же release window,
+что и Sites version 14. До применения exact SQL и GP-A–GP-I прошли внутри одной
+транзакции с `ROLLBACK`; после применения GP-A–GP-I повторно прошли против live
+schema, также rollback-only. Remote history содержит version `20260906125841`,
+оба CHECK constraint валидированы, private helper RPC не исполняются клиентскими
+ролями, постоянных GP test profiles не осталось.
 
 Новая migration создана Supabase CLI 2.116.0 через официальный package runtime;
 предыдущие migration создавались 2.115.0. Постоянной CLI-сессии нет, поэтому
 live schema/history и применение DDL выполняются через подключённую Supabase
 integration.
 
-Текущий maintenance RC: TypeScript PASS, lint PASS, production build PASS; local
+Текущий maintenance release: TypeScript PASS, lint PASS, production build PASS; local
 suite 24 PASS, 0 FAIL, 10 явно обозначенных live-only skip. Rollback database
 acceptance GP-A–GP-I PASS. Browser-emulated GP-J–GP-L PASS. В browser bundle нет
 credential-shaped Supabase secret/service-role key, database credential или
 Turnstile secret; literal `sb_secret_` присутствует только в guard-коде, который
-такой ключ отвергает. Финальный P0/P1 для maintenance release ещё не объявлен:
-после явного разрешения нужны coordinated migration+frontend release, remote
-history/advisor verification, live regression и production smoke.
+такой ключ отвергает. Production v14 smoke загрузил все 10 наблюдавшихся ресурсов
+Room route: secret/service-role/Turnstile-secret/database URL не обнаружены.
+Remote history/advisors/schema/grants проверены. Статус release: P0=0, P1=0.
+Строгий исторический Sprint 1–5 + 5.1 regression остаётся 92/92, 0 fail,
+0 skip. Повторно запускать его против production после удаления isolated CAPTCHA
+project небезопасно и не требуется для focused maintenance delta; текущие изменения
+покрыты live GP-A–GP-I и полным локальным contract/regression набором. Physical
+iOS/Android и новый двухтелефонный social-loop остаются NOT EXECUTED.
 
-После Sprint 5.1 DDL advisors просмотрены: ERROR findings нет. Security: 6 INFO
+После version 14 DDL advisors просмотрены: ERROR findings нет. Security: 6 INFO
 и 51 WARN в категориях намеренных deny-all/RPC-only таблиц, проверенных
 identity-bound `SECURITY DEFINER` product RPC, anonymous guest model и
-leaked-password protection. Новые Explore FK paths получили отдельные covering
+leaked-password protection. Performance: 17 INFO, 0 ERROR. Новые Explore FK paths получили отдельные covering
 indexes. Private/assignment tables без policies — намеренный deny-all; клиент
 работает только через narrow RPC.
 
@@ -396,8 +408,9 @@ Destructive database operations требуют отдельного подтве
 2. **DONE 29 августа:** временный Free Supabase project
    `rgenouyngkgfurrffcgw` безвозвратно удалён; отсутствие подтверждено двумя
    независимыми project listings.
-3. Уже подтверждено на production: landing, полный isolated `/demo`, closed Room
-   без новой identity/membership, organizer route с fail-closed Turnstile и scan
-   всех 13 browser bundles version 10 без service-role/secret credentials.
+3. Уже подтверждено на production v14: landing, полный isolated `/demo`, organizer,
+   open `Test2` → 4-step onboarding, anonymous session persistence после refresh,
+   closed Room без membership, invalid Room state, 390×844 без overflow/auto-zoom
+   и scan 10 наблюдавшихся ресурсов без service-role/secret credentials.
 4. Провести 10–20 physical-device QA, затем только blocking bug fixes и closed pilot.
 5. Не начинать Sprint 6, growth, monetization, notifications или новые product features до pilot data.

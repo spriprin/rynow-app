@@ -1,4 +1,4 @@
--- Focused pre-pilot maintenance: explicit profile gender and a viewer-side
+-- Production migration 20260906125841: explicit profile gender and a viewer-side
 -- discovery preference. Existing assignments are intentionally not rewritten;
 -- the preference is applied only when a new Explore/Drop item is selected.
 

@@ -2,6 +2,9 @@
 
 This checklist is for the stage after an explicitly approved production deployment. Browser emulation is not a substitute for these results.
 
+Sites version 14 is deployed. Its 390×844 production browser smoke passed, but the
+physical iOS/Android and multi-device boxes below remain intentionally unchecked.
+
 ## Test matrix
 
 Include at least:

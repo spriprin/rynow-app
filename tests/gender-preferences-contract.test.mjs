@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const migrationUrl = new URL("../supabase/migrations/20260903161156_gender_preferences_mobile_viewport.sql", import.meta.url);
+const migrationUrl = new URL("../supabase/migrations/20260906125841_gender_preferences_mobile_viewport.sql", import.meta.url);
 
 test("GP-A–I — gender and viewer-side preferences stay server-bound and privacy-safe", async () => {
   const [migration, roomSource, typesSource, analyticsSource] = await Promise.all([
