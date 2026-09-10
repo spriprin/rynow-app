@@ -96,13 +96,18 @@ actions remain available after Leave.
 - `/r/{join_code}` uses only live Supabase data and fails closed.
 - `/organizer` creates or signs in a permanent email/password Supabase Auth user and uses database-enforced ownership for Rooms, Drops and aggregate analytics.
 - Organizer Auth has its own persisted cookie/client namespace; it cannot overwrite or promote the anonymous guest session in the same browser.
-- `/demo` is a current Explore + Drops walkthrough backed only by local React state. It performs no Supabase reads or writes.
+- `/demo` is a current guest walkthrough backed only by local React state. It
+  begins with a four-step simulated check-in (photo, first name, gender/default
+  Show me and 18+), then exposes Room Wall, Explore, Interests, Match, chat and
+  safety. It performs no Supabase reads or writes and resets on reload.
 - No production RPC inserts fake people or mixes demo data into a Room.
 
 The current demo deliberately exposes only a limited, non-clickable Room Wall
-sample and one profile at a time. Explore is primary; Drop is a separate optional
-moment. Its interactions are disposable sample state. Production uses real Room
-membership, server-selected persistent Explore/Drop batches and authorized RPCs.
+sample and one profile at a time. The locally created demo profile appears in the
+sample and can be edited or reset, but no Auth user, stored profile, Storage object
+or membership is created. Explore is primary; Drop is a separate optional moment.
+Its interactions are disposable sample state. Production uses real Room membership,
+server-selected persistent Explore/Drop batches and authorized RPCs.
 
 ## Organizer Auth boundary
 
@@ -437,6 +442,20 @@ After owner review, the demo/Room creation choice was moved directly below the
 hero, before the organizer-value and explanatory sections. Its routes and card
 behavior are unchanged; only document order changed.
 
+The post-version-14 local UI candidate keeps that order and the black/cream/lime
+system, but makes the primary hero action open the guest demo directly, adds a
+clear demo action beside organizer sign-in, tightens the hero/choice spacing and
+normalizes keyboard focus and mobile-width buttons. The demo card now describes
+the complete guest walkthrough. These landing changes remain presentation-only;
+the accompanying `/demo` check-in is isolated local state and does not alter the
+production `/r/{join_code}` flow.
+
+For this candidate, TypeScript, lint, the Sites production build and all runnable
+local contracts pass (24 pass, 0 fail; 10 live-only suites remain explicitly
+gated). Lightweight local responses for `/` and `/demo` return HTTP 200 and contain
+the direct CTA and first registration step. No live Supabase regression was run
+because the candidate has no database, Auth, Storage, RPC or production Room delta.
+
 No guest, organizer, Room, Auth, Storage, Realtime, analytics or migration code
 changed. `/demo`, `/organizer` and `/r/{join_code}` remain separate entrypoints.
 Typecheck, lint, production build, rendered route contracts and desktop/mobile
@@ -452,6 +471,9 @@ release; versions 11–13 contain the approved organizer-first landing and secti
 updates; version 14 adds gender preferences and the mobile Room viewport correction.
 Production has a reconciled nineteen-version migration history, supported Turnstile
 protection and the verified 1800/hour/IP anonymous setting.
+The new demo-check-in/landing-polish candidate has no migration or environment
+change and is not part of version 14; production remains on version 14 until the
+owner explicitly approves another deployment.
 AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
 strict final live runner passed 92/92 tests with 0 fail and 0 skip across
 Organizer Auth, Sprint 1–5 and Sprint 5.1, including the real 603-second presence

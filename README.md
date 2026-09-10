@@ -31,6 +31,15 @@ than outcomes.
 - Organizer self-service Auth and the current-product demo are implemented and
   published. The organizer-first public landing rewrite is verified and published;
   its demo/Room creation choice sits directly below the hero.
+- A post-version-14 local UI candidate adds a four-step, device-local guest
+  check-in to `/demo` (photo, first name, gender/default Show me and 18+), shows
+  that demo profile on the sample Room Wall and allows it to be edited or reset.
+  The landing now sends its primary CTA directly to that walkthrough, has clearer
+  organizer/demo actions, visible keyboard focus and tighter mobile spacing. This
+  candidate makes no Supabase or production product-flow changes and is not yet
+  deployed pending owner review. Typecheck, lint and the Sites production build
+  pass; the local suite is 24 pass, 0 fail and 10 intentionally gated live-only
+  skips, and lightweight `/` + `/demo` preview checks return HTTP 200.
 - The focused Gender Preferences + Mobile Room Viewport maintenance release is
   live in Sites version 14. New guests choose `male`, `female`
   or `prefer_not_to_say`; the default viewer-side Show me value is respectively
@@ -185,17 +194,20 @@ internal checks they need. Trigger helpers are also no longer client-executable.
 | `/` | Organizer-first public landing: event value, guest flow, privacy, aggregate analytics, demo and Room creation |
 | `/r/{join_code}` | Real Supabase guest flow; never falls back to fake users |
 | `/organizer` | Self-service permanent organizer signup/sign-in, Rooms, QR, Drops and owner-only aggregate analytics |
-| `/demo` | Isolated in-memory current-product demo with Explore + optional Drops; no Supabase reads or writes |
+| `/demo` | Isolated in-memory guest walkthrough: local four-step profile check-in, Room Wall, Explore, Interests, Match, chat and safety; no Supabase reads or writes |
 
 The public landing explains HERE as a social layer for real-life events: one QR,
 browser entry, limited same-event discovery, private Interest, mutual Match,
 chat, IRL meeting and aggregate-only organizer analytics. Internal mechanics do
 not lead the page. The demo/Room creation choice appears immediately after the
 hero so organizers can act before reading the deeper explanation. The demo
-remains a deeper product walkthrough: Explore is the
-primary all-evening action and Drops are optional synchronized moments, followed
-by Interest, Interested Too, Match, chat and safety. It uses sample state only
-and is explicitly distinguished from a real Room. Neither surface uses the
+remains a deeper product walkthrough. It now starts with a local simulation of
+the QR guest check-in, including camera/gallery or sample photo, first name,
+gender/default Show me and 18+ confirmation. The created profile is visible in
+the sample Room and can be edited or reset; all state disappears on reload and
+never reaches Supabase. Explore is the primary all-evening action and Drops are
+optional synchronized moments, followed by Interest, Interested Too, Match,
+chat and safety. It is explicitly distinguished from a real Room. Neither surface uses the
 rejected `Hidden`, `Open to Meet`, `Selective`, full-catalogue or blind-mutual
 model.
 

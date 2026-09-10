@@ -23,8 +23,8 @@ test("server-renders the product landing page", async () => {
   const html = await response.text();
   assert.match(html, /Real people/);
   assert.match(html, /Same place/);
-  assert.match(html, /See how HERE works/);
-  assert.match(html, /Try the demo/);
+  assert.match(html, /Try the guest demo/);
+  assert.match(html, /Start guest walkthrough/);
   assert.match(html, /Create a Room/);
   assert.match(html, /Give people another reason to connect/);
   assert.match(html, /Private by design/);
@@ -54,10 +54,10 @@ test("keeps real QR and organizer routes separate from demo data", async () => {
   assert.doesNotMatch(organizerHtml, /142|287|Friday Social Night/i);
   const demoHtml = await demoResponse.text();
   assert.match(demoHtml, /Product demo/);
-  assert.match(demoHtml, /ROOM WALL/);
-  assert.match(demoHtml, /74 people here/);
-  assert.match(demoHtml, /Explore now/);
-  assert.match(demoHtml, /Preview Drop/);
+  assert.match(demoHtml, /SIMULATED QR ENTRY/);
+  assert.match(demoHtml, /Add your photo/);
+  assert.match(demoHtml, /Camera or gallery/);
+  assert.match(demoHtml, /No real account is created|never reaches the live event system/);
   assert.match(demoHtml, /Create a real Room &amp; QR/);
   assert.doesNotMatch(demoHtml, /Open to meet|visibility-toggle/i);
 });
@@ -99,7 +99,14 @@ test("current demo models the authoritative Explore + Drops flow without product
   assert.match(demo, /one profile at a time/i);
   assert.match(demo, /sample people and interactions only/i);
   assert.match(demo, /Nothing is written to production/i);
+  for (const registrationContract of ["STEP 1 OF 4", "Camera or gallery", "What’s your name", "Gender", "I am 18 or older", "Enter the demo Room", "Edit profile", "Show me", "Restart demo"]) {
+    assert.match(demo, new RegExp(registrationContract, "i"));
+  }
+  assert.match(demo, /FileReader/);
+  assert.match(demo, /5 \* 1024 \* 1024/);
+  assert.match(demo, /setRegistered\(true\)/);
   assert.doesNotMatch(demo, /supabase|from\("|rpc\(|insert\(|update\(|storage\./i);
+  assert.doesNotMatch(demo, /localStorage|sessionStorage|signInAnonymously/i);
   assert.doesNotMatch(demo, /Open to meet|visibility-toggle|Interest stays private/i);
 });
 

@@ -11,7 +11,7 @@ const organizerBenefits = [
 
 const steps = [
   ["01", "Put the HERE QR at your event", "Create a Room and place the QR on screens, posters, tables or event materials."],
-  ["02", "Guests join in seconds", "They open HERE in their browser, add a name and photo and enter the event Room. No download or email/password signup required."],
+  ["02", "Guests join in seconds", "They open HERE in their browser, add a photo and first name, confirm they are 18+ and enter the Room. No download or email/password signup required."],
   ["03", "They discover people at the same event", "HERE shows small selections of real participants instead of a full attendee catalogue."],
   ["04", "Someone catches their attention", "They can privately show interest."],
   ["05", "Mutual interest creates a Match", "The other person can respond. If both are interested, they can message each other."],
@@ -47,7 +47,10 @@ export function ProductLanding() {
           <a href="#how">How it works</a>
           <a href="#privacy">Privacy</a>
         </div>
-        <a className="button button--ghost button--small" href="/organizer?mode=signin">Organizer sign in</a>
+        <div className="current-landing__nav-actions">
+          <a className="current-landing__demo-link" href="/demo">Guest demo <ArrowRight size={14} /></a>
+          <a className="button button--ghost button--small" href="/organizer?mode=signin">Organizer sign in</a>
+        </div>
       </nav>
 
       <section className="current-hero" id="top">
@@ -57,10 +60,10 @@ export function ProductLanding() {
           <h2>Turn your event into a place where meeting someone new is easier.</h2>
           <p>Guests scan one QR, see a limited selection of people who are at the same event, show interest and match if it’s mutual — then meet in real life. No app download required.</p>
           <div className="button-row">
-            <a className="button button--lime" href="#how">See how HERE works <ArrowRight size={18} /></a>
-            <a className="button button--ghost" href="/organizer?mode=signup">Create a Room</a>
+            <a className="button button--lime" href="/demo">Try the guest demo <ArrowRight size={18} /></a>
+            <a className="button button--ghost" href="/organizer?mode=signup">Create a Room <ArrowRight size={18} /></a>
           </div>
-          <small><ScanLine size={16} /> One event QR · Browser-based · No GPS tracking</small>
+          <small><ScanLine size={16} /> Demo starts with guest check-in · Browser-based · No GPS tracking</small>
         </div>
 
         <div className="current-hero__product" aria-label="HERE product flow preview">
@@ -91,8 +94,8 @@ export function ProductLanding() {
         <div>
           <article>
             <span>PRODUCT DEMO</span><h3>See how HERE feels as a guest.</h3>
-            <p>Walk through a sample event with demo profiles and interactions. Nothing is saved to the real event system.</p>
-            <a className="button button--dark" href="/demo">Try the demo <ArrowRight size={17} /></a>
+            <p>Create a local demo profile, enter a sample Room and try Explore, Interests, Match, chat and safety controls. Nothing is saved to the real event system.</p>
+            <a className="button button--dark" href="/demo">Start guest walkthrough <ArrowRight size={17} /></a>
           </article>
           <article>
             <span>FOR ORGANIZERS</span><h3>Create HERE for your event.</h3>

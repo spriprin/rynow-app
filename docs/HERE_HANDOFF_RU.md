@@ -1,6 +1,6 @@
 # HERE — краткий handoff
 
-Актуально на 6 сентября 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
+Актуально на 10 сентября 2026 года. Полный продуктовый handoff владельца прочитан и принят как контекст проекта.
 
 ## Состояние
 
@@ -13,6 +13,16 @@
   always-on Explore, разделённое presence, Leave/Rejoin, adaptive Interest Budget
   и aggregate Explore analytics. Функциональный PP-набор зелёный, frontend опубликован.
 - Self-service регистрация organizer и актуальные landing/demo опубликованы.
+- Подготовлен локальный post-version-14 UI candidate: `/demo` теперь начинается
+  с четырёхшаговой симуляции guest registration — фото из camera/gallery или
+  безопасный sample, имя, gender с default Show me и 18+. Созданный demo-профиль
+  появляется на sample Room Wall, редактируется из Room и полностью сбрасывается
+  по reload или кнопке Restart. Auth user, profile, Storage object и membership
+  при этом не создаются; Supabase не вызывается. Landing ведёт primary CTA прямо
+  в guest walkthrough, чётче разделяет demo/organizer действия, получил keyboard
+  focus states и более компактные mobile hero/buttons. Production `/r/{join_code}`
+  и все live product/security правила не менялись. Candidate ещё не опубликован:
+  production остаётся Sites version 14 до отдельного подтверждения владельца.
 - Focused maintenance release Gender Preferences + Mobile Room Viewport применён
   в live Supabase и опубликован как Sites version 14. Новый guest выбирает `male`, `female` или
   `prefer_not_to_say`; default Show me соответственно Women, Men или Everyone и
@@ -144,7 +154,11 @@ privacy/control и aggregate-only organizer analytics. Drops впервые по
 только после plain-language контекста и обозначены как optional shared moments.
 `/demo` сохраняет более глубокую актуальную продуктовую модель на локальных
 sample data, ничего не читает и не пишет в Supabase и явно отличается от
-настоящей persistent Room. Старые Hidden/Open to Meet/Selective, full People
+настоящей persistent Room. Перед Room он теперь воспроизводит user-side entry:
+photo → name → gender/default Show me → 18+, затем показывает локальный профиль
+на Room Wall и позволяет отредактировать или сбросить его. После этого доступны
+Explore, optional Drop, Interest, Interested in You, mutual Match, chat и
+block/report simulation. Старые Hidden/Open to Meet/Selective, full People
 catalogue и blind-mutual механика отсутствуют.
 
 Live acceptance:
@@ -190,6 +204,14 @@ lint и production build. Общий локальный набор: 22 PASS, 0 F
 изолированные `/demo`, `/organizer` и `/r/{join_code}`. Visual sanity выполнен на
 desktop 1440×1000 и mobile 390×844: горизонтального overflow, сломанных картинок
 и обрезанных CTA нет.
+
+Post-version-14 demo-registration/landing-polish candidate от 10 сентября прошёл
+TypeScript, lint, Sites production build и весь доступный локальный набор: 24 PASS,
+0 FAIL, 10 явно gated live-only SKIP. Lightweight local `/` и `/demo` ответили
+HTTP 200; render contract подтверждает direct demo/organizer CTA, первый photo step
+и отсутствие production writes. Live Supabase regression не запускался, потому что
+database/Auth/Storage/RPC и настоящий `/r/{join_code}` flow не менялись. Candidate
+ещё не опубликован; интерактивная visual проверка оставлена владельцу в preview.
 
 Повторные полные прогоны быстро исчерпывают проектные anonymous/signup quotas.
 Test harness теперь создаёт identities небольшими пакетами, делает bounded
