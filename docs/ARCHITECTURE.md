@@ -1,510 +1,197 @@
-# HERE architecture — Pre-Pilot Core Revision
+# HERE Pilot RC1 architecture
 
-## Auth release-gate environment
+Status: local Phase 2A implementation candidate, 16 September 2026. The two RC1 migrations described here are prepared but unapplied. Production was not modified.
 
-The production organization is on the Supabase Free plan. An authorized
-temporary Branch could not be created on 24 August 2026 because hosted Branching
-requires Pro; the failed request created no resource and incurred no charge.
-With owner authorization, a separate temporary Free project,
-`HERE Auth Gate Temporary 20260826` (`rgenouyngkgfurrffcgw`, `eu-west-1`, quoted
-at $0/month), was created for the destructive Auth-capacity and repeatable
-CAPTCHA phases. It received the complete migration chain and test-only Auth
-configuration. Production was not used as an automated CAPTCHA token farm. The
-temporary project was permanently deleted on 29 August after the owner ended the
-remaining two-device smoke because no second phone was available. Both the
-official CLI and connected Supabase project list verified its absence; the
-one-time local CLI session was removed afterward.
+## 1. System shape
 
-## Identity and event presence
+```text
+mobile browser
+  ├─ public landing and isolated demo
+  ├─ guest Supabase client (anonymous Auth session)
+  └─ organizer/admin Supabase client (separate permanent Auth storage)
+             │
+             ▼
+Supabase Auth + PostgreSQL/RLS/RPC + private avatar Storage
+```
+
+The frontend is React 19 + TypeScript, built with Vinext/Vite. The application router lives under `app/`. Browser and server Supabase clients live under `lib/supabase/`.
+
+Guest and organizer sessions use different browser storage keys and client instances. An anonymous guest cannot become an organizer because organizer mutations require a non-anonymous Auth identity and ownership checks in the database. Platform operations add a second server-side allowlist check.
+
+## 2. Canonical identity model
 
 ```text
 auth.users
-  ├── 1:1 profiles
-  ├── 1:N room_members N:1 rooms
-  ├── 1:N drop_items as viewer/candidate
-  ├── 1:N explore_batches as viewer
-  ├── 1:N explore_items as viewer/candidate
-  ├── 1:N interests as sender/recipient
-  ├── N:N matches inside a Room
-  ├── 1:N messages inside a Match
-  ├── 1:N blocks
-  ├── 1:N reports
-  ├── 1:N private.drop_claim_states as Drop viewer
-  └── 1:N private.interest_opens as recipient
-
-rooms 1:N drops 1:N drop_items 0:1 interests
-rooms 1:N explore_batches 1:N explore_items 0:1 interests
-rooms 1:N private instrumentation and validated safety attribution
+  ├─ 1:1 profiles
+  ├─ 1:N room_members N:1 rooms
+  ├─ 1:N explore_batches → explore_items
+  ├─ interests as sender/recipient
+  ├─ matches as one canonical pair inside a Room
+  ├─ messages inside a Match
+  ├─ blocks and reports
+  ├─ user_notifications
+  ├─ match_irl_feedback
+  └─ user_data_deletion_requests
 ```
 
-`profiles` never stores `current_room_id`. A browser identity can reuse one minimal profile across many Rooms; event presence is the canonical `(room_id, user_id)` membership.
-
-The Gender Preferences maintenance candidate adds two nullable constrained profile
-fields: `gender` (`male | female | prefer_not_to_say`) and
-`discovery_preference` (`male | female | everyone`). Null is a deliberate migration
-state for existing profiles, not a usable discovery value. On the next relevant open
-Room visit, an existing identity updates only these missing fields through its
-existing self-only profile RLS path. New profiles submit them with name, photo and
-18+ confirmation. Organizers receive neither raw field through analytics or any
-organizer RPC, and this release adds no gender aggregates.
-
-When a valid returning session has a profile but no membership in the scanned
-Room, the Welcome Back boundary offers either explicit Room join or profile edit.
-The editor revalidates the current user with `auth.getUser()`, updates only the
-row whose ID is that user, optionally uploads a new avatar under that user's
-private Storage folder, and preserves the profile ID, anonymous session, 18+
-confirmation and all memberships. Replaced or failed-upload avatar objects are
-removed with bounded retries. Migration
-`20260828092916_restrict_replaced_avatar_reads` permits non-owner signing only for
-the avatar path currently referenced by `profiles`. Follow-up migration
-`20260829125141_allow_owner_avatar_cleanup` retains owner SELECT on objects in the
-owner's own folder because Supabase Storage resolves an object through SELECT
-before DELETE. This lets supported client cleanup remove the stale object without
-making it signable by unrelated users. New uploads set a five-minute response
-cache TTL and signed avatar tokens also last five minutes. Successful deletion
-invalidates CDN copies after propagation; a browser that already cached a legacy
-upload can keep that local response until its former one-hour TTL expires.
-Database and Storage RLS remain the authorization boundary.
-
-## Split presence model
-
-Membership, recent activity and discovery eligibility are intentionally distinct.
-A membership is durable event history. `recently active` requires an open Room,
-`is_active`, `discovery_enabled`, no `left_at`, and server-written `last_seen_at`
-within 10 minutes. It drives Room Wall vitality and the organizer recent count.
-`discovery eligible` uses the same explicit state plus a valid completed profile
-and a 60-minute server window; it drives new Explore and Drop assignments.
-
-The visible/online client calls `heartbeat_room_presence(room_id)` once per 60
-seconds. Hidden or offline tabs stop heartbeats. Returning to the foreground
-immediately restores automatic timeout eligibility. `leave_room_presence` is an
-explicit user decision: it writes `discovery_enabled=false`, `left_at=now()` and
-invalidates unseen assignments where that person is the candidate. Heartbeat,
-refresh and idempotent join do not undo explicit Leave. `rejoin_room_presence`
-is required and works only while the Room is open.
-
-Guests have no direct UPDATE grant on `room_members`, so they cannot forge a
-future timestamp or update another user. Both heartbeat/leave RPCs derive the
-user from `auth.uid()` and use database time. `organizer_room_presence_counts()`
-returns only owner-authorized aggregate `joined_count`, ten-minute `recent_count`
-and sixty-minute `eligible_count`. Automatic or explicit ineligibility never
-deletes a profile, membership, Match or message. Existing Matches/chat and safety
-actions remain available after Leave.
-
-## Production and demo isolation
-
-- `/r/{join_code}` uses only live Supabase data and fails closed.
-- `/organizer` creates or signs in a permanent email/password Supabase Auth user and uses database-enforced ownership for Rooms, Drops and aggregate analytics.
-- Organizer Auth has its own persisted cookie/client namespace; it cannot overwrite or promote the anonymous guest session in the same browser.
-- `/demo` is a current guest walkthrough backed only by local React state. It
-  begins with a four-step simulated check-in (photo, first name, gender/default
-  Show me and 18+), then exposes Room Wall, Explore, Interests, Match, chat and
-  safety. It performs no Supabase reads or writes and resets on reload.
-- No production RPC inserts fake people or mixes demo data into a Room.
-
-The current demo deliberately exposes only a limited, non-clickable Room Wall
-sample and one profile at a time. The locally created demo profile appears in the
-sample and can be edited or reset, but no Auth user, stored profile, Storage object
-or membership is created. Explore is primary; Drop is a separate optional moment.
-Its interactions are disposable sample state. Production uses real Room membership,
-server-selected persistent Explore/Drop batches and authorized RPCs.
-
-## Organizer Auth boundary
-
-Organizer signup uses Supabase email/password Auth and creates a permanent user;
-passwords are never stored by HERE. The project currently auto-confirms email,
-while the UI also handles a null signup session by showing a check-email state.
-Password recovery uses a fixed trusted application origin and completes with
-`updateUser` only after Supabase establishes the recovery session.
-
-Authorization never depends on `user_metadata` or a client `isAdmin` flag. Room
-inserts require a non-anonymous authenticated JWT and set
-`organizer_id = auth.uid()`; reads and updates remain owner-bound. Organizer
-identity grants no access to individual Interests, Matches, messages, Blocks or Reports.
-
-## Analytics boundary
-
-`room_analytics(room_id)` is the only organizer analytics surface. It derives
-the viewer from `auth.uid()`, rejects anonymous users, requires that permanent
-user to own the requested Room, fixes `search_path`, and returns one JSON
-aggregate. The response may contain only an owned Room ID, owned Drop IDs,
-times, statuses, counts and rates. It never returns participant/profile IDs,
-names, avatars, assignments, Interest/Match/message IDs, pairs, safety actors,
-reasons, details or message bodies.
-
-Canonical historical sources remain `room_members`, `explore_batches`,
-`explore_items`, `drops`, `drop_items`, `interests`, `matches`, `messages`,
-`blocks` and `reports`. Explore analytics exposes only batches claimed/completed,
-real cards seen and Explore Interests. No analytics event
-warehouse or generic person-level log exists. Two private tables store only
-facts that cannot be reconstructed reliably:
-
-- `private.drop_claim_states`: one `(drop_id, viewer_id)` row with database-time first attempt, optional first forming state and optional first unlock;
-- `private.interest_opens`: one Interest row written only by the real recipient when the sender card is actually displayed.
-
-Both private tables have RLS, no policies, no grants to `anon`/`authenticated`,
-and are reached only by fixed-path `SECURITY DEFINER` functions. A trigger skips
-claim instrumentation when an assignment predates Sprint 4, preventing a later
-refresh from fabricating historical claim data. `blocks.room_id` and
-`blocks.match_id` are nullable, validated context for new actions; the Block
-itself remains global.
-
-Exact rate definitions (returned as `null` when the denominator is zero):
-
-1. unlock = successful unique viewer+Drop unlocks / unique viewer+Drop claim attempts;
-2. Drop completion = viewer+Drop runs with every assigned item seen and handled / assigned viewer+Drop runs;
-3. Interest response = accepted + declined / all Interests sent;
-4. Interest acceptance = accepted / accepted + declined;
-5. Interest decline = declined / accepted + declined;
-6. Match → conversation = Matches with at least one persisted message / all Matches.
-
-Drop `cards_seen` and Explore `explore_cards_seen` count only assignments whose
-`first_seen_at` is not null. Conversation
-latency is the median database-time interval from Match creation to the first
-persisted message. Joined/active are membership semantics; active is not claimed
-to be precise physical attendance. Claim/forming/unlock, incoming-open and
-attributed-Block metrics begin with Sprint 4 and are not backfilled. Analytics
-tables or outcomes never enter Fair Exposure ranking.
-
-## Room boundary
-
-`get_room_by_join_code` resolves only safe Room fields using an unpredictable public join code. `join_room_by_code` derives identity from `auth.uid()`, requires a completed 18+ profile, rejects non-open Rooms, and upserts only the caller's membership.
-
-The Room Wall returns a joined count and no more than 12 minimal profiles. It is deliberately not a full catalogue and cannot originate an Interest.
-
-Anonymous guests carry the PostgreSQL `authenticated` role, so organizer policies also inspect the JWT `is_anonymous` claim. Restrictive Room write policies prevent another permissive policy from accidentally restoring organizer rights to anonymous users.
-
-## Discovery and Fair Exposure
-
-The deprecated architecture `Room → wait for Drop → discovery` is not
-authoritative. `claim_explore_batch(room_id)` gives an eligible participant a
-small persistent server-selected batch throughout the evening. Target size is:
-available candidates up to 5; 6 for eligible pools 6–11; 8 for 12–49; and 10
-for 50+. The browser never receives the full eligible pool or direct table access.
-
-After every card is handled, the ambient batch is complete and the next one is
-unavailable for 15 minutes unless at least three genuinely new eligible unseen
-participants joined after the completed batch was created. Refresh returns the
-same batch and progression. If an unseen candidate becomes ineligible, only that
-unseen reservation may be invalidated and replaced; seen cards never reroll.
-
-A scheduled Drop is opened by persisted database time or an organizer RPC and
-creates an independent synchronized batch of up to 12 fresh people. Explore
-remains usable before and after a Drop. A pending or genuinely seen candidate in
-either mode is excluded from the other mode while unseen eligible people remain.
-
-Eligibility is applied before ranking:
-
-1. same open Room and discovery-eligible memberships within the 60-minute server window;
-2. complete 18+ profile;
-3. not self;
-4. pair is not blocked;
-5. candidate gender matches the viewer's explicit `discovery_preference`;
-6. candidate has not previously been seen by this viewer and is not already reserved.
-
-The compatibility rule is intentionally viewer-side. Candidate profile completeness
-is required, but the candidate's own preference is not checked against the viewer;
-this is not an orientation or reciprocal-compatibility model. The filter is inside
-`claim_explore_batch`, `explore_state`, `claim_your_drop` and `room_drop_state`
-before exposure ranking, so the browser never receives the unfiltered pool. Existing
-valid `explore_items` and `drop_items` are returned unchanged after an edit; only
-future item insertion/fill uses the new preference. The incoming-Interest RPC is not
-filtered, preserving prior direct Interests when either participant later edits a
-preference.
-
-Explore and Drops share one opportunity calculation: actual delivered impressions
-(`first_seen_at`) plus pending reservations across both modes. A small
-randomization is allowed inside close exposure bands. Interests, declines,
-Matches, messages and popularity do not enter ranking.
-
-Interest creation accepts only a server-assigned, actually seen Explore or Drop
-item. The budget is batch-scoped and backend-only: for assigned size `<=5`,
-budget equals assigned size; otherwise it is `ceil(size × 0.5)`. Decline does not
-refund. Explore and Drop budgets are separate but both feed the same incoming
-Interest/Match flow.
-
-## Match and chat boundary
-
-`respond_to_interest` is callable only by the real recipient. Acceptance canonicalizes the two user UUIDs and inserts one unique `(room_id, user_a_id, user_b_id)` Match with conflict-safe idempotency.
-
-Messages are created through the idempotent
-`send_match_message_idempotent(match_id, body, client_message_id)` surface;
-the database uniqueness constraint makes double-submit one logical message.
-History is readable only by the two unblocked Match participants. The selected
-chat subscribes to `messages INSERT` through Supabase Realtime using the current
-access token, deduplicates by persisted message ID, and reloads Postgres history
-on every subscription. Channel errors use bounded reconnect backoff; the single
-foreground Room poll also refreshes an open conversation. Realtime is delivery
-acceleration, never the source of truth. Closing a Room prevents new discovery
-but does not delete existing Match/chat history.
-
-## Safety boundary
-
-- Block is private and excludes both directions before future Explore/Drop ranking.
-- Block closes pending Interests and unhandled cards for the pair.
-- A blocked pair cannot list its Match or send/read messages through normal access.
-- Reports are visible only to the reporter through ordinary product roles.
-- One report action uses `submit_report_idempotent(..., client_action_id)` so retries cannot duplicate the logical report; Report and Block remains one transaction.
-- Organizer identity is not a moderation identity and cannot inspect Reports or chats.
-- New Block/Report backend paths validate shared Room or actual Match context before storing Room attribution; cross-Room spoofing is rejected.
-
-## Storage boundary
-
-The `avatars` bucket is private. Object paths begin with the authenticated user
-UUID. Upload, replacement and deletion are limited to the owner's folder;
-signed reads are available to the owner, a recent active Room co-member, or an
-unblocked Match participant. This keeps Match/chat avatars available after a
-Room closes without exposing the bucket publicly. The client caches signed URLs
-for less than their lifetime, retries signing once after an image error, and
-falls back to initials if Storage remains unavailable.
-
-## Runtime recovery and diagnostics
-
-The Room screen owns one guarded 15-second poll and one 60-second heartbeat.
-Both stop while the document is hidden or offline and are cleaned up on unmount.
-Foreground/online events immediately refresh persisted Room, discovery, Match
-and presence state. Safe reads retry no more than twice with jitter; mutations
-are retried only through explicit database idempotency.
-
-Normal users receive friendly offline, reconnect, rate-limit and generic retry
-states rather than raw PostgREST/RPC/fetch errors. Development diagnostics use
-operation name, error code/status, timestamp and Room/Drop/Match IDs where
-appropriate. Chat bodies, Interest pairs, report details, profile data, session
-tokens and credentials are never logged.
-
-## Database operations
-
-The connected project is `xwycdnyxuluuhylcnnjh` (`Here MVP`, PostgreSQL 17). Supabase integration tools are the authority for live schema inspection, migrations, advisors and logs.
-
-The initial schema was applied manually, so Phase 0 first compared the intended
-objects and behavior with the live database. With explicit owner approval, the
-five matching historical versions were registered in
-`supabase_migrations.schema_migrations` without replaying their SQL. The two
-Phase 0 hardening migrations were then applied normally. Three additive Sprint
-4 migrations and the additive Sprint 5 reliability migration were created with
-the official CLI, transaction-dry-run, applied live and verified. Sprint 5.1
-added one core revision plus three narrow follow-ups, each transaction-dry-run
-before application. A final compatibility migration restored the established
-closed-Room error precedence without changing eligibility or access. The focused
-maintenance migration was then applied in the coordinated version 14 release.
-Remote history currently contains nineteen ordered versions through
-`20260906125841_gender_preferences_mobile_viewport`:
-
-- `20260824093231_pre_pilot_core_revision`;
-- `20260824094220_fix_explore_replacement_position`;
-- `20260824094426_fix_left_presence_state`;
-- `20260824095156_pre_pilot_fk_indexes`;
-- `20260827163024_restore_closed_room_error_precedence`;
-- `20260828092916_restrict_replaced_avatar_reads`;
-- `20260829125141_allow_owner_avatar_cleanup`;
-- `20260906125841_gender_preferences_mobile_viewport`.
-
-The additive maintenance migration is now
-`20260906125841_gender_preferences_mobile_viewport.sql` in both local and remote
-history. Official Supabase CLI 2.116.0 created the original SQL. Before release, the
-connected Supabase integration executed the exact migration plus focused GP-A–GP-I
-acceptance in a transaction and rolled everything back; SQL/DDL and behavioral
-assertions passed with no production mutation. On 6 September 2026 the owner approved
-the coupled release: the integration applied the migration, Sites version 14 was
-published immediately afterward, and GP-A–GP-I passed again against the live schema
-inside a rollback-only transaction. No GP test profiles were retained.
-
-The generic `is_room_member(room, user)` and
-`shares_active_room(viewer, target)` functions remain available only to trusted
-database-owned functions; neither `anon` nor `authenticated` can execute them
-through RPC. RLS policies call separate one-target wrappers that derive the
-viewer from `auth.uid()`. This prevents forged-user presence probes without
-breaking server-side checks that legitimately validate both people.
-
-Current advisor classification:
-
-- `drop_items`, `interests`, `explore_batches` and `explore_items` having RLS but no policies is intentional: product roles have no direct DML grants and all access is through narrow RPCs;
-- anonymous users receiving the `authenticated` role is intentional for the QR guest model; ownership and Room checks remain mandatory;
-- anonymous execution of `get_room_by_join_code` is intentional and returns only the public join-route fields;
-- authenticated execution of product RPCs is intentional where each function binds identity with `auth.uid()` and the acceptance suite attacks forged arguments;
-- direct regression attacks also reject organizer chat reads, reversed Match insertion, forged Block ownership and forged Report ownership;
-- public execution of `rls_auto_enable` and `rooms_set_join_code` is revoked;
-- spoofable generic membership helpers are not Data API executable; the authenticated RLS wrappers bind identity to `auth.uid()`;
-- `private.drop_claim_states` and `private.interest_opens` having RLS with no policy is intentional deny-all instrumentation isolation;
-- Sprint 4–5.1 `SECURITY DEFINER` warnings are intentional narrow product surfaces with fixed `search_path`, `auth.uid()` binding and explicit owner/recipient/context authorization;
-- leaked-password protection is not enabled and remains an organizer-auth hardening limitation;
-- the advisor's composite-FK notice for `(drop_id, room_id)` is covered for equality lookups by the existing `(room_id, drop_id)` index and leading `drop_id` primary-key column; a duplicate index was not added;
-- unused-index notices are expected immediately after adding safety/instrumentation indexes to a new test-heavy workload.
-
-The post-release production advisor run reports no ERROR findings. Security has 6
-INFO and 51 WARN notices; Performance has 17 INFO and no ERROR. The categories
-are intentional deny-all/RPC-only tables, reviewed identity-bound product RPCs,
-the intentional anonymous guest model and the existing leaked-password-protection
-setting. Performance advisor suggestions
-for the new Explore foreign keys were addressed by the final covering-index
-migration; older informational heuristics remain documented rather than being
-treated as authorization failures.
-
-During the earlier 20-session stress run, Supabase Realtime temporarily reported
-`DatabaseLackOfConnections`: only 9 database connections were available while
-the tenant required at least 12. This was capacity pressure rather than RLS or
-authorization failure. Bounded reconnect plus Postgres-history refresh recovered
-successfully in the final S5-H live run. The client now tolerates that transient
-condition. The earlier 24 August anonymous run (1 success, 99 HTTP 429) was made
-against a depleted token bucket and remains only historical negative evidence;
-it is not used as capacity proof. No retry, spoofed forwarding,
-secret-in-browser or RLS weakening was used as a fix.
-
-The deployed Auth-capacity release integrates Cloudflare Turnstile through
-Supabase's supported CAPTCHA contract. A fresh open-Room guest first resolves the
-Room, checks `getSession()`, and only when no valid session exists obtains a token
-for `signInAnonymously({ options: { captchaToken } })`. Existing sessions continue
-directly to profile/membership state. Invalid, draft and closed Room routes never
-create an identity. Since Supabase CAPTCHA is a project-wide Auth setting rather
-than an anonymous-only switch, permanent organizer sign-in, signup and password
-recovery use the same public widget/token contract. The public site key is a
-browser build variable; the Turnstile secret must exist only in hosted Supabase
-Auth configuration.
-
-The official hosted rate limiter uses a 30-token maximum IP bucket and the
-configured anonymous hourly value as its refill rate. Test code therefore records
-the exact inspected `rate_limit_anonymous_users`, waits for a full natural refill,
-requires 100 unique users over roughly ten minutes and then 50 unique users in
-roughly one minute, and fails on every 429. Repeatable Cloudflare test proof is
-allowed only against an explicitly isolated non-production Supabase project.
-Authenticated Dashboard inspection showed the actual HERE Free-project value was
-30/hour/IP and the anonymous field was editable. The Dashboard accepted
-`1800/hour/IP`, and a full reload independently returned 1800. IP forwarding
-remains disabled. This gives a 30/minute refill while preserving the hosted
-30-token burst ceiling. The production Cloudflare Managed widget is restricted
-to `here-social-room.spriprin.chatgpt.site`; its public site key is present in
-Sites environment revision 2 as a non-secret client build variable. Supabase
-persisted CAPTCHA as enabled with provider `Turnstile by
-Cloudflare`. The provider secret was transferred directly into Supabase Auth and
-is absent from the repository and browser configuration. Live production Auth
-now rejects both missing and invalid proof without returning 429. A real widget
-token was accepted once by production anonymous Auth and its replay was rejected
-with a CAPTCHA-specific HTTP 400. Refresh of an existing guest session rendered
-no widget and returned directly to the Room. Temporary localhost/loopback widget
-hostnames and the probe route were removed immediately afterward. The isolated
-provider phases passed independently: the official always-fail configuration
-rejected 3/3 attempts and the official always-pass configuration accepted 3/3.
-Production PP-R rejected missing and malformed proof 3/3 without 429. AUTH-P1
-then created 100/100 genuinely fresh users from one NAT over 588.973 seconds
-with 0 HTTP 429 and p95 latency 473 ms. After a clean refill, AUTH-P2 created
-50/50 fresh users over 49.487 seconds with 0 HTTP 429 and p95 latency 336 ms.
-The exact deployed hostname now renders the real widget fail-closed. Production
-smoke passed for the landing/current product, the full isolated `/demo`, closed
-Room behavior with unchanged Auth-user and membership counts, and all nine local
-JavaScript bundles with no service-role, Supabase secret or Turnstile secret.
-In two independent automated in-app Browser contexts Cloudflare did not issue a
-fresh Managed-challenge token, so no organizer request or test identity was
-created. The remaining fresh organizer and two-guest path must be performed in
-an ordinary human browser; CAPTCHA must not be bypassed or disabled for it.
-
-## Mobile viewport boundary
-
-The root layout now owns an explicit framework `Viewport` export with
-`width=device-width` and `initialScale=1`; no maximum scale or `user-scalable=no` is
-used. The prior form inheritance allowed Room/Profile/chat controls to inherit the
-12px label size, which is an iOS Safari auto-zoom trigger. All mobile input, textarea
-and select controls are now explicitly at least 16px. Room roots are constrained to
-the viewport, flex/grid children use `min-width: 0` where their content may be long,
-headings wrap safely, and fixed sheets remain within the viewport. Existing
-`safe-area-inset-top`/`safe-area-inset-bottom` behavior is preserved for Room chrome,
-chat composer and bottom sheets.
-
-Browser-emulated GP-J–GP-L coverage exercised widths 360, 375, 390, 412 and 430px
-across Room home/Wall, Explore/Drop cards, Incoming, Matches, chat, Profile, Leave and
-Safety. Main document width never exceeded the effective viewport, visible fields
-computed to 16px and focus retained visual scale 1. This is an emulation result;
-physical iOS/Android testing remains a separate post-deployment gate. The production
-v14 smoke repeated the 390×844 geometry check on landing, demo, organizer and Room
-states: scale stayed 1, organizer/Room fields computed to 16px and no main horizontal
-overflow was found.
-
-The maintenance release passes typecheck, lint, production build, 24/24 runnable local
-contracts and the rollback-only live database acceptance; 10 credential-gated tests
-remain explicitly skipped in the ordinary local command. Remote history, constraints,
-function grants and advisors were verified after application. The production v14 scan
-loaded 10 observed Room-route assets and found no credential-shaped Supabase secret,
-service-role key, database URL/password or Turnstile secret. The historical strict
-Sprint 1–5 + 5.1 live runner remains 92/92 with 0 fail and 0 skip; it was not repeated
-against production after the authorized isolated CAPTCHA project was deleted. The
-focused live maintenance suite and non-live regression are green, with P0=0 and P1=0.
-
-## Public landing boundary
-
-The organizer-first public landing rewrite is presentation-only. `/` remains a
-server-rendered marketing surface and does not read or write Supabase. It now
-orders information as product definition → demo/Room creation → organizer value
-→ six-step guest flow → privacy/control → aggregate analytics. `Room`,
-`Explore`, `Match` and `Drop` appear only after plain-language context; Drops are
-explicitly optional. The hero composition, profile preview and black/cream/lime
-visual system remain unchanged.
-
-After owner review, the demo/Room creation choice was moved directly below the
-hero, before the organizer-value and explanatory sections. Its routes and card
-behavior are unchanged; only document order changed.
-
-The post-version-14 local UI candidate keeps that order and the black/cream/lime
-system, but makes the primary hero action open the guest demo directly, adds a
-clear demo action beside organizer sign-in, tightens the hero/choice spacing and
-normalizes keyboard focus and mobile-width buttons. The demo card now describes
-the complete guest walkthrough. These landing changes remain presentation-only;
-the accompanying `/demo` check-in is isolated local state and does not alter the
-production `/r/{join_code}` flow.
-
-For this candidate, TypeScript, lint, the Sites production build and all runnable
-local contracts pass (24 pass, 0 fail; 10 live-only suites remain explicitly
-gated). Lightweight local responses for `/` and `/demo` return HTTP 200 and contain
-the direct CTA and first registration step. No live Supabase regression was run
-because the candidate has no database, Auth, Storage, RPC or production Room delta.
-
-No guest, organizer, Room, Auth, Storage, Realtime, analytics or migration code
-changed. `/demo`, `/organizer` and `/r/{join_code}` remain separate entrypoints.
-Typecheck, lint, production build, rendered route contracts and desktop/mobile
-visual checks passed locally. The owner approved this presentation-only release
-on 1 September 2026, and it is included in the current production frontend.
-
-## Release boundary
-
-The current production frontend is Sites version 14 from commit
-`796796b24139222b0af402f8e7c05647ee1c8751`, using Sites environment revision 2
-on the existing production URL. Version 10 introduced the verified returning-profile
-release; versions 11–13 contain the approved organizer-first landing and section-order
-updates; version 14 adds gender preferences and the mobile Room viewport correction.
-Production has a reconciled nineteen-version migration history, supported Turnstile
-protection and the verified 1800/hour/IP anonymous setting.
-The new demo-check-in/landing-polish candidate has no migration or environment
-change and is not part of version 14; production remains on version 14 until the
-owner explicitly approves another deployment.
-AUTH-P1, AUTH-P2 and the isolated/production-negative PP-R phases are green. The
-strict final live runner passed 92/92 tests with 0 fail and 0 skip across
-Organizer Auth, Sprint 1–5 and Sprint 5.1, including the real 603-second presence
-test. Typecheck, lint, Auth harness, static/render/security contracts and the
-production build are also green. The current maintenance suite reports 24 pass,
-0 fail and 10 explicit live-only skips. P0=0 and P1=0, and the owner-authorized
-version 14 publication completed successfully. Production smoke passed for `/`,
-`/demo`, `/organizer`, open Room resolution/onboarding/session refresh, closed Room
-rejection, invalid Room handling, mobile geometry and browser-secret scanning. The
-human-browser run had previously created the real
-open Room `Test1`; one returning guest reused a nine-day-old identity/profile,
-created one active membership and refreshed presence 209 seconds after join
-without duplication. The same identity then opened real Room `Test2`, updated
-its name and avatar through the deployed Welcome Back editor, retained its UUID,
-18+ flag and Test1 membership, joined Test2 exactly once, and persisted after
-refresh. The old Storage object was removed and only the new avatar remains.
-The second fresh guest and two-person social loop were not executed on a physical
-second device because none was available; reused sessions were not counted as
-evidence. The temporary Supabase project has been deleted and verified absent.
-Sprint 6 is out of scope.
-
-Version 10 post-deploy checks returned HTTP 200 for the landing page, organizer,
-isolated demo and real `Test1` join route. All 13 referenced browser bundles
-loaded successfully; `Edit profile` is present in the deployed bundle and no
-service-role key, Supabase secret key or database credential was found.
-
-Version 14 post-deploy checks resolved real Room `Test2`, created one fresh anonymous
-identity through the Managed widget, reached step 1 of the four-step onboarding and
-reused that identity after refresh. No profile or membership was created before the
-required photo/name/gender/18+ completion. A closed Room returned `This Room has
-ended.` with zero new membership, and an invalid code returned the intended not-found
-state. The 10 observed assets loaded successfully and contained only the expected
-publishable Supabase key shape; no secret/service-role/Turnstile-secret/database URL
-was present. Physical-device and two-device interaction QA remain NOT EXECUTED.
+`profiles.id = auth.users.id`. A profile persists across events. Event participation is the unique `(room_id, user_id)` row in `room_members`; no `current_room_id` is stored in the profile.
+
+New profile creation deliberately cannot set its own legal acceptance audit fields. After the 18+ profile exists, `accept_pilot_terms(version)` records the supported document version and a server timestamp.
+
+## 3. QR and session flow
+
+```text
+/r/{join_code}
+  → resolve Room through secure RPC
+  → reject missing/draft/closed entry as appropriate
+  → reuse valid browser session, otherwise Turnstile + anonymous sign-in
+  → load existing profile or run onboarding
+  → load existing membership or idempotently join
+  → inspect presence before any protected Room Wall/Explore reads
+  → active Room or explicit Rejoin state
+```
+
+Existing members of a closed Room can still open their Connections and chats. A new user cannot create a membership after closure.
+
+## 4. Presence invariants
+
+Membership history, recent activity and discovery eligibility are different concepts.
+
+- **Membership:** durable unique `(room_id, user_id)` record.
+- **Recently active:** active/discovery-enabled, not explicitly left, with a heartbeat in the last 10 minutes.
+- **Discovery eligible:** active/discovery-enabled, not explicitly left, complete profile, heartbeat/activity within 60 minutes, and Room open.
+
+The client does not use unload/pagehide to infer Leave. Therefore a refresh, temporary network loss, backgrounding or ordinary browser close leaves `left_at` unchanged.
+
+Explicit Leave calls `leave_room_presence`, sets `is_active=false`, `discovery_enabled=false`, and writes `left_at`. Cold reopening calls the idempotent join path but then checks the same membership before any Room data. An explicitly-left member sees **Rejoin this event?**. `rejoin_room_presence` clears `left_at` and restores the same row.
+
+## 5. Continuous curated Explore
+
+`claim_explore_batch(room_id)` is the only active candidate acquisition path.
+
+The server:
+
+1. verifies the authenticated user is discovery eligible;
+2. invalidates stale cards;
+3. counts current unhandled cards;
+4. when three or fewer remain and a new candidate exists, reserves enough candidates to bring the buffer toward ten;
+5. excludes self, incomplete/inactive/left users, blocked pairs, existing active Matches, any existing Interest relationship, already viewed candidates and candidates already pending for that viewer;
+6. orders by delivered plus pending exposure buckets and randomizes only within comparable exposure buckets;
+7. returns at most ten cards.
+
+Only the selected rows are returned. The complete Room candidate pool never reaches the browser. Likes/Interest outcomes are not an ordering signal.
+
+The browser merges only the server-authoritative rows, preserves `first_seen_at`, de-duplicates candidate IDs and keeps a maximum of ten. It refreshes every 15 seconds while visible/online and immediately after a foreground/network recovery, so newly joined or newly eligible guests can appear without a full application reload. When no candidate exists, no empty batch is written repeatedly.
+
+The truthful empty state is:
+
+> You’ve seen everyone available right now. New people will appear here as they join the event.
+
+## 6. Interest, Match and chat invariants
+
+- `interests_one_pair_per_room` permits at most one sender → recipient Interest in a Room.
+- Any prior Interest relationship excludes the pair from future Explore assignment, so a declined Interest cannot be resent.
+- Existing active Matches are excluded.
+- Blocked relationships cannot interact.
+- `send_explore_interest` is idempotent for a network retry of the same handled card.
+- A private configurable sender threshold defaults to 20 new Interests in 60 seconds. An advisory transaction lock prevents concurrent requests from racing the check. This is anti-automation protection, not an Interest budget.
+- Match creation retains the canonical pair and unique Room/pair constraint, so concurrent reciprocal responses create one Match.
+- Message insertion remains through the identity-bound idempotent RPC; only Match participants can read chat.
+
+## 7. Connections and notifications
+
+`user_connections()` returns only the caller’s active, non-blocked Matches across Rooms, plus the other person’s minimum public profile, source Room name, recent message summary and the caller’s unread count. No empty Connections section is rendered.
+
+`user_notifications` stores identity-bound events for:
+
+- incoming Interest;
+- new Match;
+- new chat message.
+
+Database triggers create events with a unique `(recipient_id, kind, source_id)` key. `notification_state()` returns only counts for `auth.uid()`. `mark_notifications_read()` can scope message reads to one Match. The current UI polls every 15 seconds and on foreground, so badges appear without first opening a tab. Realtime publication is optional; polling remains the source-of-truth fallback.
+
+## 8. Post-event IRL outcome
+
+`match_irl_feedback` uses `(match_id, respondent_id)` as its primary key. `record_match_irl_feedback` verifies the caller is a Match participant and the event has ended. The four values are `yes`, `no`, `not_yet`, and `prefer_not_to_say`.
+
+RLS lets a participant read only their own answer. The other participant never receives it. Organizer analytics only count answers by category.
+
+## 9. Safety and moderation
+
+Report categories are normalized to the Pilot RC1 list. `submit_report_rc1`:
+
+- derives the reporter from `auth.uid()`;
+- validates Room/Match context;
+- uses a caller-provided idempotency UUID;
+- optionally invokes the same Block operation;
+- stores explicit event-staff sharing consent separately.
+
+`block_user_rc1` invalidates pending Explore cards and declines pending Interests for the pair without mutating historical Drop rows.
+
+The platform admin boundary is `private.platform_admins`. `/admin` signs in with a permanent account (and Turnstile when configured), then every operations RPC verifies both non-anonymous Auth and allowlist membership. Organizer ownership is insufficient.
+
+The admin Room overview is aggregate. The moderation queue returns category, Room, reported user, timestamp, optional details, consent and status. It intentionally does not return reporter identity or chat contents. Status changes are audited.
+
+Organizer analytics remain separate and aggregate-only. They never return individual pairings, rejections, messages, reporter identities or individual feedback answers.
+
+## 10. Draft legal and retention infrastructure
+
+`/terms` and `/privacy` are explicitly labelled drafts and do not claim legal/GDPR compliance. The application records a version and server timestamp after the 18+ confirmation.
+
+`private.pilot_settings` stores proposed retention values:
+
+- operational/unmatched event data: 30 days;
+- Connections/Matches/chat: 90 days;
+- safety Reports: 180 days.
+
+`cleanup_enabled` is constrained to `false`. No scheduled delete job or historical cleanup is introduced in Phase 2A.
+
+“Delete my data” creates/refreshes an identity-bound pending request. It does not blindly cascade shared or safety data. The proposed execution policy is:
+
+1. freeze the request and create an auditable operator record;
+2. remove the current avatar object and profile-visible fields;
+3. deactivate/anonymize membership identity where aggregate integrity permits;
+4. remove unmatched Interests after the approved short retention period;
+5. preserve the other participant’s legitimate Connection/chat record through a reviewed anonymization model rather than blind cascading;
+6. retain safety evidence for the approved safety period with restricted access;
+7. retain only non-identifying aggregates longer;
+8. delete the Auth user only after all FK/shared-data consequences are approved and tested.
+
+The final behavior is blocked on owner/legal decisions and must be implemented as a separate reviewed backend operation.
+
+## 11. Historical Drop objects
+
+Historical migration files, Drop tables and rows remain untouched. Phase 2A does not rewrite history, truncate tables or drop definitions.
+
+The new continuous-Explore migration copies previously viewed historical Drop-card identities once into a private, RLS-protected seen ledger. Active helpers then use that ledger rather than reading Drop tables, so those people do not repeat within a Room. It removes all frontend calls/UI/copy and revokes client execution from legacy Drop RPCs. Historical cleanup can happen only in a later dedicated migration after backup, dependency inspection and owner approval.
+
+## 12. Migration order and rollout
+
+Apply on an isolated staging Supabase project in timestamp order. The new files are:
+
+1. `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql`
+2. `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql`
+
+Before production rollout:
+
+- take a schema/data snapshot;
+- inspect migration SQL and run it in staging;
+- verify all functions, constraints, RLS policies, grants and private tables;
+- seed a permanent organizer and separately allowlist a platform admin using a trusted database operator path;
+- run the gated RC1 acceptance and full historical regression;
+- run real iPhone Safari and Android Chrome QA;
+- verify production Auth/CAPTCHA/shared-NAT capacity separately;
+- deploy frontend only after database compatibility is confirmed.
+
+Rollback strategy is application rollback plus a forward corrective migration. Do not edit an already-applied migration or restore old client privileges casually.
+
+## 13. Security boundaries to preserve
+
+- Only public/publishable credentials are present in browser code.
+- Turnstile and Supabase secrets remain in their provider configuration.
+- All mutating RPCs derive identity from `auth.uid()`.
+- RLS remains enabled on user-facing public tables.
+- Security-definer functions use an explicit empty `search_path` and schema-qualified objects.
+- No `using (true)` private-data policy is introduced.
+- Anonymous guests cannot create/modify organizer Rooms or access admin operations.
+- Organizers receive aggregates, not private relationship or safety details.

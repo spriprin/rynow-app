@@ -5,7 +5,7 @@ import { ArrowRight, BarChart3, Heart, MessageCircle, Radio, ScanLine, ShieldChe
 const organizerBenefits = [
   [Heart, "Make the first move easier", "Guests can find out whether interest is mutual before approaching someone."],
   [ScanLine, "Works inside your existing event", "One QR. No app installation. HERE adds a social layer without replacing the event itself."],
-  [Sparkles, "Create moments of interaction", "Discovery stays available throughout the night. Optional Drops bring guests back for shared moments with fresh people to discover."],
+  [Sparkles, "Keep discovery moving", "A small, curated Explore stream refreshes as eligible guests join or return during the event."],
   [BarChart3, "Understand engagement", "See aggregate participation, interest, match and conversation metrics — never private interests or messages."],
 ] as const;
 
@@ -79,11 +79,11 @@ export function ProductLanding() {
               ].map((id) => <img key={id} src={`https://images.unsplash.com/${id}?auto=format&fit=crop&w=160&q=82`} alt="" />)}
             </div>
           </div>
-          <article className="current-drop-card">
+          <article className="current-profile-card">
             <span>SOMEONE AT THIS EVENT</span>
-            <div className="current-drop-card__photo" role="img" aria-label="Sample guest profile" />
+            <div className="current-profile-card__photo" role="img" aria-label="Sample guest profile" />
             <div><strong>Sofia, 26</strong><small>Here tonight</small></div>
-            <div className="current-drop-card__actions"><span>Next</span><b><Heart size={15} />Interested</b></div>
+            <div className="current-profile-card__actions"><span>Next</span><b><Heart size={15} />Interested</b></div>
           </article>
           <div className="current-match-chip"><MessageCircle size={17} /><span><small>IT’S MUTUAL</small>Say hi. Meet here.</span></div>
         </div>
@@ -127,7 +127,6 @@ export function ProductLanding() {
             <article key={number}><span>{number}</span><h3>{title}</h3><p>{copy}</p></article>
           ))}
         </div>
-        <p className="current-how__note"><Sparkles size={17} /> Organizers can also schedule optional Drops — shared moments during the night when guests receive fresh people to discover. HERE works throughout the event without them.</p>
       </section>
 
       <section className="current-trust" id="privacy">

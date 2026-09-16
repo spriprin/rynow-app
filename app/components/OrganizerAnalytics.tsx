@@ -1,179 +1,89 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, BarChart3, CircleHelp, Eye, Heart, MessageCircle, RefreshCw, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Activity, BarChart3, Eye, Heart, MessageCircle, RefreshCw, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { getSupabaseOrganizerClient } from "@/lib/supabase/organizer-client";
-import type { FoundationRoom, RoomAnalytics, RoomAnalyticsDrop } from "@/lib/types";
+import type { FoundationRoom, RoomAnalytics } from "@/lib/types";
 
-const FORMULAS = {
-  active: "Memberships with a server heartbeat in the last 10 minutes whose guest has not explicitly left. This is recent app presence, not exact physical attendance.",
-  eligible: "Guests with discovery enabled and a server heartbeat in the last 60 minutes. They may appear in new Explore or Drop assignments.",
-  unlock: "Successful unique viewer + Drop unlocks ÷ unique viewer + Drop claim attempts.",
-  completion: "Completed viewer + Drop runs ÷ started viewer + Drop runs. A run completes only when every assigned card was actually seen and handled.",
-  response: "Accepted + declined Interests ÷ all Interests sent in this Room.",
-  acceptance: "Accepted Interests ÷ all responded Interests.",
-  decline: "Declined Interests ÷ all responded Interests.",
-  conversation: "Matches with at least one real message ÷ all Matches created in this Room.",
-  cardsSeen: "Assigned cards where first_seen_at is not null. Assignment alone is never an impression.",
-  incomingOpened: "Incoming Interests whose recipient actually opened the sender card. List loading and polling do not count.",
-} as const;
-
-function count(value: number | null | undefined) {
-  return new Intl.NumberFormat("en").format(Number(value || 0));
-}
-
-function rate(value: number | null | undefined) {
-  return value == null ? "No data" : `${new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value)}%`;
-}
-
-function duration(seconds: number | null) {
+function number(value: number | null | undefined) { return Number(value || 0); }
+function count(value: number | null | undefined) { return new Intl.NumberFormat("en").format(number(value)); }
+function rate(value: number | null | undefined) { return value == null ? "No data" : new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value) + "%"; }
+function duration(seconds: number | null | undefined) {
   if (seconds == null) return "No data";
-  if (seconds < 60) return `${Math.round(seconds)} sec`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
-  return `${new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(seconds / 3600)} hr`;
+  if (seconds < 60) return Math.round(seconds) + " sec";
+  if (seconds < 3600) return Math.round(seconds / 60) + " min";
+  return new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(seconds / 3600) + " hr";
 }
-
-function updatedAt(value: string) {
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(value));
-}
-
-function dropTime(value: string) {
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
-}
-
-function Info({ copy }: { copy: string }) {
-  return <button type="button" className="analytics-info" aria-label={copy} title={copy}><CircleHelp size={14} /></button>;
-}
-
-function MetricCard({ label, value, icon, info }: { label: string; value: string; icon: React.ReactNode; info?: string }) {
-  return <article className="analytics-metric-card"><div>{icon}<span>{label}{info && <Info copy={info} />}</span></div><strong>{value}</strong></article>;
+function Metric({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return <article className="analytics-metric-card"><div>{icon}<span>{label}</span></div><strong>{value}</strong></article>;
 }
 
 export function OrganizerAnalytics({ room }: { room: FoundationRoom }) {
   const [analytics, setAnalytics] = useState<RoomAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [attendance, setAttendance] = useState("");
 
-  const load = useCallback(async (manual = false) => {
-    if (manual) setRefreshing(true);
-    else setLoading(true);
+  const load = useCallback(async () => {
     setError("");
-    try {
-      const client = getSupabaseOrganizerClient();
-      if (!client) throw new Error("Supabase is not configured");
-      const { data, error: analyticsError } = await client.rpc("room_analytics", { p_room_id: room.id });
-      if (analyticsError) throw analyticsError;
-      setAnalytics(data as RoomAnalytics);
-    } catch {
-      setError("Room analytics could not be loaded. Your private interaction data was not exposed.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    const client = getSupabaseOrganizerClient();
+    if (!client) { setError("Supabase is not configured."); setLoading(false); return; }
+    const result = await client.rpc("room_analytics", { p_room_id: room.id });
+    if (result.error) setError("Aggregate analytics could not be loaded.");
+    else {
+      const next = result.data as RoomAnalytics;
+      setAnalytics(next);
+      const total = next.summary.total_attendance;
+      setAttendance(total == null ? "" : String(total));
     }
+    setLoading(false);
   }, [room.id]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => { void load(); }, 0);
-    return () => window.clearTimeout(timer);
+    const initialLoad = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(initialLoad);
   }, [load]);
+
+  async function saveAttendance(event: FormEvent) {
+    event.preventDefault();
+    const client = getSupabaseOrganizerClient();
+    if (!client || attendance === "") return;
+    const result = await client.rpc("organizer_set_total_attendance", { p_room_id: room.id, p_total: Number(attendance) });
+    if (result.error) setError("Attendance could not be saved."); else await load();
+  }
 
   const funnel = useMemo(() => {
     if (!analytics) return [];
-    const summary = analytics.summary;
+    const s = analytics.summary;
     return [
-      ["Joined", summary.joined_memberships],
-      ["Explore started", summary.explore_batches_claimed],
-      ["Explore card seen", summary.explore_cards_seen],
-      ["Interest", summary.interest_senders],
-      ["Match", summary.matches_created],
-      ["Conversation", summary.conversations_started],
+      ["Joined", number(s.joined_memberships)], ["Explore users", number(s.explore_users)],
+      ["Profiles viewed", number(s.profiles_viewed)], ["Interests", number(s.interests_sent)],
+      ["Matches", number(s.matches_created)], ["Conversations", number(s.conversations_started)],
     ] as const;
   }, [analytics]);
 
-  if (loading) return <section className="organizer-analytics analytics-state" aria-busy="true"><RefreshCw className="spin" /><div><span className="eyebrow">ROOM ANALYTICS</span><h2>Building privacy-safe totals…</h2><p>No people, pairs or message text are loaded.</p></div></section>;
+  if (loading) return <section className="organizer-analytics analytics-state"><RefreshCw className="spin" /><div><h2>Building privacy-safe totals…</h2><p>No people, pairs or chat text are loaded.</p></div></section>;
+  if (!analytics) return <section className="organizer-analytics analytics-state analytics-state--error"><ShieldCheck /><div><h2>Analytics unavailable.</h2><p>{error}</p><button className="button button--ghost" onClick={() => void load()}>Try again</button></div></section>;
 
-  if (error || !analytics) return <section className="organizer-analytics analytics-state analytics-state--error"><ShieldCheck /><div><span className="eyebrow">ROOM ANALYTICS</span><h2>Analytics unavailable.</h2><p>{error || "Try again in a moment."}</p><button className="button button--ghost button--small" onClick={() => void load(true)}>Try again</button></div></section>;
-
-  const summary = analytics.summary;
-  const maxFunnel = Math.max(1, ...funnel.map(([, value]) => value));
-
+  const s = analytics.summary;
+  const max = Math.max(1, ...funnel.map((entry) => entry[1]));
   return <section className="organizer-analytics">
-    <header className="organizer-analytics__header">
-      <div><span className="eyebrow">ROOM ANALYTICS</span><h2>What happened in this Room.</h2><p>Aggregate product health only. Recently active and discovery eligible are different server-time windows, not verified physical attendance.</p></div>
-      <div><small>Last updated<br /><strong>{updatedAt(analytics.last_updated)}</strong></small><button className="icon-button" onClick={() => void load(true)} disabled={refreshing} aria-label="Refresh Room analytics"><RefreshCw className={refreshing ? "spin" : ""} /></button></div>
-    </header>
-
+    <header className="organizer-analytics__header"><div><span className="eyebrow">AGGREGATE ROOM ANALYTICS</span><h2>From arrival to real-life outcome.</h2><p>No private pairings, rejections, chat content, reporter identity or individual feedback answers.</p></div><button className="icon-button" onClick={() => void load()} aria-label="Refresh"><RefreshCw /></button></header>
+    <form className="analytics-attendance" onSubmit={saveAttendance}><label>Total event attendance <small>Optional manual organizer estimate</small><input type="number" min="0" value={attendance} onChange={(event) => setAttendance(event.target.value)} placeholder="e.g. 180" /></label><button className="button button--ghost button--small">Save</button></form>
     <div className="analytics-summary-grid">
-      <MetricCard label="Joined" value={count(summary.joined_memberships)} icon={<Users />} />
-      <MetricCard label="Recently active" value={count(summary.active_memberships)} icon={<Activity />} info={FORMULAS.active} />
-      <MetricCard label="Discovery eligible" value={count(summary.discovery_eligible_memberships)} icon={<Sparkles />} info={FORMULAS.eligible} />
-      <MetricCard label="Cards seen" value={count(summary.cards_seen)} icon={<Eye />} info={FORMULAS.cardsSeen} />
-      <MetricCard label="Interests" value={count(summary.interests_sent)} icon={<Heart />} />
-      <MetricCard label="Matches" value={count(summary.matches_created)} icon={<Sparkles />} />
-      <MetricCard label="Conversations" value={count(summary.conversations_started)} icon={<MessageCircle />} />
+      <Metric label="Joined" value={count(s.joined_memberships)} icon={<Users />} />
+      <Metric label="Recently active" value={count(s.active_memberships)} icon={<Activity />} />
+      <Metric label="Discovery eligible" value={count(s.discovery_eligible_memberships)} icon={<Sparkles />} />
+      <Metric label="Explore users" value={count(s.explore_users)} icon={<Users />} />
+      <Metric label="Profiles viewed" value={count(s.profiles_viewed)} icon={<Eye />} />
+      <Metric label="Interests" value={count(s.interests_sent)} icon={<Heart />} />
+      <Metric label="Matches" value={count(s.matches_created)} icon={<Sparkles />} />
+      <Metric label="Conversations" value={count(s.conversations_started)} icon={<MessageCircle />} />
     </div>
-
-    <section className="analytics-panel analytics-discovery">
-      <div className="analytics-panel__heading"><div><span>ALWAYS-ON EXPLORE</span><h3>Small, fair selections throughout the evening</h3></div><Sparkles /></div>
-      <div className="analytics-compact-grid">
-        <div><span>Batches claimed</span><strong>{count(summary.explore_batches_claimed)}</strong></div>
-        <div><span>Batches completed</span><strong>{count(summary.explore_batches_completed)}</strong></div>
-        <div><span>Real cards seen</span><strong>{count(summary.explore_cards_seen)}</strong></div>
-        <div><span>Explore Interests</span><strong>{count(summary.explore_interests_sent)}</strong></div>
-        <div><span>Completion rate</span><strong>{rate(analytics.explore?.completion_rate)}</strong></div>
-      </div>
-    </section>
-
-    {summary.joined_memberships === 0 && <div className="analytics-empty"><Users /><div><strong>No participant data yet.</strong><p>Share this Room’s QR. Aggregates will appear after real guests join.</p></div></div>}
-
-    <div className="analytics-dashboard-grid">
-      <section className="analytics-panel analytics-funnel">
-        <div className="analytics-panel__heading"><div><span>CONVERSION FUNNEL</span><h3>From Room to conversation</h3></div><BarChart3 /></div>
-        <div>{funnel.map(([label, value]) => <div key={label}><span>{label}</span><i><b style={{ width: `${Math.max(value ? 4 : 0, (value / maxFunnel) * 100)}%` }} /></i><strong>{count(value)}</strong></div>)}</div>
-      </section>
-
-      <section className="analytics-panel analytics-rates">
-        <div className="analytics-panel__heading"><div><span>QUALITY RATES</span><h3>Defined, never guessed</h3></div><CircleHelp /></div>
-        <dl>
-          <div><dt>Unlock rate <Info copy={FORMULAS.unlock} /></dt><dd>{rate(analytics.rates.unlock_rate)}</dd></div>
-          <div><dt>Drop completion <Info copy={FORMULAS.completion} /></dt><dd>{rate(analytics.rates.drop_completion_rate)}</dd></div>
-          <div><dt>Interest response <Info copy={FORMULAS.response} /></dt><dd>{rate(analytics.rates.interest_response_rate)}</dd></div>
-          <div><dt>Match → conversation <Info copy={FORMULAS.conversation} /></dt><dd>{rate(analytics.rates.match_to_conversation_rate)}</dd></div>
-        </dl>
-      </section>
-    </div>
-
-    <section className="analytics-panel analytics-discovery">
-      <div className="analytics-panel__heading"><div><span>DISCOVERY HEALTH</span><h3>Real server-side events</h3></div><Eye /></div>
-      <div className="analytics-compact-grid">
-        <div><span>Drops scheduled</span><strong>{count(summary.scheduled_drops)}</strong></div>
-        <div><span>Effectively opened</span><strong>{count(summary.effectively_opened_drops)}</strong></div>
-        <div><span>Unique claim attempts</span><strong>{count(summary.claim_attempts)}</strong></div>
-        <div><span>Forming attempts</span><strong>{count(summary.forming_attempts)}</strong></div>
-        <div><span>Successful unlocks</span><strong>{count(summary.successful_unlocks)}</strong></div>
-        <div><span>Completed Your Drops</span><strong>{count(summary.your_drop_completed_runs)}</strong></div>
-        <div><span>Incoming Interests opened <Info copy={FORMULAS.incomingOpened} /></span><strong>{count(summary.incoming_interests_opened)}</strong></div>
-        <div><span>Median Match → first message</span><strong>{duration(summary.median_match_to_first_message_seconds)}</strong></div>
-      </div>
-    </section>
-
-    <section className="analytics-panel analytics-response">
-      <div className="analytics-panel__heading"><div><span>INTEREST RESPONSE</span><h3>Aggregate outcomes</h3></div><Heart /></div>
-      <div className="analytics-response__counts"><div><span>Pending</span><strong>{count(summary.pending_interests)}</strong></div><div><span>Accepted</span><strong>{count(summary.accepted_interests)}</strong></div><div><span>Declined</span><strong>{count(summary.declined_interests)}</strong></div></div>
-      <div className="analytics-response__rates"><span>Response <strong>{rate(analytics.rates.interest_response_rate)}</strong><Info copy={FORMULAS.response} /></span><span>Acceptance <strong>{rate(analytics.rates.interest_acceptance_rate)}</strong><Info copy={FORMULAS.acceptance} /></span><span>Decline <strong>{rate(analytics.rates.interest_decline_rate)}</strong><Info copy={FORMULAS.decline} /></span></div>
-    </section>
-
-    <DropAnalytics drops={analytics.drops} />
-
-    <section className="analytics-safety"><ShieldCheck /><div><span>SAFETY · AGGREGATES ONLY</span><h3>{count(summary.blocks_count)} Blocks · {count(summary.reports_count)} Reports</h3><p>No identities, reasons, message bodies or pair graph are available here. Block attribution starts with Sprint 4.</p></div></section>
-    <footer className="analytics-privacy-note"><ShieldCheck /><span>Analytics never affects Fair Exposure and never exposes profiles, assignments, Interests, Matches, messages, Blocks or Reports as person-level records.</span></footer>
-  </section>;
-}
-
-function DropAnalytics({ drops }: { drops: RoomAnalyticsDrop[] }) {
-  return <section className="analytics-panel analytics-drop-table">
-    <div className="analytics-panel__heading"><div><span>DROP BREAKDOWN</span><h3>One aggregate row per Drop</h3></div><Sparkles /></div>
-    {drops.length === 0 ? <div className="analytics-insufficient"><strong>No Drops scheduled.</strong><p>Add a Drop to begin measuring discovery health.</p></div> : <div className="analytics-drop-table__scroll"><table><thead><tr><th>Drop</th><th>Status</th><th>Claims</th><th>Unlocked</th><th>Cards seen</th><th>Completed</th><th>Interests</th><th>Matches</th></tr></thead><tbody>{drops.map((drop) => <tr key={drop.drop_id}><td><strong>#{drop.sequence_number}</strong><small>{dropTime(drop.effective_open_at)}</small></td><td><span className={`analytics-drop-status analytics-drop-status--${drop.effective_status}`}>{drop.effective_status}</span></td><td>{count(drop.claim_attempts)}<small>{count(drop.forming_attempts)} forming</small></td><td>{count(drop.successful_unlocks)}<small>{rate(drop.unlock_rate)}</small></td><td>{count(drop.cards_seen)}</td><td>{count(drop.completed_runs)}<small>{rate(drop.completion_rate)}</small></td><td>{count(drop.interests_sent)}<small>{count(drop.incoming_interests_opened)} opened</small></td><td>{count(drop.matches_created)}</td></tr>)}</tbody></table></div>}
+    <div className="analytics-dashboard-grid"><section className="analytics-panel analytics-funnel"><div className="analytics-panel__heading"><div><span>PILOT FUNNEL</span><h3>From Room to conversation</h3></div><BarChart3 /></div><div>{funnel.map(([label,value]) => <div key={label}><span>{label}</span><i><b style={{ width: Math.max(value ? 4 : 0, value / max * 100) + "%" }} /></i><strong>{count(value)}</strong></div>)}</div></section>
+      <section className="analytics-panel analytics-rates"><div className="analytics-panel__heading"><div><span>CONVERSION</span><h3>Defined aggregates</h3></div><BarChart3 /></div><dl><div><dt>Attendance → joined</dt><dd>{rate(analytics.rates.join_rate)}</dd></div><div><dt>Joined → Explore</dt><dd>{rate(analytics.rates.explore_rate)}</dd></div><div><dt>Match → conversation</dt><dd>{rate(analytics.rates.match_to_conversation_rate)}</dd></div><div><dt>Median Match → first message</dt><dd>{duration(s.median_match_to_first_message_seconds)}</dd></div></dl></section></div>
+    <section className="analytics-panel"><div className="analytics-panel__heading"><div><span>MET IN PERSON</span><h3>Post-event outcome answers</h3></div><Users /></div><div className="analytics-compact-grid"><div><span>Yes</span><strong>{count(s.irl_yes)}</strong></div><div><span>No</span><strong>{count(s.irl_no)}</strong></div><div><span>Not yet</span><strong>{count(s.irl_not_yet)}</strong></div><div><span>Prefer not to say</span><strong>{count(s.irl_prefer_not_to_say)}</strong></div></div></section>
+    <section className="analytics-safety"><ShieldCheck /><div><span>SAFETY · AGGREGATES ONLY</span><h3>{count(s.blocks_count)} Blocks · {count(s.reports_count)} Reports</h3><p>Report details and moderation remain with authorized platform operations.</p></div></section>
+    {error && <p className="form-error">{error}</p>}
   </section>;
 }

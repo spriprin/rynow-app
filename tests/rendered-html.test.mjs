@@ -91,11 +91,14 @@ test("organizer self-service Auth keeps permanent and anonymous sessions separat
   assert.doesNotMatch(landing.replaceAll("aria-hidden", ""), /Open to meet|Hidden|Selective/i);
 });
 
-test("current demo models the authoritative Explore + Drops flow without production writes", async () => {
+test("current demo models the Pilot RC1 Explore flow without production writes or repetition", async () => {
   const demo = await readFile(new URL("../app/components/CurrentProductDemo.tsx", import.meta.url), "utf8");
-  for (const contract of ["Room Wall", "Explore", "all evening", "Your Drop", "Adaptive Interest Budget", "Interests left", "Interested in You", "Interested Too", "IT’S MUTUAL", "Message Sofia", "Block Sofia", "Report", "Report and Block"]) {
+  for (const contract of ["Room Wall", "Explore", "all evening", "Interested in You", "Interested Too", "IT’S MUTUAL", "Message Sofia", "Block Sofia", "Report", "Report and Block", "Connections"]) {
     assert.match(demo, new RegExp(contract, "i"));
   }
+  assert.doesNotMatch(demo, /\bDrops?\b|Interest Budget|Interests left/i);
+  assert.match(demo, /Math\.min\(current \+ 1, explorePeople\.length\)/);
+  assert.match(demo, /You’ve seen everyone available right now/);
   assert.match(demo, /one profile at a time/i);
   assert.match(demo, /sample people and interactions only/i);
   assert.match(demo, /Nothing is written to production/i);
@@ -199,11 +202,11 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[3], /NEXT_PUBLIC_APP_URL/);
   assert.match(files[1], /margin: 4/);
   assert.match(files[1], /Open join link/);
-  assert.match(files[0], /room_drop_state/);
-  assert.match(files[0], /claim_your_drop/);
-  assert.match(files[0], /mark_drop_item_seen/);
+  assert.doesNotMatch(files[0], /room_drop_state|claim_your_drop|mark_drop_item_seen/);
+  assert.match(files[0], /claim_explore_batch/);
+  assert.match(files[0], /mark_explore_item_seen/);
   assert.match(files[0], /Interested in You/i);
-  assert.match(files[0], /new Date\(target\)\.getTime\(\) > nowMs/);
+  assert.match(files[0], /ROOM_POLL_MS = 15_000/);
   assert.match(files[0], /aria-expanded=\{incomingOpen\}/);
 });
 
@@ -328,7 +331,7 @@ test("Sprint 4 exposes owner-only aggregates and instruments only real product e
 
   assert.match(roomSource, /mark_incoming_interest_opened/);
   assert.match(roomSource, /if \(!incomingOpen \|\| !selectedIncoming/);
-  assert.match(roomSource, /block_user_in_context/);
+  assert.match(roomSource, /block_user_rc1/);
   assert.match(organizerSource, /room_analytics/);
   assert.match(organizerSource, /No data/);
   assert.match(organizerSource, /Joined → Your Drop started → Card seen → Interest → Match → Conversation|From Room to conversation/);
@@ -382,7 +385,7 @@ test("Sprint 5 hardens presence, retries, Realtime and duplicate mutations", asy
   assert.match(roomSource, /status === "SUBSCRIBED"[\s\S]*loadMessages/);
   assert.match(roomSource, /ResilientAvatar/);
   assert.match(roomSource, /send_match_message_idempotent/);
-  assert.match(roomSource, /submit_report_idempotent/);
+  assert.match(roomSource, /submit_report_rc1/);
   assert.match(reliabilitySource, /value\.status === 429/);
   assert.match(reliabilitySource, /Too many people are joining at once/);
   assert.match(reliabilitySource, /\[HERE operation failed\]/);
@@ -390,18 +393,19 @@ test("Sprint 5 hardens presence, retries, Realtime and duplicate mutations", asy
   assert.match(organizerSource, /joined ·.*recent/i);
 });
 
-test("Pre-pilot revision makes Explore primary while keeping Drops and explicit presence control", async () => {
+test("Pilot RC1 makes continuous Explore primary and preserves explicit presence control", async () => {
   const migration = await readFile(
     new URL("../supabase/migrations/20260824093231_pre_pilot_core_revision.sql", import.meta.url),
     "utf8",
   );
-  const [roomSource, landingSource, organizerSource, replacementFix, leftStateFix, fkIndexes] = await Promise.all([
+  const [roomSource, landingSource, organizerSource, replacementFix, leftStateFix, fkIndexes, rc1] = await Promise.all([
     readFile(new URL("../app/components/RoomJoinApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/components/ProductLanding.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/components/OrganizerAnalytics.tsx", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260824094220_fix_explore_replacement_position.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260824094426_fix_left_presence_state.sql", import.meta.url), "utf8"),
     readFile(new URL("../supabase/migrations/20260824095156_pre_pilot_fk_indexes.sql", import.meta.url), "utf8"),
+    readFile(new URL("../supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql", import.meta.url), "utf8"),
   ]);
 
   assert.match(migration, /add column if not exists discovery_enabled boolean not null default true/i);
@@ -428,8 +432,11 @@ test("Pre-pilot revision makes Explore primary while keeping Drops and explicit 
   for (const contract of ["claim_explore_batch", "mark_explore_item_seen", "send_explore_interest", "Leave event", "Rejoin event", "Explore now", "Interested in You", "Matches"]) {
     assert.match(roomSource, new RegExp(contract, "i"));
   }
-  assert.match(landingSource, /HERE works throughout the event without them/i);
-  assert.match(landingSource, /schedule optional Drops — shared moments/i);
+  assert.doesNotMatch(roomSource + landingSource + organizerSource, /\bDrops?\b|Interest Budget|Interests left/i);
+  assert.match(rc1, /pending<=3/i);
+  assert.match(rc1, /limit greatest\(0,10-pending\)/i);
+  assert.match(rc1, /rapid_interest_limit/i);
+  assert.match(rc1, /revoke all on function public\.room_drop_state/i);
   assert.match(organizerSource, /discovery eligible/i);
-  assert.match(organizerSource, /Explore started/i);
+  assert.match(organizerSource, /Explore users/i);
 });

@@ -7,16 +7,13 @@ type ErrorLike = {
 
 export type DiagnosticContext = {
   roomId?: string;
-  dropId?: string;
+  discoveryId?: string;
   matchId?: string;
 };
 
 const KNOWN_PRODUCT_ERRORS = [
   /this room has ended/i,
   /this room is not open yet/i,
-  /this drop is not open yet/i,
-  /your drop is still forming/i,
-  /no interests left/i,
   /interest already sent/i,
   /this interaction is unavailable/i,
   /messaging is unavailable/i,

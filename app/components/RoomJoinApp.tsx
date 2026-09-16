@@ -2,26 +2,27 @@
 /* eslint-disable @next/next/no-img-element -- avatars are short-lived signed Supabase Storage URLs. */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, Ban, CalendarDays, Check, Clock3, DoorOpen, Flag, ImagePlus, LockKeyhole, MapPin, MessageCircle, Radio, RefreshCw, Send, ShieldCheck, Sparkles, UserRound, Users, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Ban, CalendarDays, Check, DoorOpen, Flag, ImagePlus, LockKeyhole, MapPin, MessageCircle, Radio, RefreshCw, Send, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import type { RealtimeChannel, Session } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import { logDiagnostic, retryRead, userFacingError } from "@/lib/reliability";
-import type { DiscoveryPreference, DropItem, DropItemAction, ExploreItem, ExploreState, FoundationProfile, FoundationRoom, Gender, IncomingInterest, MatchMessage, RoomDropState, RoomMatch, RoomPresenceState, RoomWallPerson } from "@/lib/types";
+import type { DiscoveryPreference, ExploreAction, ExploreItem, ExploreState, FoundationProfile, FoundationRoom, Gender, IncomingInterest, MatchMessage, RoomMatch, RoomPresenceState, RoomWallPerson } from "@/lib/types";
+import { isExplicitlyLeft, mergeExploreBuffer, REPORT_CATEGORIES, LEGAL_VERSION, CAUGHT_UP_COPY } from "@/lib/rc1-state";
+import { UserArea } from "./UserArea";
 import { AuthTurnstile, isTurnstileConfigured, type AuthTurnstileHandle } from "./AuthTurnstile";
 
 type Screen = "loading" | "configuration" | "missing" | "closed" | "not-open" | "verification" | "onboarding" | "profile-completion" | "ready" | "edit-profile" | "room" | "error";
 type OnboardingStep = 1 | 2 | 3 | 4;
 type RoomWallRpcRow = { id: string; display_name: string; avatar_path: string; joined_at: string };
-type DropItemRpcRow = { id: string; item_position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
-type ExploreItemRpcRow = { id: string; position: number; first_seen_at: string | null; action: DropItemAction; candidate_id: string; display_name: string; avatar_path: string };
+type ExploreItemRpcRow = { id: string; position: number; first_seen_at: string | null; action: ExploreAction; candidate_id: string; display_name: string; avatar_path: string };
 type IncomingInterestRpcRow = { interest_id: string; from_user_id: string; display_name: string; avatar_path: string; created_at: string };
 type RoomMatchRpcRow = { match_id: string; other_user_id: string; display_name: string; avatar_path: string; matched_at: string; last_message_at: string | null; last_message_body: string | null; unread_count: number };
 type MatchMessageRow = { id: string; match_id: string; sender_id: string; body: string; created_at: string; read_at: string | null };
-type SafetyTarget = { userId: string; displayName: string; matchId: string | null };
+type SafetyTarget = { userId: string; displayName: string; matchId: string | null; roomId: string };
 type ConnectionState = "online" | "offline" | "recovering";
 
-const REPORT_REASONS = ["Harassment", "Fake profile", "Inappropriate behavior", "Spam", "Safety concern", "Other"] as const;
-const PROFILE_SELECT = "id, display_name, avatar_path, age_confirmed_18, gender, discovery_preference";
+const REPORT_REASONS = REPORT_CATEGORIES;
+const PROFILE_SELECT = "id, display_name, avatar_path, age_confirmed_18, gender, discovery_preference, accepted_document_version, accepted_at";
 const GENDER_OPTIONS: Array<{ value: Gender; label: string }> = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
@@ -45,7 +46,8 @@ function defaultDiscoveryPreference(gender: Gender): DiscoveryPreference {
 }
 
 function hasCompletedDiscoveryProfile(profile: FoundationProfile) {
-  return profile.gender !== null && profile.discovery_preference !== null;
+  return profile.gender !== null && profile.discovery_preference !== null
+    && profile.accepted_document_version === LEGAL_VERSION && Boolean(profile.accepted_at);
 }
 
 function initialScreenFor(room: FoundationRoom | null | undefined): Screen {
@@ -61,15 +63,6 @@ function roomDate(value: string) {
 function extensionFor(file: File) {
   const fromMime = file.type.split("/")[1]?.replace("jpeg", "jpg");
   return fromMime?.replace(/[^a-z0-9]/g, "") || "jpg";
-}
-
-function formatCountdown(target: string | null, nowMs: number) {
-  if (!target) return "--:--:--";
-  const seconds = Math.max(0, Math.floor((new Date(target).getTime() - nowMs) / 1000));
-  const hours = Math.floor(seconds / 3600).toString().padStart(2, "0");
-  const minutes = Math.floor((seconds % 3600) / 60).toString().padStart(2, "0");
-  const remaining = (seconds % 60).toString().padStart(2, "0");
-  return `${hours}:${minutes}:${remaining}`;
 }
 
 function mapMessage(row: MatchMessageRow): MatchMessage {
@@ -140,8 +133,6 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [exploreItems, setExploreItems] = useState<ExploreItem[]>([]);
   const [exploreOpen, setExploreOpen] = useState(false);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
-  const [dropState, setDropState] = useState<RoomDropState | null>(null);
-  const [dropItems, setDropItems] = useState<DropItem[]>([]);
   const [incomingInterests, setIncomingInterests] = useState<IncomingInterest[]>([]);
   const [incomingOpen, setIncomingOpen] = useState(false);
   const [selectedIncoming, setSelectedIncoming] = useState<IncomingInterest | null>(null);
@@ -151,8 +142,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [messages, setMessages] = useState<MatchMessage[]>([]);
   const [matchMoment, setMatchMoment] = useState<RoomMatch | null>(null);
   const [safetyTarget, setSafetyTarget] = useState<SafetyTarget | null>(null);
-  const [dropOpen, setDropOpen] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
+  const activeExploreItem = useMemo(() => exploreItems.find((item) => item.action === null) || null, [exploreItems]);
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [step, setStep] = useState<OnboardingStep>(1);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState("");
@@ -162,7 +153,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const [ageConfirmed, setAgeConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [dropError, setDropError] = useState("");
+  const [discoveryError, setDiscoveryError] = useState("");
   const [connectionState, setConnectionState] = useState<ConnectionState>(() => typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online");
   const [recoveryEpoch, setRecoveryEpoch] = useState(0);
   const bootstrapStarted = useRef(false);
@@ -170,7 +161,6 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const turnstileRef = useRef<AuthTurnstileHandle | undefined>(undefined);
   const markingSeen = useRef(new Set<string>());
   const markingIncomingOpened = useRef(new Set<string>());
-  const zeroRequeryFor = useRef("");
   const polling = useRef(false);
   const realtimeReconnectAttempts = useRef(0);
   const sendingMessage = useRef(false);
@@ -219,6 +209,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     const urls = await signedUrlMap(rows.map((item) => item.avatar_path));
     const nextMatches = rows.map((item) => ({
       id: item.match_id,
+      roomId,
       otherUserId: item.other_user_id,
       displayName: item.display_name,
       avatarPath: item.avatar_path,
@@ -229,7 +220,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       unreadCount: Number(item.unread_count || 0),
     } satisfies RoomMatch));
     setMatches(nextMatches);
-    setSelectedMatch((current) => current ? nextMatches.find((item) => item.id === current.id) || null : null);
+    setSelectedMatch((current) => current ? nextMatches.find((item) => item.id === current.id) || (current.roomId !== roomId ? current : null) : null);
     return nextMatches;
   }, []);
 
@@ -243,18 +234,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     }, { matchId });
     setMessages(((data || []) as MatchMessageRow[]).map(mapMessage));
     await client.rpc("mark_match_messages_read", { p_match_id: matchId });
-  }, []);
-
-  const loadAssignedDrop = useCallback(async (dropId: string) => {
-    const client = getSupabaseBrowserClient();
-    if (!client) return [];
-    const { data, error: itemsError } = await client.rpc("claim_your_drop", { p_drop_id: dropId });
-    if (itemsError) throw itemsError;
-    const rows = (data || []) as DropItemRpcRow[];
-    const urls = await signedUrlMap(rows.map((item) => item.avatar_path));
-    const items = rows.map((item) => ({ id: item.id, position: Number(item.item_position), firstSeenAt: item.first_seen_at, action: item.action, candidateId: item.candidate_id, displayName: item.display_name, avatarPath: item.avatar_path, avatarUrl: urls.get(item.avatar_path) || "" } satisfies DropItem));
-    setDropItems(items);
-    return items;
+    await client.rpc("mark_notifications_read", { p_kind: "message", p_room_id: null, p_match_id: matchId });
   }, []);
 
   const mapExploreItems = useCallback(async (rows: ExploreItemRpcRow[]) => {
@@ -284,52 +264,32 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   const loadExploreState = useCallback(async (roomId: string) => {
     const client = getSupabaseBrowserClient();
     if (!client) return null;
-    const result = await client.rpc("explore_state", { p_room_id: roomId });
+    const result = await client.rpc("claim_explore_batch", { p_room_id: roomId });
     if (result.error) throw result.error;
-    const nextState = (Array.isArray(result.data) ? result.data[0] : result.data) as ExploreState | null;
+    const nextState = result.data as ExploreState;
+    const items = await mapExploreItems((nextState?.items || []) as ExploreItemRpcRow[]);
     setExploreState(nextState);
-    if (!nextState?.batch_id || Number(nextState.remaining_count || 0) === 0) {
-      setExploreItems([]);
-      setExploreOpen(false);
-    }
+    setExploreItems((current) => mergeExploreBuffer(current, items));
     return nextState;
-  }, []);
+  }, [mapExploreItems]);
 
   const loadDiscovery = useCallback(async (roomId: string) => {
     const client = getSupabaseBrowserClient();
     if (!client) return;
-    const [stateResult, exploreResult, presenceResult, incomingResult] = await retryRead("load_discovery_state", async () => {
-      const results = await Promise.all([
-        client.rpc("room_drop_state", { p_room_id: roomId }),
-        client.rpc("explore_state", { p_room_id: roomId }),
-        client.rpc("room_presence_state", { p_room_id: roomId }),
-        client.rpc("interested_in_you", { p_room_id: roomId }),
-      ]);
-      if (results[0].error) throw results[0].error;
-      if (results[1].error) throw results[1].error;
-      if (results[2].error) throw results[2].error;
-      if (results[3].error) throw results[3].error;
-      return results;
-    }, { roomId });
-    const stateData = stateResult.data;
-    const exploreData = (Array.isArray(exploreResult.data) ? exploreResult.data[0] : exploreResult.data) as ExploreState | null;
-    const presenceData = (Array.isArray(presenceResult.data) ? presenceResult.data[0] : presenceResult.data) as RoomPresenceState | null;
-    const incomingData = incomingResult.data;
-    const state = (Array.isArray(stateData) ? stateData[0] : stateData) as RoomDropState | undefined;
-    setDropState(state || null);
-    setExploreState(exploreData);
-    setPresence(presenceData);
-    if (state?.drop_id && Number(state.assigned_count) > 0) await loadAssignedDrop(state.drop_id);
-    else { setDropItems([]); setDropOpen(false); }
-    if (!exploreData?.batch_id || Number(exploreData.remaining_count || 0) === 0) {
-      setExploreItems([]);
-      setExploreOpen(false);
-    }
-
-    const incoming = (incomingData || []) as IncomingInterestRpcRow[];
+    const [, incomingResult] = await Promise.all([
+      loadExploreState(roomId),
+      client.rpc("interested_in_you", { p_room_id: roomId }),
+    ]);
+    if (incomingResult.error) throw incomingResult.error;
+    const incoming = (incomingResult.data || []) as IncomingInterestRpcRow[];
     const urls = await signedUrlMap(incoming.map((item) => item.avatar_path));
     setIncomingInterests(incoming.map((item) => ({ interestId: item.interest_id, fromUserId: item.from_user_id, displayName: item.display_name, avatarPath: item.avatar_path, avatarUrl: urls.get(item.avatar_path) || "", createdAt: item.created_at })));
-  }, [loadAssignedDrop]);
+  }, [loadExploreState]);
+
+  const clearDiscovery = useCallback(() => {
+    setWall([]); setExploreItems([]); setExploreState(null); setExploreOpen(false);
+    setIncomingInterests([]); setIncomingOpen(false); setSelectedIncoming(null);
+  }, []);
 
   const heartbeat = useCallback(async (roomId: string) => {
     if (document.visibilityState === "hidden" || !navigator.onLine) return;
@@ -354,29 +314,41 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     setRoom(resolvedRoom);
 
     if (resolvedRoom.status === "closed") {
-      setDropOpen(false);
       setIncomingOpen(false);
       setSelectedIncoming(null);
-      setDropError("");
+      setDiscoveryError("");
       await loadConnections(roomId);
       setConnectionState("online");
       return;
     }
 
+    const restoredPresence = await loadPresence(roomId);
+    if (isExplicitlyLeft(restoredPresence)) {
+      clearDiscovery();
+      await loadConnections(roomId);
+      setConnectionState("online");
+      return;
+    }
     if (resumePresence) await heartbeat(roomId);
     await Promise.all([loadWall(roomId), loadDiscovery(roomId), loadConnections(roomId)]);
     setConnectionState("online");
-  }, [heartbeat, joinCode, loadConnections, loadDiscovery, loadWall]);
+  }, [clearDiscovery, heartbeat, joinCode, loadConnections, loadDiscovery, loadPresence, loadWall]);
 
   const enterRoom = useCallback(async (resolvedRoom: FoundationRoom) => {
     const client = getSupabaseBrowserClient();
     if (!client) return;
     const { error: joinError } = await client.rpc("join_room_by_code", { p_join_code: joinCode });
     if (joinError) throw joinError;
-    await Promise.all([loadWall(resolvedRoom.id), loadDiscovery(resolvedRoom.id), loadConnections(resolvedRoom.id)]);
+    const restoredPresence = await loadPresence(resolvedRoom.id);
+    if (isExplicitlyLeft(restoredPresence)) {
+      clearDiscovery();
+      await loadConnections(resolvedRoom.id);
+    } else {
+      await Promise.all([loadWall(resolvedRoom.id), loadDiscovery(resolvedRoom.id), loadConnections(resolvedRoom.id)]);
+    }
     setConnectionState("online");
     setScreen("room");
-  }, [joinCode, loadConnections, loadDiscovery, loadWall]);
+  }, [clearDiscovery, joinCode, loadConnections, loadDiscovery, loadPresence, loadWall]);
 
   const continueGuestSession = useCallback(async (resolvedRoom: FoundationRoom, session: Session) => {
     const client = getSupabaseBrowserClient();
@@ -394,6 +366,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     setDisplayName(typedProfile.display_name);
     setGender(typedProfile.gender || "");
     setDiscoveryPreference(typedProfile.discovery_preference || (typedProfile.gender ? defaultDiscoveryPreference(typedProfile.gender) : ""));
+    setLegalAccepted(typedProfile.accepted_document_version === LEGAL_VERSION && Boolean(typedProfile.accepted_at));
     const ownUrls = await signedUrlMap([typedProfile.avatar_path]);
     setOwnAvatarUrl(ownUrls.get(typedProfile.avatar_path) || "");
     const { data: membership, error: membershipError } = await client.from("room_members").select("room_id").eq("room_id", resolvedRoom.id).eq("user_id", userId).maybeSingle();
@@ -548,13 +521,6 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }, [activeRoomId, activeRoomStatus, refreshRoom, screen]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") setNowMs(Date.now());
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
     if (!selectedMatchId) return;
     const client = getSupabaseBrowserClient();
     if (!client) return;
@@ -570,7 +536,10 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `match_id=eq.${selectedMatchId}` }, (payload) => {
           const message = mapMessage(payload.new as MatchMessageRow);
           setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message]);
-          if (message.senderId !== profile?.id) void client.rpc("mark_match_messages_read", { p_match_id: selectedMatchId });
+          if (message.senderId !== profile?.id) {
+            void client.rpc("mark_match_messages_read", { p_match_id: selectedMatchId });
+            void client.rpc("mark_notifications_read", { p_kind: "message", p_room_id: null, p_match_id: selectedMatchId });
+          }
         })
         .subscribe((status, statusError) => {
           if (!active) return;
@@ -601,34 +570,6 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }, [loadMessages, profile?.id, recoveryEpoch, selectedMatchId]);
 
   useEffect(() => {
-    const target = dropState?.next_scheduled_at;
-    if (screen !== "room" || !room || !target || new Date(target).getTime() > nowMs) return;
-    if (zeroRequeryFor.current === target) return;
-    zeroRequeryFor.current = target;
-    void loadDiscovery(room.id).catch(() => undefined);
-  }, [dropState?.next_scheduled_at, loadDiscovery, nowMs, room, screen]);
-
-  const activeItem = useMemo(() => dropItems.find((item) => item.action === null) || null, [dropItems]);
-  const activeExploreItem = useMemo(() => exploreItems.find((item) => item.action === null) || null, [exploreItems]);
-  const interestsLeft = Math.max(0, Number(dropState?.interest_budget || 0) - Number(dropState?.interests_used || 0));
-  const exploreInterestsLeft = Math.max(0, Number(exploreState?.interest_budget || 0) - Number(exploreState?.interests_used || 0));
-
-  useEffect(() => {
-    if (!dropOpen || !activeItem || activeItem.firstSeenAt || markingSeen.current.has(activeItem.id)) return;
-    const client = getSupabaseBrowserClient();
-    if (!client) return;
-    markingSeen.current.add(activeItem.id);
-    void client.rpc("mark_drop_item_seen", { p_drop_item_id: activeItem.id }).then(({ data, error: seenError }) => {
-      markingSeen.current.delete(activeItem.id);
-      if (seenError) {
-        logDiagnostic("mark_drop_item_seen", seenError, { roomId: room?.id, dropId: dropState?.drop_id || undefined });
-        return setDropError(userFacingError(seenError, "We couldn’t open this profile. Try again."));
-      }
-      setDropItems((current) => current.map((item) => item.id === activeItem.id ? { ...item, firstSeenAt: String(data) } : item));
-    });
-  }, [activeItem, dropOpen, dropState?.drop_id, room?.id]);
-
-  useEffect(() => {
     if (!exploreOpen || !activeExploreItem || activeExploreItem.firstSeenAt || markingSeen.current.has(activeExploreItem.id)) return;
     const client = getSupabaseBrowserClient();
     if (!client) return;
@@ -636,8 +577,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     void client.rpc("mark_explore_item_seen", { p_explore_item_id: activeExploreItem.id }).then(({ data, error: seenError }) => {
       markingSeen.current.delete(activeExploreItem.id);
       if (seenError) {
-        logDiagnostic("mark_explore_item_seen", seenError, { roomId: room?.id, dropId: exploreState?.batch_id || undefined });
-        return setDropError(userFacingError(seenError, "We couldn’t open this profile. Try again."));
+        logDiagnostic("mark_explore_item_seen", seenError, { roomId: room?.id, discoveryId: exploreState?.batch_id || undefined });
+        return setDiscoveryError(userFacingError(seenError, "We couldn’t open this profile. Try again."));
       }
       setExploreItems((current) => current.map((item) => item.id === activeExploreItem.id ? { ...item, firstSeenAt: String(data) } : item));
     });
@@ -656,6 +597,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
         setError(userFacingError(openedError, "We couldn’t update this Interest. Try again."));
       }
     });
+    void client.rpc("mark_notifications_read", { p_kind: "interest", p_room_id: room?.id || null, p_match_id: null });
   }, [incomingOpen, room?.id, selectedIncoming]);
 
   function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -667,8 +609,10 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
   }
 
   async function finishOnboarding() {
-    if (!room || !photoFile || displayName.trim().length < 2 || !gender || !ageConfirmed) return;
+    if (!room || !photoFile || displayName.trim().length < 2 || !gender || !ageConfirmed || !legalAccepted) return;
     setBusy(true); setError("");
+    let persistedProfile: FoundationProfile | null = null;
+    let uploadedPath = "";
     try {
       const client = getSupabaseBrowserClient();
       if (!client) throw new Error("Supabase is not configured");
@@ -677,6 +621,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       const avatarPath = `${userData.user.id}/avatar-${crypto.randomUUID()}.${extensionFor(photoFile)}`;
       const { error: uploadError } = await client.storage.from("avatars").upload(avatarPath, photoFile, { contentType: photoFile.type, cacheControl: "300", upsert: false });
       if (uploadError) throw uploadError;
+      uploadedPath = avatarPath;
       const nextProfile: FoundationProfile = {
         id: userData.user.id,
         display_name: displayName.trim(),
@@ -685,9 +630,14 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
         gender,
         discovery_preference: discoveryPreference || defaultDiscoveryPreference(gender),
       };
-      const { error: profileError } = await client.from("profiles").upsert(nextProfile);
+      const { error: profileError } = await client.from("profiles").insert(nextProfile);
       if (profileError) throw profileError;
+      persistedProfile = nextProfile;
       setProfile(nextProfile);
+      const accepted = await client.rpc("accept_pilot_terms", { p_version: LEGAL_VERSION });
+      if (accepted.error) throw accepted.error;
+      nextProfile.accepted_document_version = LEGAL_VERSION;
+      nextProfile.accepted_at = String(accepted.data);
       const ownUrls = await signedUrlMap([avatarPath], true);
       const signedAvatarUrl = ownUrls.get(avatarPath) || "";
       setOwnAvatarUrl(signedAvatarUrl || photoPreview);
@@ -696,13 +646,24 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       await enterRoom(room);
     } catch (reason) {
       logDiagnostic("finish_onboarding", reason, { roomId: room.id });
-      setError(userFacingError(reason, "We couldn’t finish your profile. Try again."));
+      const client = getSupabaseBrowserClient();
+      if (!persistedProfile && uploadedPath && client) void client.storage.from("avatars").remove([uploadedPath]);
+      if (persistedProfile) {
+        profileCompletionHasMembership.current = false;
+        setProfile({ ...persistedProfile });
+        setOwnAvatarUrl(photoPreview);
+        setScreen("profile-completion");
+        setError("Your profile was saved. Continue to finish entering the Room.");
+      } else {
+        setError(userFacingError(reason, "We couldn’t finish your profile. Try again."));
+      }
     }
     finally { setBusy(false); }
   }
 
   async function finishProfileCompletion() {
-    if (!room || !profile || !gender) return;
+    const needsLegalAcceptance = Boolean(profile && (profile.accepted_document_version !== LEGAL_VERSION || !profile.accepted_at));
+    if (!room || !profile || !gender || (needsLegalAcceptance && !legalAccepted)) return;
     setBusy(true); setError("");
     try {
       const client = getSupabaseBrowserClient();
@@ -717,6 +678,12 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
         .single();
       if (profileError || !savedProfile) throw profileError || new Error("Profile could not be saved");
       const nextProfile = savedProfile as FoundationProfile;
+      if (needsLegalAcceptance) {
+        const accepted = await client.rpc("accept_pilot_terms", { p_version: LEGAL_VERSION });
+        if (accepted.error) throw accepted.error;
+        nextProfile.accepted_document_version = LEGAL_VERSION;
+        nextProfile.accepted_at = String(accepted.data);
+      }
       setProfile(nextProfile);
       setGender(nextProfile.gender || "");
       setDiscoveryPreference(nextProfile.discovery_preference || "");
@@ -867,7 +834,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
 
   async function openExplore() {
     if (!room || presence?.discovery_enabled === false) return;
-    setBusy(true); setDropError("");
+    setBusy(true); setDiscoveryError("");
     try {
       const client = getSupabaseBrowserClient();
       if (!client) throw new Error("Supabase is not configured");
@@ -877,35 +844,32 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       const items = await mapExploreItems((nextState?.items || []) as ExploreItemRpcRow[]);
       setExploreState(nextState);
       setExploreItems(items);
-      setExploreOpen(items.some((item) => item.action === null));
+      setExploreOpen(true);
     } catch (reason) {
       logDiagnostic("claim_explore_batch", reason, { roomId: room.id });
-      setDropError(userFacingError(reason, "We couldn’t open Explore. Try again."));
+      setDiscoveryError(userFacingError(reason, "We couldn’t open Explore. Try again."));
     }
     finally { setBusy(false); }
   }
 
   async function actOnExploreItem(action: "passed" | "interested") {
     if (!activeExploreItem?.firstSeenAt || !room) return;
-    setBusy(true); setDropError("");
+    setBusy(true); setDiscoveryError("");
     try {
       const client = getSupabaseBrowserClient();
       if (!client) throw new Error("Supabase is not configured");
       if (action === "interested") {
-        const { data, error: interestError } = await client.rpc("send_explore_interest", { p_explore_item_id: activeExploreItem.id });
+        const { error: interestError } = await client.rpc("send_explore_interest", { p_explore_item_id: activeExploreItem.id });
         if (interestError) throw interestError;
-        setExploreState((current) => current ? { ...current, interests_used: Number(current.interest_budget || 0) - Number(data || 0) } : current);
       } else {
         const { error: passError } = await client.rpc("pass_explore_item", { p_explore_item_id: activeExploreItem.id });
         if (passError) throw passError;
       }
       setExploreItems((current) => current.map((item) => item.id === activeExploreItem.id ? { ...item, action } : item));
-      const nextState = await loadExploreState(room.id);
-      if (Number(nextState?.remaining_count || 0) === 0) setExploreOpen(false);
-      await loadDiscovery(room.id);
+      await loadExploreState(room.id);
     } catch (reason) {
-      logDiagnostic(`explore_${action}`, reason, { roomId: room.id, dropId: exploreState?.batch_id || undefined });
-      setDropError(userFacingError(reason, "We couldn’t save this choice. Try again."));
+      logDiagnostic(`explore_${action}`, reason, { roomId: room.id, discoveryId: exploreState?.batch_id || undefined });
+      setDiscoveryError(userFacingError(reason, "We couldn’t save this choice. Try again."));
     }
     finally { setBusy(false); }
   }
@@ -920,9 +884,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       if (leaveError) throw leaveError;
       setLeaveConfirmOpen(false);
       setExploreOpen(false);
-      setDropOpen(false);
-      setWall([]);
-      await Promise.all([loadPresence(room.id), loadExploreState(room.id), loadConnections(room.id)]);
+      clearDiscovery();
+      await Promise.all([loadPresence(room.id), loadConnections(room.id)]);
     } catch (reason) {
       logDiagnostic("leave_event", reason, { roomId: room.id });
       setError(userFacingError(reason, "We couldn’t leave this event. Try again."));
@@ -938,48 +901,10 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       if (!client) throw new Error("Supabase is not configured");
       const { error: rejoinError } = await client.rpc("rejoin_room_presence", { p_room_id: room.id });
       if (rejoinError) throw rejoinError;
-      await Promise.all([loadWall(room.id), loadDiscovery(room.id), loadConnections(room.id)]);
+      await Promise.all([loadPresence(room.id), loadWall(room.id), loadDiscovery(room.id), loadConnections(room.id)]);
     } catch (reason) {
       logDiagnostic("rejoin_event", reason, { roomId: room.id });
       setError(userFacingError(reason, "We couldn’t rejoin this event. Try again."));
-    }
-    finally { setBusy(false); }
-  }
-
-  async function openYourDrop() {
-    if (!dropState?.drop_id) return;
-    setBusy(true); setDropError("");
-    try {
-      const items = await loadAssignedDrop(dropState.drop_id);
-      if (!items.length) throw new Error("Your Drop is still forming. People are joining now.");
-      setDropOpen(true);
-      if (room) await loadDiscovery(room.id);
-    } catch (reason) {
-      logDiagnostic("claim_your_drop", reason, { roomId: room?.id, dropId: dropState.drop_id || undefined });
-      setDropError(userFacingError(reason, "We couldn’t open Your Drop. Try again."));
-    }
-    finally { setBusy(false); }
-  }
-
-  async function actOnItem(action: "passed" | "interested") {
-    if (!activeItem?.firstSeenAt || !room) return;
-    setBusy(true); setDropError("");
-    try {
-      const client = getSupabaseBrowserClient();
-      if (!client) throw new Error("Supabase is not configured");
-      if (action === "interested") {
-        const { data, error: interestError } = await client.rpc("send_interest", { p_drop_item_id: activeItem.id });
-        if (interestError) throw interestError;
-        setDropState((current) => current ? { ...current, interests_used: Number(current.interest_budget || 0) - Number(data || 0) } : current);
-      } else {
-        const { error: passError } = await client.rpc("pass_drop_item", { p_drop_item_id: activeItem.id });
-        if (passError) throw passError;
-      }
-      setDropItems((current) => current.map((item) => item.id === activeItem.id ? { ...item, action } : item));
-      await loadDiscovery(room.id);
-    } catch (reason) {
-      logDiagnostic(`drop_${action}`, reason, { roomId: room.id, dropId: dropState?.drop_id || undefined });
-      setDropError(userFacingError(reason, "We couldn’t save this choice. Try again."));
     }
     finally { setBusy(false); }
   }
@@ -1054,9 +979,9 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     try {
       const client = getSupabaseBrowserClient();
       if (!client) throw new Error("Supabase is not configured");
-      const { error: blockError } = await client.rpc("block_user_in_context", {
+      const { error: blockError } = await client.rpc("block_user_rc1", {
         p_blocked_id: target.userId,
-        p_room_id: room.id,
+        p_room_id: target.roomId,
         p_match_id: target.matchId,
       });
       if (blockError) throw blockError;
@@ -1079,9 +1004,10 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     if (!safetyTarget || !room || submittingReport.current) return;
     const form = new FormData(event.currentTarget);
     const shouldBlock = form.get("block") === "true";
+    const shareWithEventStaff = form.get("shareWithEventStaff") === "true";
     const reason = String(form.get("reason") || "");
     const details = String(form.get("details") || "").trim() || null;
-    const fingerprint = JSON.stringify([safetyTarget.userId, room.id, safetyTarget.matchId, reason, details, shouldBlock]);
+    const fingerprint = JSON.stringify([safetyTarget.userId, safetyTarget.roomId, safetyTarget.matchId, reason, details, shouldBlock, shareWithEventStaff]);
     const attempt = reportAttempt.current?.fingerprint === fingerprint
       ? reportAttempt.current
       : { fingerprint, id: crypto.randomUUID() };
@@ -1091,13 +1017,14 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     try {
       const client = getSupabaseBrowserClient();
       if (!client) throw new Error("Supabase is not configured");
-      const { error: reportError } = await client.rpc("submit_report_idempotent", {
+      const { error: reportError } = await client.rpc("submit_report_rc1", {
         p_reported_user_id: safetyTarget.userId,
-        p_room_id: room.id,
+        p_room_id: safetyTarget.roomId,
         p_match_id: safetyTarget.matchId,
-        p_reason: reason,
+        p_category: reason,
         p_details: details,
         p_block: shouldBlock,
+        p_share_with_event_staff: shareWithEventStaff,
         p_client_action_id: attempt.id,
       });
       if (reportError) throw reportError;
@@ -1153,7 +1080,8 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
         {step === 4 && <>
           <button className="back-link" onClick={() => setStep(3)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 4 OF 4</span><h1>One last check.</h1><p>HERE is currently available only to adults.</p>
           <label className="foundation-age-check"><input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} /><span><Check size={18} /></span><strong>I am 18 or older</strong></label>
-          {error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!ageConfirmed || busy} onClick={finishOnboarding}>{busy ? "Joining…" : "Enter the Room"}<ArrowRight size={18} /></button><small className="foundation-privacy"><ShieldCheck size={14} />Your profile is saved for your next HERE event.</small>
+          <label className="foundation-age-check"><input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} /><span><Check size={18} /></span><strong>I accept the <a href="/terms" target="_blank" rel="noreferrer">Draft Terms</a> and acknowledge the <a href="/privacy" target="_blank" rel="noreferrer">Draft Privacy Policy</a>.</strong></label>
+          {error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!ageConfirmed || !legalAccepted || busy} onClick={finishOnboarding}>{busy ? "Joining…" : "Enter the Room"}<ArrowRight size={18} /></button><small className="foundation-privacy"><ShieldCheck size={14} />Your profile is saved for your next HERE event.</small>
         </>}
       </section>
     </main>;
@@ -1164,10 +1092,11 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       <FoundationRoomHeader room={room} />
       <section className="foundation-form-card returning-card profile-completion-card">
         <ResilientAvatar className="returning-avatar" path={profile.avatar_path} url={ownAvatarUrl} name={profile.display_name} />
-        <span className="eyebrow">ONE QUICK THING</span><h1>How do you identify?</h1><p>We added a simple discovery preference. Choose once, then continue with your existing profile. Organizers do not receive your individual answer.</p>
+        <span className="eyebrow">ONE QUICK THING</span><h1>Confirm your profile.</h1><p>Complete the missing preference or accept the current draft documents, then continue with your existing profile.</p>
         <ProfileChoices name="returning-gender" label="Gender" value={gender} options={GENDER_OPTIONS} onChange={(value) => { setGender(value); setDiscoveryPreference(defaultDiscoveryPreference(value)); }} />
+        {(profile.accepted_document_version !== LEGAL_VERSION || !profile.accepted_at) && <label className="foundation-age-check"><input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} /><span><Check size={18} /></span><strong>I accept the <a href="/terms" target="_blank" rel="noreferrer">Draft Terms</a> and acknowledge the <a href="/privacy" target="_blank" rel="noreferrer">Draft Privacy Policy</a>.</strong></label>}
         {error && <p className="form-error">{error}</p>}
-        <button className="button button--lime button--wide" disabled={!gender || busy} onClick={finishProfileCompletion}>{busy ? "Saving…" : "Continue"}<ArrowRight size={18} /></button>
+        <button className="button button--lime button--wide" disabled={!gender || ((profile.accepted_document_version !== LEGAL_VERSION || !profile.accepted_at) && !legalAccepted) || busy} onClick={finishProfileCompletion}>{busy ? "Saving…" : "Continue"}<ArrowRight size={18} /></button>
         <small className="foundation-privacy"><ShieldCheck size={14} />Your name, photo, connections and guest identity stay unchanged.</small>
       </section>
     </main>;
@@ -1179,12 +1108,12 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
 
   if (screen === "edit-profile" && room && profile) {
     const editPhotoUrl = photoPreview || ownAvatarUrl;
-    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card profile-editor-card"><button className="back-link" disabled={busy} onClick={cancelProfileEditor}><ArrowLeft size={17} />Back</button><span className="eyebrow">YOUR PROFILE</span><h1>Update your profile.</h1><p>Change what people see and who appears in your future Explore and Drops.</p><label className="foundation-photo-picker has-photo"><span style={editPhotoUrl ? { backgroundImage: `url(${editPhotoUrl})` } : undefined}>{photoFile ? <Check /> : <ImagePlus />}</span><strong>{photoFile ? "New photo selected" : "Change photo"}</strong><small>Camera or gallery · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label><label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label><ProfileChoices name="profile-gender" label="Gender" value={gender} options={GENDER_OPTIONS} onChange={setGender} /><ProfileChoices name="profile-discovery" label="Show me" value={discoveryPreference} options={DISCOVERY_OPTIONS} onChange={setDiscoveryPreference} /><small className="profile-choice-note">Changes apply to future selections. Existing cards, incoming Interests, Matches and chats stay unchanged. Organizers do not receive your individual gender or Show me setting.</small>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={displayName.trim().length < 2 || !gender || !discoveryPreference || busy} onClick={saveReturningProfile}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={cancelProfileEditor}>Cancel</button></div><small className="foundation-privacy"><ShieldCheck size={14} />Your guest identity and 18+ confirmation stay unchanged.</small></section></main>;
+    return <main className="foundation-onboarding"><FoundationRoomHeader room={room} /><section className="foundation-form-card profile-editor-card"><button className="back-link" disabled={busy} onClick={cancelProfileEditor}><ArrowLeft size={17} />Back</button><span className="eyebrow">YOUR PROFILE</span><h1>Update your profile.</h1><p>Change what people see and who appears in your future Explore.</p><label className="foundation-photo-picker has-photo"><span style={editPhotoUrl ? { backgroundImage: `url(${editPhotoUrl})` } : undefined}>{photoFile ? <Check /> : <ImagePlus />}</span><strong>{photoFile ? "New photo selected" : "Change photo"}</strong><small>Camera or gallery · maximum 5 MB</small><input className="file-input" type="file" accept="image/*" onChange={choosePhoto} /></label><label>First name<input value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={50} placeholder="Anna" /></label><ProfileChoices name="profile-gender" label="Gender" value={gender} options={GENDER_OPTIONS} onChange={setGender} /><ProfileChoices name="profile-discovery" label="Show me" value={discoveryPreference} options={DISCOVERY_OPTIONS} onChange={setDiscoveryPreference} /><small className="profile-choice-note">Changes apply to future selections. Existing cards, incoming Interests, Matches and chats stay unchanged. Organizers do not receive your individual gender or Show me setting.</small>{error && <p className="form-error">{error}</p>}<div className="returning-actions"><button className="button button--lime button--wide" disabled={displayName.trim().length < 2 || !gender || !discoveryPreference || busy} onClick={saveReturningProfile}>{busy ? "Saving…" : "Save changes"}<Check size={18} /></button><button className="button button--ghost button--wide" disabled={busy} onClick={cancelProfileEditor}>Cancel</button></div><small className="foundation-privacy"><ShieldCheck size={14} />Your guest identity and 18+ confirmation stay unchanged.</small></section></main>;
   }
 
   if (screen === "room" && room) {
     if (selectedMatch) {
-      const target = { userId: selectedMatch.otherUserId, displayName: selectedMatch.displayName, matchId: selectedMatch.id };
+      const target = { userId: selectedMatch.otherUserId, displayName: selectedMatch.displayName, matchId: selectedMatch.id, roomId: selectedMatch.roomId || room.id };
       return <>
         <ChatView
           room={room}
@@ -1208,19 +1137,13 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
       </>;
     }
 
-    const hasCurrentDrop = Boolean(dropState?.drop_id);
-    const hasLeftEvent = presence?.discovery_enabled === false || exploreState?.status === "left";
-    const isForming = hasCurrentDrop && Number(dropState?.assigned_count || 0) === 0 && Number(dropState?.eligible_count || 0) < Number(dropState?.min_unlock_count || 0);
-    const hasSeenEveryone = isForming && Number(dropState?.eligible_count || 0) === 0 && Number(dropState?.active_candidate_count || 0) > 0;
-    const isClaimable = hasCurrentDrop && Number(dropState?.assigned_count || 0) === 0 && !isForming;
-    const isComplete = hasCurrentDrop && Number(dropState?.assigned_count || 0) > 0 && Number(dropState?.remaining_count || 0) === 0;
-
+    const hasLeftEvent = isExplicitlyLeft(presence);
     return (
       <main className="foundation-room-screen">
         <header>
           <span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span>
           <div className="foundation-room-actions">
-            {profile && <button className="room-profile-button" type="button" onClick={() => openProfileEditor("room")} aria-label="Edit profile"><UserRound size={16} /><span>Profile</span></button>}
+            {profile && <UserArea userId={profile.id} roomId={room.id} onEditProfile={() => openProfileEditor("room")} onOpenConnection={(connection) => { setMatches((current) => current.some((item) => item.id === connection.id) ? current : [...current, connection]); openConversation(connection); }} />}
             <span className={`foundation-live ${room.status === "closed" ? "foundation-live--ended" : ""}`}><i />{room.status === "closed" ? "ROOM ENDED" : "ROOM OPEN"}</span>
           </div>
         </header>
@@ -1241,7 +1164,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
           <section className="presence-left-card">
             <DoorOpen />
             <span className="eyebrow">YOU LEFT THE EVENT</span>
-            <h2>You’re no longer shown in discovery.</h2>
+            <h2>Rejoin this event?</h2>
             <p>Your existing Matches and chats remain available. Rejoin only if you’re back at the event.</p>
             {error && <p className="form-error">{error}</p>}
             <button className="button button--dark" disabled={busy} onClick={() => void rejoinEvent()}>{busy ? "Rejoining…" : "Rejoin event"}</button>
@@ -1249,27 +1172,27 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
         ) : <>
 
         {exploreOpen && activeExploreItem ? (
-          <section className="your-drop explore-flow">
+          <section className="explore-carousel explore-flow">
             <button className="back-link" onClick={() => setExploreOpen(false)}><ArrowLeft size={17} />Back to Room</button>
-            <div className="your-drop__top"><span className="eyebrow">EXPLORE</span><span>{exploreItems.filter((item) => item.action !== null).length + 1} / {exploreItems.length}</span></div>
-            <article className="drop-profile-card">
-              <div className="drop-profile-card__photo"><ResilientAvatar path={activeExploreItem.avatarPath} url={activeExploreItem.avatarUrl} name={activeExploreItem.displayName} /></div>
-              <div className="drop-profile-card__copy"><span>Here at this event.</span><h2>{activeExploreItem.displayName}</h2><p>{exploreInterestsLeft} {exploreInterestsLeft === 1 ? "Interest" : "Interests"} left in this batch</p><div className="profile-safety-actions"><button type="button" onClick={() => void blockPerson({ userId: activeExploreItem.candidateId, displayName: activeExploreItem.displayName, matchId: null })}><Ban size={14} />Block</button><button type="button" onClick={() => setSafetyTarget({ userId: activeExploreItem.candidateId, displayName: activeExploreItem.displayName, matchId: null })}><Flag size={14} />Report</button></div></div>
-              <div className="drop-profile-card__actions">
+            <div className="explore-carousel__top"><span className="eyebrow">EXPLORE</span><span>Here, now</span></div>
+            <article className="explore-profile-card">
+              <div className="explore-profile-card__photo"><ResilientAvatar path={activeExploreItem.avatarPath} url={activeExploreItem.avatarUrl} name={activeExploreItem.displayName} /></div>
+              <div className="explore-profile-card__copy"><span>Here at this event.</span><h2>{activeExploreItem.displayName}</h2><div className="profile-safety-actions"><button type="button" onClick={() => void blockPerson({ userId: activeExploreItem.candidateId, displayName: activeExploreItem.displayName, matchId: null, roomId: room.id })}><Ban size={14} />Block</button><button type="button" onClick={() => setSafetyTarget({ userId: activeExploreItem.candidateId, displayName: activeExploreItem.displayName, matchId: null, roomId: room.id })}><Flag size={14} />Report</button></div></div>
+              <div className="explore-profile-card__actions">
                 <button className="button button--ghost" disabled={busy || !activeExploreItem.firstSeenAt} onClick={() => void actOnExploreItem("passed")}>Next <ArrowRight size={17} /></button>
-                <button className="button button--lime" disabled={busy || !activeExploreItem.firstSeenAt || exploreInterestsLeft === 0} onClick={() => void actOnExploreItem("interested")}><Sparkles size={17} />Interested</button>
+                <button className="button button--lime" disabled={busy || !activeExploreItem.firstSeenAt} onClick={() => void actOnExploreItem("interested")}><Sparkles size={17} />Interested</button>
               </div>
             </article>
-            {dropError && <p className="form-error">{dropError}</p>}
+            {discoveryError && <p className="form-error">{discoveryError}</p>}
           </section>
         ) : (
           <section className={`explore-status ${exploreState?.status === "ready" || exploreState?.status === "active" ? "explore-status--ready" : ""}`}>
             <div className="explore-status__icon"><Users /></div>
             <span className="eyebrow">EXPLORE · ALL EVENING</span>
-            {exploreState?.status === "caught_up" || exploreState?.status === "waiting" ? <><h2>You’re caught up.</h2><p>More people are joining tonight. We’ll refresh who’s available.</p><button className="button button--dark" disabled={busy} onClick={() => void openExplore()}>Check for new people</button></>
+            {exploreState?.status === "caught_up" || exploreState?.status === "waiting" ? <><h2>You’re caught up.</h2><p>{CAUGHT_UP_COPY}</p><button className="button button--dark" disabled={busy} onClick={() => void openExplore()}>Check for new people</button></>
               : exploreState?.status === "active" ? <><h2>Continue where you left off.</h2><p>Your current people and their order stay the same after refresh.</p><button className="button button--dark" disabled={busy} onClick={() => void openExplore()}>Continue Explore <ArrowRight size={18} /></button></>
                 : <><h2>See who’s here.</h2><p>A small, fairly balanced set of people who are active at this event.</p><button className="button button--dark" disabled={busy} onClick={() => void openExplore()}>{busy ? "Opening…" : "Explore now"}<ArrowRight size={18} /></button></>}
-            {dropError && <p className="form-error">{dropError}</p>}
+            {discoveryError && <p className="form-error">{discoveryError}</p>}
           </section>
         )}
 
@@ -1286,44 +1209,6 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
             <div className="foundation-empty-wall"><Users /><strong>You’re first here.</strong><p>Other guests will appear after joining this exact Room.</p></div>
           )}
         </section>
-
-        {dropOpen && dropItems.length ? (
-          <section className="your-drop">
-            <button className="back-link" onClick={() => setDropOpen(false)}><ArrowLeft size={17} />Room Wall</button>
-            <div className="your-drop__top"><span className="eyebrow">YOUR DROP</span><span>{activeItem ? `${activeItem.position} / ${dropItems.length}` : "Complete"}</span></div>
-            {activeItem ? (
-              <article className="drop-profile-card">
-                <div className="drop-profile-card__photo"><ResilientAvatar path={activeItem.avatarPath} url={activeItem.avatarUrl} name={activeItem.displayName} /></div>
-                <div className="drop-profile-card__copy"><span>Same place. Right now.</span><h2>{activeItem.displayName}</h2><p>{interestsLeft} {interestsLeft === 1 ? "Interest" : "Interests"} left</p><div className="profile-safety-actions"><button type="button" onClick={() => void blockPerson({ userId: activeItem.candidateId, displayName: activeItem.displayName, matchId: null })}><Ban size={14} />Block</button><button type="button" onClick={() => setSafetyTarget({ userId: activeItem.candidateId, displayName: activeItem.displayName, matchId: null })}><Flag size={14} />Report</button></div></div>
-                <div className="drop-profile-card__actions">
-                  <button className="button button--ghost" disabled={busy || !activeItem.firstSeenAt} onClick={() => actOnItem("passed")}>Next <ArrowRight size={17} /></button>
-                  <button className="button button--lime" disabled={busy || !activeItem.firstSeenAt || interestsLeft === 0} onClick={() => actOnItem("interested")}><Sparkles size={17} />Interested</button>
-                </div>
-              </article>
-            ) : (
-              <div className="drop-complete">
-                <Check />
-                <span className="eyebrow">THAT’S YOUR DROP</span>
-                <h2>You’ve seen this Drop.</h2>
-                {dropState?.next_scheduled_at ? <p>Next Drop · <strong>{formatCountdown(dropState.next_scheduled_at, nowMs)}</strong><br />New people are joining tonight.</p> : <p>New people may appear in the next one.</p>}
-                <button className="button button--dark" onClick={() => setDropOpen(false)}>Back to Room</button>
-              </div>
-            )}
-            {dropError && <p className="form-error">{dropError}</p>}
-          </section>
-        ) : (
-          <section className={`drop-status ${isClaimable ? "drop-status--live" : ""}`}>
-            <div>{isClaimable ? <Sparkles /> : <Clock3 />}</div>
-            {isClaimable ? <><span className="eyebrow">DROP LIVE</span><h2>Your Drop is ready.</h2><p>A limited selection, balanced for fair opportunity.</p><button className="button button--dark" disabled={busy} onClick={openYourDrop}>Open Your Drop <ArrowRight size={18} /></button></>
-              : Number(dropState?.assigned_count || 0) > 0 && !isComplete ? <><span className="eyebrow">YOUR DROP</span><h2>Continue where you left off.</h2><p>Your people and their order stay the same after refresh.</p><button className="button button--dark" onClick={() => setDropOpen(true)}>Continue Your Drop <ArrowRight size={18} /></button></>
-                : isComplete ? <><span className="eyebrow">THAT’S YOUR DROP</span><h2>You’ve seen this Drop.</h2>{dropState?.next_scheduled_at ? <p>Next Drop · <strong>{formatCountdown(dropState.next_scheduled_at, nowMs)}</strong><br />New people are joining tonight.</p> : <p>New people may appear in the next one.</p>}</>
-                  : hasSeenEveryone ? <><span className="eyebrow">CURRENTLY CAUGHT UP</span><h2>You’ve seen everyone currently available.</h2><p>New people may appear in the next Drop.</p></>
-                    : isForming ? <><span className="eyebrow">DROP LIVE</span><h2>Your Drop is forming.</h2><p>People are joining now.</p></>
-                      : dropState?.next_scheduled_at ? <><span className="eyebrow">NEXT DROP</span><h2 className="drop-countdown">{formatCountdown(dropState.next_scheduled_at, nowMs)}</h2><p>Stay present. Everyone’s Drop opens together.</p></>
-                        : <><span className="eyebrow">DROPS</span><h2>The next Drop will appear here.</h2><p>Keep an eye on the Room Wall.</p></>}
-            {dropError && <p className="form-error">{dropError}</p>}
-          </section>
-        )}
 
         <section className="interested-in-you">
           <button
@@ -1350,7 +1235,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
           {incomingOpen && selectedIncoming && (
             <article className="incoming-profile">
               <ResilientAvatar path={selectedIncoming.avatarPath} url={selectedIncoming.avatarUrl} name={selectedIncoming.displayName} />
-              <div className="incoming-profile__copy"><span className="eyebrow">SAME PLACE. RIGHT NOW.</span><h2>{selectedIncoming.displayName}</h2><p>They sent you an Interest in this Room.</p><div className="incoming-profile__actions"><button className="button button--lime" disabled={busy} onClick={() => void respondToIncoming(true)}><Sparkles size={17} />Interested Too</button><button className="button button--ghost" disabled={busy} onClick={() => void respondToIncoming(false)}>Not for me</button></div><div className="profile-safety-actions"><button type="button" onClick={() => void blockPerson({ userId: selectedIncoming.fromUserId, displayName: selectedIncoming.displayName, matchId: null })}><Ban size={14} />Block</button><button type="button" onClick={() => setSafetyTarget({ userId: selectedIncoming.fromUserId, displayName: selectedIncoming.displayName, matchId: null })}><Flag size={14} />Report</button></div></div>
+              <div className="incoming-profile__copy"><span className="eyebrow">SAME PLACE. RIGHT NOW.</span><h2>{selectedIncoming.displayName}</h2><p>They sent you an Interest in this Room.</p><div className="incoming-profile__actions"><button className="button button--lime" disabled={busy} onClick={() => void respondToIncoming(true)}><Sparkles size={17} />Interested Too</button><button className="button button--ghost" disabled={busy} onClick={() => void respondToIncoming(false)}>Not for me</button></div><div className="profile-safety-actions"><button type="button" onClick={() => void blockPerson({ userId: selectedIncoming.fromUserId, displayName: selectedIncoming.displayName, matchId: null, roomId: room.id })}><Ban size={14} />Block</button><button type="button" onClick={() => setSafetyTarget({ userId: selectedIncoming.fromUserId, displayName: selectedIncoming.displayName, matchId: null, roomId: room.id })}><Flag size={14} />Report</button></div></div>
               <button type="button" className="icon-button" onClick={() => setSelectedIncoming(null)} aria-label="Close profile"><ArrowLeft size={18} /></button>
             </article>
           )}
@@ -1358,7 +1243,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
         </>}
         </>}
 
-        <MatchesSection matches={matches} open={matchesOpen} onToggle={() => setMatchesOpen((current) => !current)} onOpen={openConversation} />
+        {matches.length > 0 && <MatchesSection matches={matches} open={matchesOpen} onToggle={() => setMatchesOpen((current) => !current)} onOpen={openConversation} />}
 
         {matchMoment && <MatchMoment match={matchMoment} onMessage={() => { openConversation(matchMoment); setMatchMoment(null); }} onBack={() => setMatchMoment(null)} />}
         {safetyTarget && <SafetySheet target={safetyTarget} busy={busy} error={error} onClose={() => setSafetyTarget(null)} onSubmit={submitSafetyReport} />}
@@ -1423,10 +1308,12 @@ function MatchMoment({ match, onMessage, onBack }: { match: RoomMatch; onMessage
 }
 
 function ChatView({ room, match, messages, ownUserId, busy, error, connectionState, onRetry, onBack, onSend, onBlock, onReport }: { room: FoundationRoom; match: RoomMatch; messages: MatchMessage[]; ownUserId: string; busy: boolean; error: string; connectionState: ConnectionState; onRetry: () => void; onBack: () => void; onSend: (event: FormEvent<HTMLFormElement>) => void; onBlock: () => void; onReport: () => void }) {
+  const sourceRoomName = match.roomName || room.name;
+  const sourceRoomEnded = (match.roomId !== undefined && match.roomId !== room.id) || match.roomStatus === "closed" || room.status === "closed";
   return <main className="match-chat">
-    <header><button className="icon-button" onClick={onBack} aria-label="Back to Matches"><ArrowLeft size={19} /></button><div><ResilientAvatar path={match.avatarPath} url={match.avatarUrl} name={match.displayName} /><div><strong>{match.displayName}</strong><small>{room.status === "closed" ? "You met here" : `Here at ${room.venue_name || room.name} tonight`}</small></div></div><div className="chat-safety"><button type="button" onClick={onReport}><Flag size={15} />Report</button><button type="button" onClick={onBlock}><Ban size={15} />Block</button></div></header>
+    <header><button className="icon-button" onClick={onBack} aria-label="Back to Matches"><ArrowLeft size={19} /></button><div><ResilientAvatar path={match.avatarPath} url={match.avatarUrl} name={match.displayName} /><div><strong>{match.displayName}</strong><small>{sourceRoomName}</small></div></div><div className="chat-safety"><button type="button" onClick={onReport}><Flag size={15} />Report</button><button type="button" onClick={onBlock}><Ban size={15} />Block</button></div></header>
     <ConnectionBanner state={connectionState} onRetry={onRetry} />
-    <section className="match-chat__context"><span className="eyebrow">REAL PEOPLE. SAME PLACE.</span><p>{room.status === "closed" ? "This Room has ended, but your conversation remains." : `You’re both at ${room.venue_name || room.name} tonight. Chat briefly, then go say hi.`}</p></section>
+    <section className="match-chat__context"><span className="eyebrow">REAL PEOPLE. SAME PLACE.</span><p>{sourceRoomEnded ? `You connected at ${sourceRoomName}. Your conversation remains.` : `You’re both at ${room.venue_name || room.name} tonight. Chat briefly, then go say hi.`}</p></section>
     <section className="match-chat__messages" aria-live="polite">{messages.length ? messages.map((message) => <article className={message.senderId === ownUserId ? "mine" : "theirs"} key={message.id}><p>{message.body}</p><time>{new Intl.DateTimeFormat("en", { hour: "2-digit", minute: "2-digit" }).format(new Date(message.createdAt))}</time></article>) : <div className="match-chat__empty"><MessageCircle /><strong>Break the final barrier.</strong><p>One short message is enough.</p></div>}</section>
     {error && <p className="match-chat__error form-error">{error}</p>}
     <form className="match-chat__composer" onSubmit={onSend}><input name="message" maxLength={1000} placeholder={`Message ${match.displayName}`} aria-label={`Message ${match.displayName}`} autoComplete="off" /><button className="button button--lime" disabled={busy} aria-label="Send message"><Send size={18} /></button></form>
@@ -1434,5 +1321,19 @@ function ChatView({ room, match, messages, ownUserId, busy, error, connectionSta
 }
 
 function SafetySheet({ target, busy, error, onClose, onSubmit }: { target: SafetyTarget; busy: boolean; error: string; onClose: () => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void }) {
-  return <div className="safety-sheet" role="dialog" aria-modal="true" aria-label={`Report ${target.displayName}`}><form onSubmit={onSubmit}><button type="button" className="icon-button safety-sheet__close" onClick={onClose} aria-label="Close report"><X size={18} /></button><Flag /><span className="eyebrow">SAFETY</span><h2>Report {target.displayName}</h2><p>The person you report will never see who submitted it.</p><label>Reason<select name="reason" required defaultValue=""><option value="" disabled>Choose a reason</option>{REPORT_REASONS.map((reason) => <option value={reason} key={reason}>{reason}</option>)}</select></label><label>Details <small>Optional</small><textarea name="details" maxLength={1000} placeholder="Add anything our safety team should know." /></label>{error && <p className="form-error">{error}</p>}<div><button className="button button--dark" name="block" value="false" disabled={busy}>Submit report</button><button className="button button--lime" name="block" value="true" disabled={busy}><Ban size={16} />Report and Block</button></div></form></div>;
+  return <div className="safety-sheet" role="dialog" aria-modal="true" aria-label={`Report ${target.displayName}`}>
+    <form onSubmit={onSubmit}>
+      <button type="button" className="icon-button safety-sheet__close" onClick={onClose} aria-label="Close report"><X size={18} /></button>
+      <Flag /><span className="eyebrow">SAFETY</span><h2>Report {target.displayName}</h2>
+      <p>The person you report will never see who submitted it.</p>
+      <label>Reason<select name="reason" required defaultValue=""><option value="" disabled>Choose a reason</option>{REPORT_REASONS.map((reason) => <option value={reason} key={reason}>{reason}</option>)}</select></label>
+      <label>Details <small>Optional</small><textarea name="details" maxLength={1000} placeholder="Add anything our safety team should know." /></label>
+      <label className="event-staff-consent" htmlFor="event-staff-consent">
+        <input id="event-staff-consent" type="checkbox" name="shareWithEventStaff" value="true" aria-label="Share relevant report details with event staff" />
+        <span><strong>Do you need help from event staff?</strong><small>Only select this if you consent to sharing this report’s relevant details with event staff.</small></span>
+      </label>
+      {error && <p className="form-error">{error}</p>}
+      <div><button className="button button--dark" name="block" value="false" disabled={busy}>Submit report</button><button className="button button--lime" name="block" value="true" disabled={busy}><Ban size={16} />Report and Block</button></div>
+    </form>
+  </div>;
 }

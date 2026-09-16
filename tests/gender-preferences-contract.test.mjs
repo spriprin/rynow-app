@@ -63,8 +63,8 @@ test("GP-J–L — mobile Room uses a natural viewport, safe input size and boun
   assert.match(layout, /export const viewport: Viewport = \{[\s\S]*width: "device-width"[\s\S]*initialScale: 1/);
   assert.doesNotMatch(layout, /maximumScale|minimumScale|userScalable/);
   assert.match(css, /-webkit-text-size-adjust: 100%/);
-  assert.match(css, /@media \(max-width: 760px\) \{[\s\S]*input, textarea, select, \.organizer-drop-form input \{ font-size: 16px; \}/);
+  assert.match(css, /@media \(max-width: 760px\) \{[\s\S]*input, textarea, select[^{]*\{ font-size: 16px; \}/);
   assert.match(css, /\.foundation-room-screen \{[\s\S]*max-width: 100%[\s\S]*overflow-x: hidden[\s\S]*overflow-x: clip/);
-  assert.match(css, /\.drop-profile-card > \* \{ min-width: 0; \}/);
+  assert.match(css, /\.explore-profile-card > \* \{ min-width: 0; \}/);
   assert.doesNotMatch(`${layout}\n${css}`, /user-scalable\s*=\s*no|maximum-scale\s*=\s*1/i);
 });

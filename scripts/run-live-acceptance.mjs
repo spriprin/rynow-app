@@ -48,11 +48,7 @@ if (releaseGate) {
 const regressionSuites = [
   "tests/organizer-auth-acceptance.test.mjs",
   "tests/supabase-acceptance.test.mjs",
-  "tests/sprint2-acceptance.test.mjs",
-  "tests/sprint3-acceptance.test.mjs",
-  "tests/sprint4-acceptance.test.mjs",
-  "tests/sprint5-acceptance.test.mjs",
-  "tests/pre-pilot-acceptance.test.mjs",
+  "tests/pilot-rc1-acceptance.test.mjs",
 ];
 const dedicatedGateSuites = [
   "tests/auth-captcha.test.mjs",
@@ -69,7 +65,7 @@ for (const [index, suite] of suites.entries()) {
   }
   const result = spawnSync(process.execPath, ["--test", `--test-reporter=${releaseGate ? "tap" : "spec"}`, suite], {
     cwd: process.cwd(),
-    env: process.env,
+    env: { ...process.env, HERE_TEST_PILOT_RC1: releaseGate ? "true" : process.env.HERE_TEST_PILOT_RC1 },
     stdio: releaseGate ? "pipe" : "inherit",
     encoding: releaseGate ? "utf8" : undefined,
     maxBuffer: 20 * 1024 * 1024,

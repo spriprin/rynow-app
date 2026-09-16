@@ -8,7 +8,6 @@ import {
   ArrowRight,
   Camera,
   Check,
-  Clock3,
   Flag,
   Heart,
   ImagePlus,
@@ -25,7 +24,7 @@ import {
   X,
 } from "lucide-react";
 
-type DemoView = "room" | "profile" | "explore" | "drop" | "incoming" | "match" | "chat";
+type DemoView = "room" | "profile" | "explore" | "incoming" | "match" | "chat";
 type DemoStep = 1 | 2 | 3 | 4;
 type DemoGender = "male" | "female" | "prefer_not_to_say";
 type DemoPreference = "female" | "male" | "everyone";
@@ -43,7 +42,7 @@ const wallPeople = [
   ["Oskar", "photo-1506794778202-cad84cf45f1d"],
 ] as const;
 
-const dropPeople = [
+const explorePeople = [
   { name: "Sofia", age: 26, image: photo("photo-1494790108377-be9c29b29330"), bio: "New in Riga. Live music, long dinners and spontaneous dancing." },
   { name: "Noah", age: 28, image: photo("photo-1500648767791-00dcc994a43e"), bio: "Product designer, vinyl collector and always close to the dance floor." },
   { name: "Elena", age: 29, image: photo("photo-1524504388940-b1c1722653e1"), bio: "Photographer, curious human and enthusiastic beginner at almost everything." },
@@ -82,14 +81,15 @@ export function CurrentProductDemo() {
   const [gender, setGender] = useState<DemoGender | "">("");
   const [preference, setPreference] = useState<DemoPreference | "">("");
   const [ageConfirmed, setAgeConfirmed] = useState(false);
+  const [legalAccepted, setLegalAccepted] = useState(false);
   const [photoError, setPhotoError] = useState("");
   const [view, setView] = useState<DemoView>("room");
-  const [dropIndex, setDropIndex] = useState(0);
-  const [budget, setBudget] = useState(4);
+  const [exploreIndex, setExploreIndex] = useState(0);
+  const [hasMatch, setHasMatch] = useState(false);
   const [toast, setToast] = useState("");
   const [messages, setMessages] = useState(initialMessages);
   const [safetyMode, setSafetyMode] = useState<SafetyMode>(null);
-  const person = dropPeople[dropIndex % dropPeople.length];
+  const person = explorePeople[exploreIndex] || null;
   const name = displayName.trim() || "Guest";
 
   function flash(message: string) {
@@ -126,7 +126,7 @@ export function CurrentProductDemo() {
   }
 
   function finishRegistration() {
-    if (!avatar || displayName.trim().length < 2 || !gender || !preference || !ageConfirmed) return;
+    if (!avatar || displayName.trim().length < 2 || !gender || !preference || !ageConfirmed || !legalAccepted) return;
     setRegistered(true);
     setView("room");
     flash(`Welcome to Friday Social, ${displayName.trim()}`);
@@ -140,22 +140,22 @@ export function CurrentProductDemo() {
     setGender("");
     setPreference("");
     setAgeConfirmed(false);
+    setLegalAccepted(false);
     setPhotoError("");
     setView("room");
-    setDropIndex(0);
-    setBudget(4);
+    setExploreIndex(0);
     setMessages(initialMessages);
+    setHasMatch(false);
     setSafetyMode(null);
     setToast("");
   }
 
   function nextProfile() {
-    setDropIndex((current) => (current + 1) % dropPeople.length);
+    setExploreIndex((current) => Math.min(current + 1, explorePeople.length));
   }
 
   function sendInterest() {
-    if (budget === 0) return flash(`No Interests left in this ${view === "drop" ? "Drop" : "Explore batch"}`);
-    setBudget((current) => current - 1);
+    if (!person) return;
     flash(`Interest sent to ${person.name}`);
     nextProfile();
   }
@@ -193,6 +193,8 @@ export function CurrentProductDemo() {
           preference={preference}
           ageConfirmed={ageConfirmed}
           setAgeConfirmed={setAgeConfirmed}
+          legalAccepted={legalAccepted}
+          setLegalAccepted={setLegalAccepted}
           finishRegistration={finishRegistration}
         />
         <DemoNotice onRestart={restartDemo} showRestart={false} />
@@ -211,8 +213,8 @@ export function CurrentProductDemo() {
           avatar={avatar}
           onProfile={() => setView("profile")}
           onExplore={() => setView("explore")}
-          onDrop={() => setView("drop")}
           onIncoming={() => setView("incoming")}
+          hasMatch={hasMatch}
           onMatch={() => setView("match")}
         />
       )}
@@ -239,29 +241,30 @@ export function CurrentProductDemo() {
             <button className="button button--lime button--wide" disabled={!avatar || displayName.trim().length < 2 || !gender || !preference} onClick={() => { setView("room"); flash("Demo profile updated"); }}>Save changes <Check size={18} /></button>
             <small className="foundation-privacy"><ShieldCheck size={14} />No profile data is sent to production.</small>
           </div>
+          {hasMatch && <section className="demo-profile-connections"><span className="eyebrow">CONNECTIONS</span><button onClick={() => setView("chat")}><img src={explorePeople[0].image} alt="" /><span><strong>Sofia</strong><small>Friday Social · Open chat</small></span><ArrowRight /></button></section>}
         </section>
       )}
 
-      {(view === "explore" || view === "drop") && (
-        <section className="demo-drop-view">
+      {view === "explore" && (
+        <section className="demo-explore-view">
           <DemoBack onClick={() => setView("room")} label="Back to Room" />
-          <div className="demo-drop-heading">
+          <div className="demo-explore-heading">
             <div>
-              <span>{view === "drop" ? "DROP LIVE" : "EXPLORE · ALL EVENING"}</span>
-              <h1>{view === "drop" ? "Your Drop" : "See who’s here"}</h1>
+              <span>EXPLORE · ALL EVENING</span>
+              <h1>See who’s here</h1>
               <p>One profile at a time. This sample selection is limited, just like the live product.</p>
             </div>
-            <strong><Heart size={16} />Adaptive Interest Budget · {budget} Interests left</strong>
           </div>
-          <article className="demo-profile-card">
-            <img src={person.image} alt={`${person.name}, sample profile`} />
+          {person ? <><article className="demo-profile-card">
+            <img src={person.image} alt={person.name + ", sample profile"} />
             <div className="demo-profile-card__copy"><span>HERE TONIGHT</span><h2>{person.name}, {person.age}</h2><p>{person.bio}</p></div>
             <div className="demo-profile-card__actions">
               <button className="button button--ghost" onClick={nextProfile}>Next</button>
-              <button className="button button--lime" onClick={sendInterest} disabled={budget === 0}><Heart size={17} />Interested</button>
+              <button className="button button--lime" onClick={sendInterest}><Heart size={17} />Interested</button>
             </div>
           </article>
-          <div className="demo-drop-progress" aria-label={`Profile ${dropIndex + 1} of ${dropPeople.length}`}>{dropPeople.map((item, index) => <i key={item.name} className={index === dropIndex ? "active" : ""} />)}</div>
+          <div className="demo-explore-progress" aria-label={"Profile " + (exploreIndex + 1) + " of " + explorePeople.length}>{explorePeople.map((item, index) => <i key={item.name} className={index === exploreIndex ? "active" : ""} />)}</div></>
+          : <article className="demo-caught-up"><Users /><h2>You’ve seen everyone available right now.</h2><p>New people will appear here as they join the event.</p><button className="button button--ghost" onClick={() => setView("room")}>Back to Room</button></article>}
         </section>
       )}
 
@@ -270,15 +273,15 @@ export function CurrentProductDemo() {
           <DemoBack onClick={() => setView("room")} label="Back to Room" />
           <div className="demo-section-title"><span>INTERESTED IN YOU</span><h1>Sofia wants to meet.</h1><p>The sender is visible. This is your decision — no guessing.</p></div>
           <article className="demo-incoming-card">
-            <img src={dropPeople[0].image} alt="Sofia, sample incoming Interest" />
-            <div><span>HERE TONIGHT</span><h2>Sofia, 26</h2><p>{dropPeople[0].bio}</p><div><button className="button button--ghost" onClick={() => { setView("room"); flash("Not for me — no Match created"); }}><X size={17} />Not for me</button><button className="button button--lime" onClick={() => setView("match")}><Heart size={17} />Interested Too</button></div></div>
+            <img src={explorePeople[0].image} alt="Sofia, sample incoming Interest" />
+            <div><span>HERE TONIGHT</span><h2>Sofia, 26</h2><p>{explorePeople[0].bio}</p><div><button className="button button--ghost" onClick={() => { setView("room"); flash("Not for me — no Match created"); }}><X size={17} />Not for me</button><button className="button button--lime" onClick={() => { setHasMatch(true); setView("match"); }}><Heart size={17} />Interested Too</button></div></div>
           </article>
         </section>
       )}
 
       {view === "match" && (
         <section className="demo-match-view">
-          <div className="demo-match-avatars"><img src={avatar} alt={`${name}, your demo profile`} /><img src={dropPeople[0].image} alt="Sofia" /></div>
+          <div className="demo-match-avatars"><img src={avatar} alt={`${name}, your demo profile`} /><img src={explorePeople[0].image} alt="Sofia" /></div>
           <span>IT’S MUTUAL</span><h1>You’re both here<br />right now.</h1><p>Chat just enough to find each other — then meet in the room.</p>
           <div className="button-row"><button className="button button--lime" onClick={() => setView("chat")}><MessageCircle size={17} />Message Sofia</button><button className="button button--ghost" onClick={() => setView("room")}>Back to Room</button></div>
         </section>
@@ -286,7 +289,7 @@ export function CurrentProductDemo() {
 
       {view === "chat" && (
         <section className="demo-chat-view">
-          <header><DemoBack onClick={() => setView("match")} label="Match" /><div><img src={dropPeople[0].image} alt="Sofia" /><span><strong>Sofia</strong><small>Both at Friday Social</small></span></div><button className="icon-button" onClick={() => setSafetyMode("menu")} aria-label="Safety options"><MoreHorizontal /></button></header>
+          <header><DemoBack onClick={() => setView("match")} label="Match" /><div><img src={explorePeople[0].image} alt="Sofia" /><span><strong>Sofia</strong><small>Both at Friday Social</small></span></div><button className="icon-button" onClick={() => setSafetyMode("menu")} aria-label="Safety options"><MoreHorizontal /></button></header>
           <div className="demo-chat-context"><Sparkles size={15} />You matched here tonight. Say where you are and meet in person.</div>
           <div className="demo-messages">{messages.map((message) => <article key={message.id} className={message.mine ? "mine" : "theirs"}><p>{message.body}</p><small>{message.time}</small></article>)}</div>
           <form onSubmit={sendMessage}><input name="message" aria-label="Message Sofia" placeholder="Write a message…" autoComplete="off" /><button type="submit" aria-label="Send message"><Send size={17} /></button></form>
@@ -297,7 +300,7 @@ export function CurrentProductDemo() {
         <div className="demo-safety" role="dialog" aria-modal="true" aria-label="Safety options">
           <section>
             <button className="icon-button" onClick={() => setSafetyMode(null)} aria-label="Close safety options"><X /></button>
-            {safetyMode === "menu" ? <><Shield /><span>SAFETY</span><h2>You’re in control.</h2><p>These demo actions mirror the privacy boundaries in a real Room.</p><button onClick={() => mockSafety("Block")}><Shield size={17} />Block Sofia</button><button onClick={() => setSafetyMode("report")}><Flag size={17} />Report</button><button className="danger" onClick={() => mockSafety("Report and Block")}><Flag size={17} />Report and Block</button></> : <><Flag /><span>REPORT</span><h2>What happened?</h2><p>No report leaves this isolated demo.</p>{["Harassment", "Fake profile", "Inappropriate behavior", "Spam", "Safety concern"].map((reason) => <button key={reason} onClick={() => mockSafety(`Report: ${reason}`)}>{reason}<ArrowRight size={15} /></button>)}</>}
+            {safetyMode === "menu" ? <><Shield /><span>SAFETY</span><h2>You’re in control.</h2><p>These demo actions mirror the privacy boundaries in a real Room.</p><button onClick={() => mockSafety("Block")}><Shield size={17} />Block Sofia</button><button onClick={() => setSafetyMode("report")}><Flag size={17} />Report</button><button className="danger" onClick={() => mockSafety("Report and Block")}><Flag size={17} />Report and Block</button></> : <><Flag /><span>REPORT</span><h2>What happened?</h2><p>No report leaves this isolated demo.</p>{["Harassment / inappropriate behaviour", "Spam", "Fake profile / impersonation", "Inappropriate profile/content", "Safety concern", "Other"].map((reason) => <button key={reason} onClick={() => mockSafety(`Report: ${reason}`)}>{reason}<ArrowRight size={15} /></button>)}</>}
           </section>
         </div>
       )}
@@ -318,7 +321,7 @@ function DemoHeader({ name, avatar, onProfile, onRoom }: { name?: string; avatar
   );
 }
 
-function DemoRegistration({ step, setStep, displayName, setDisplayName, avatar, useSamplePhoto, photoError, choosePhoto, gender, chooseGender, preference, ageConfirmed, setAgeConfirmed, finishRegistration }: {
+function DemoRegistration({ step, setStep, displayName, setDisplayName, avatar, useSamplePhoto, photoError, choosePhoto, gender, chooseGender, preference, ageConfirmed, setAgeConfirmed, legalAccepted, setLegalAccepted, finishRegistration }: {
   step: DemoStep;
   setStep: (step: DemoStep) => void;
   displayName: string;
@@ -332,6 +335,8 @@ function DemoRegistration({ step, setStep, displayName, setDisplayName, avatar, 
   preference: DemoPreference | "";
   ageConfirmed: boolean;
   setAgeConfirmed: (confirmed: boolean) => void;
+  legalAccepted: boolean;
+  setLegalAccepted: (accepted: boolean) => void;
   finishRegistration: () => void;
 }) {
   const preferenceLabel = preferenceOptions.find((option) => option.value === preference)?.label;
@@ -385,7 +390,8 @@ function DemoRegistration({ step, setStep, displayName, setDisplayName, avatar, 
           <DemoBack onClick={() => setStep(3)} label="Back" />
           <span className="eyebrow">STEP 4 OF 4</span><h2>One last check.</h2><p>HERE is currently available only to adults.</p>
           <label className="foundation-age-check"><input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} /><span><Check size={18} /></span><strong>I am 18 or older</strong></label>
-          <button className="button button--lime button--wide" disabled={!ageConfirmed} onClick={finishRegistration}>Enter the demo Room <ArrowRight size={18} /></button>
+          <label className="foundation-age-check"><input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} /><span><Check size={18} /></span><strong>I accept the <Link href="/terms" target="_blank">Draft Terms</Link> and acknowledge the <Link href="/privacy" target="_blank">Draft Privacy Policy</Link>.</strong></label>
+          <button className="button button--lime button--wide" disabled={!ageConfirmed || !legalAccepted} onClick={finishRegistration}>Enter the demo Room <ArrowRight size={18} /></button>
           <small className="foundation-privacy"><ShieldCheck size={14} />No real account is created. Reload to reset the demo.</small>
         </>}
       </section>
@@ -418,7 +424,7 @@ function DemoBack({ onClick, label }: { onClick: () => void; label: string }) {
   return <button className="back-link demo-back" onClick={onClick}><ArrowLeft size={17} />{label}</button>;
 }
 
-function RoomWall({ name, avatar, onProfile, onExplore, onDrop, onIncoming, onMatch }: { name: string; avatar: string; onProfile: () => void; onExplore: () => void; onDrop: () => void; onIncoming: () => void; onMatch: () => void }) {
+function RoomWall({ name, avatar, onProfile, onExplore, onIncoming, hasMatch, onMatch }: { name: string; avatar: string; onProfile: () => void; onExplore: () => void; onIncoming: () => void; hasMatch: boolean; onMatch: () => void }) {
   return (
     <section className="demo-room">
       <div className="demo-room__heading"><span>HERE TONIGHT</span><h1>Friday Social</h1><p>Lumen Club · Riga</p></div>
@@ -431,11 +437,8 @@ function RoomWall({ name, avatar, onProfile, onExplore, onDrop, onIncoming, onMa
         </div>
         <small>Limited sample · Room Wall is not a people catalogue</small>
       </section>
-      <article className="demo-next-drop demo-explore"><span>EXPLORE · ALL EVENING</span><Users /><strong>See who’s here</strong><p>Open a small, fair selection now. It is never a full people catalogue.</p><button className="button button--dark" onClick={onExplore}>Explore now <ArrowRight size={17} /></button></article>
-      <div className="demo-room-grid">
-        <article className="demo-next-drop"><span>NEXT DROP</span><Clock3 /><strong>08:42</strong><p>Drops are optional synchronized bursts of fresh discovery.</p><button className="button button--lime" onClick={onDrop}>Preview Drop <ArrowRight size={17} /></button></article>
-        <div><button className="demo-room-link" onClick={onIncoming}><span><Heart /><i>1</i></span><strong>Interested in You</strong><small>See who sent it</small><ArrowRight /></button><button className="demo-room-link" onClick={onMatch}><span><MessageCircle /></span><strong>Matches</strong><small>1 active connection</small><ArrowRight /></button></div>
-      </div>
+      <article className="demo-explore-card demo-explore"><span>EXPLORE · ALL EVENING</span><Users /><strong>See who’s here</strong><p>Open a small, fair selection now. It is never a full people catalogue.</p><button className="button button--dark" onClick={onExplore}>Explore now <ArrowRight size={17} /></button></article>
+      <div className="demo-room-grid"><div><button className="demo-room-link" onClick={onIncoming}><span><Heart /><i>1</i></span><strong>Interested in You</strong><small>See who sent it</small><ArrowRight /></button>{hasMatch && <button className="demo-room-link" onClick={onMatch}><span><MessageCircle /></span><strong>Connections</strong><small>Sofia · Friday Social</small><ArrowRight /></button>}</div></div>
     </section>
   );
 }
