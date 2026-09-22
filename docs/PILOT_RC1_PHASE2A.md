@@ -125,6 +125,8 @@ Documentation:
 Local tests verify:
 
 - no active Drop UI/copy/RPC calls;
+- the real QR route stays isolated from demo data whether its configured backend renders the loading shell or rejects the deliberately fake test slug;
+- source-contract extraction is reproducible with both LF and Windows CRLF checkouts;
 - no hard Interest budget;
 - candidate buffer bound/de-duplication/refill threshold;
 - server eligibility, preference, Block/Match/Interest/view exclusions;
@@ -175,6 +177,23 @@ Local results for this candidate:
 | `git diff --check` | PASS |
 
 The first build attempt encountered an old generated `dist/.openai/drizzle` directory (`EEXIST`). Only the verified local generated `dist` directory was removed; the clean rebuild then passed. No source or production data was removed.
+
+### Staging Security Advisor addendum — 22 September 2026
+
+The full migration chain is now applied to the isolated `here-staging` project (`orkkwgxuzudawiailyen`). Production Supabase, production frontend and DNS remain unchanged.
+
+`supabase db advisors --linked --project-ref orkkwgxuzudawiailyen --type security --level info` reported no `ERROR` findings:
+
+- Eight `rls_enabled_no_policy` `INFO` findings are expected deny-by-default controls. The affected private/RPC-only tables have no direct `anon` or `authenticated` table grants in the live staging catalog.
+- The single anonymous `SECURITY DEFINER` warning for `get_room_by_join_code` is expected: it is the deliberately narrow pre-Auth QR lookup and returns only Room entry metadata for a high-entropy join code.
+- Forty authenticated `SECURITY DEFINER` warnings cover 32 active client RPCs, five identity-bound RLS/Storage helpers and three inactive compatibility RPCs. The active identity-bound functions derive the caller from `auth.uid()`; the admin functions instead call the private platform-admin allowlist guard.
+
+Two defense-in-depth items must be resolved with a new forward-only migration before the pilot:
+
+1. Revoke client execution from the inactive `explore_state`, `sent_interests` and non-idempotent `send_match_message` RPCs unless an explicit compatibility requirement is approved.
+2. Change the nine inherited functions still configured with `search_path=public` (`can_access_match`, `get_room_by_join_code`, `interested_in_you`, `is_pair_blocked`, `mark_match_messages_read`, `room_joined_count`, `room_matches`, `send_match_message`, `sent_interests`) to the documented empty `search_path`, schema-qualifying any remaining references. Re-run the advisor and live regression after that migration.
+
+These are staging hardening findings, not evidence of a current cross-user data path. No database change was made as part of this review.
 
 ## 6. Not live-tested in Phase 2A
 

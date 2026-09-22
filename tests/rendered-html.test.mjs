@@ -47,7 +47,7 @@ test("keeps real QR and organizer routes separate from demo data", async () => {
   assert.equal(roomResponse.status, 200);
   assert.equal(organizerResponse.status, 200);
   const roomHtml = await roomResponse.text();
-  assert.match(roomHtml, /Opening Room/i);
+  assert.match(roomHtml, /Opening Room|ROOM NOT FOUND/i);
   assert.doesNotMatch(roomHtml, /Noah|Sofia|93 visible/i);
   const organizerHtml = await organizerResponse.text();
   assert.match(organizerHtml, /Opening organizer space/i);
@@ -161,7 +161,7 @@ test("Sprint 2 is additive, server-generated and popularity-neutral", async () =
   assert.match(migration, /drop_items and interests intentionally have no direct table policies/i);
   assert.doesNotMatch(migration, /create table public\.(matches|messages)/i);
 
-  const rankingBlock = migration.match(/with candidate_exposure as \([\s\S]*?\), ranked as \([\s\S]*?\)\n {4}select/i)?.[0] || "";
+  const rankingBlock = migration.match(/with candidate_exposure as \([\s\S]*?\), ranked as \([\s\S]*?\)\r?\n {4}select/i)?.[0] || "";
   assert.match(rankingBlock, /delivered_count/);
   assert.match(rankingBlock, /pending_count/);
   assert.doesNotMatch(rankingBlock, /interests|interest_budget|popularity/i);
@@ -187,7 +187,7 @@ test("client bundle source never references a service role key", async () => {
   assert.match(files[0], /join_room_by_code/);
   assert.match(files[0], />Edit profile</);
   assert.match(files[0], /setScreen\("edit-profile"\)/);
-  const returningProfileEdit = files[0].match(/async function saveReturningProfile\(\) \{[\s\S]*?\n {2}\}\n\n {2}async function joinReturningGuest/)?.[0] || "";
+  const returningProfileEdit = files[0].match(/async function saveReturningProfile\(\) \{[\s\S]*?\r?\n {2}\}\r?\n\r?\n {2}async function joinReturningGuest/)?.[0] || "";
   assert.match(returningProfileEdit, /getUser\(\)/);
   assert.match(returningProfileEdit, /userData\.user\.id !== profile\.id/);
   assert.match(returningProfileEdit, /update\(\{[\s\S]*display_name: expectedDisplayName[\s\S]*avatar_path: expectedAvatarPath[\s\S]*gender: expectedGender[\s\S]*discovery_preference: expectedDiscoveryPreference[\s\S]*\.eq\("id", userData\.user\.id\)/);
@@ -284,7 +284,7 @@ test("Sprint 3 creates one secure social loop without popularity ranking", async
   assert.match(migration, /create or replace function public\.block_user\(p_blocked_id uuid\)/i);
   assert.match(migration, /create or replace function public\.submit_report/i);
   assert.match(migration, /not public\.is_pair_blocked\(current_user_id, rm\.user_id\)/i);
-  const rankingBlock = migration.match(/with candidate_exposure as \([\s\S]*?\), ranked as \([\s\S]*?\)\n {4}select/i)?.[0] || "";
+  const rankingBlock = migration.match(/with candidate_exposure as \([\s\S]*?\), ranked as \([\s\S]*?\)\r?\n {4}select/i)?.[0] || "";
   assert.doesNotMatch(rankingBlock, /matches|messages|interests|popularity/i);
   assert.match(migration, /alter publication supabase_realtime add table public\.messages/i);
   assert.match(migration, /rooms_insert_permanent_organizer[\s\S]*is_anonymous[\s\S]*auth\.jwt\(\)[\s\S]*email/i);
