@@ -51,9 +51,9 @@ test("Pilot RC1 staging acceptance — identity, continuous Explore, social loop
   const [alice, bob] = await Promise.all([guest("Alice " + suffix, "female"), guest("Bob " + suffix, "male")]);
   for (const actor of [alice, bob]) assert.ifError((await actor.api.rpc("join_room_by_code", { p_join_code: room.join_code })).error);
 
-  const initialMembership = await alice.api.from("room_members").select("room_id,user_id,joined_at,left_at,discovery_enabled").eq("room_id", room.id).single();
+  const initialMembership = await alice.api.from("room_members").select("room_id,user_id,joined_at,left_at,discovery_enabled").eq("room_id", room.id).eq("user_id", alice.id).single();
   assert.ifError(initialMembership.error);
-  const bobMembershipBefore = await bob.api.from("room_members").select("joined_at").eq("room_id", room.id).single();
+  const bobMembershipBefore = await bob.api.from("room_members").select("joined_at").eq("room_id", room.id).eq("user_id", bob.id).single();
   assert.ifError(bobMembershipBefore.error);
   const claim = await alice.api.rpc("claim_explore_batch", { p_room_id: room.id });
   assert.ifError(claim.error);
@@ -119,7 +119,8 @@ test("Pilot RC1 staging acceptance — identity, continuous Explore, social loop
   assert.equal(left.discovery_enabled, false);
   assert.ok(left.left_at);
   assert.ifError((await restored.rpc("rejoin_room_presence", { p_room_id: room.id })).error);
-  const rejoined = await restored.from("room_members").select("joined_at,left_at,discovery_enabled").eq("room_id", room.id).single();
+  const rejoined = await restored.from("room_members").select("joined_at,left_at,discovery_enabled").eq("room_id", room.id).eq("user_id", alice.id).single();
+  assert.ifError(rejoined.error);
   assert.equal(rejoined.data.joined_at, initialMembership.data.joined_at);
   assert.equal(rejoined.data.left_at, null);
   assert.equal(rejoined.data.discovery_enabled, true);

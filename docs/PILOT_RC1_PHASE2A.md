@@ -187,17 +187,32 @@ The full migration chain is now applied to the isolated `here-staging` project (
 - Eight `rls_enabled_no_policy` `INFO` findings are expected deny-by-default controls. The affected private/RPC-only tables have no direct `anon` or `authenticated` table grants in the live staging catalog.
 - The single anonymous `SECURITY DEFINER` warning for `get_room_by_join_code` is expected: it is the deliberately narrow pre-Auth QR lookup and returns only Room entry metadata for a high-entropy join code.
 - Forty authenticated `SECURITY DEFINER` warnings cover 32 active client RPCs, five identity-bound RLS/Storage helpers and three inactive compatibility RPCs. The active identity-bound functions derive the caller from `auth.uid()`; the admin functions instead call the private platform-admin allowlist guard.
+- Enabling the architecture's required anonymous Auth flow adds twelve `auth_allow_anonymous_sign_ins` warnings. Eleven are expected for guest-facing, identity/member-bound policies on profiles, Rooms, memberships, blocks, Matches/messages, Reports/feedback/deletion requests, Realtime chat and avatar objects. Their live definitions bind access to `auth.uid()` or the reviewed membership/Match helpers, and the RC1 negative cross-profile test passed. The twelfth is the obsolete `public.drops` read path and should not remain client-readable for the new product.
+- `auth_leaked_password_protection` is a genuine Auth hardening warning for permanent organizer/admin accounts; it is not mitigated by the anonymous guest model.
 
-Two defense-in-depth items must be resolved with a new forward-only migration before the pilot:
+Four defense-in-depth items must be resolved before the pilot:
 
 1. Revoke client execution from the inactive `explore_state`, `sent_interests` and non-idempotent `send_match_message` RPCs unless an explicit compatibility requirement is approved.
 2. Change the nine inherited functions still configured with `search_path=public` (`can_access_match`, `get_room_by_join_code`, `interested_in_you`, `is_pair_blocked`, `mark_match_messages_read`, `room_joined_count`, `room_matches`, `send_match_message`, `sent_interests`) to the documented empty `search_path`, schema-qualifying any remaining references. Re-run the advisor and live regression after that migration.
+3. Remove the remaining `authenticated` `SELECT` grant/policy exposure from the deprecated `public.drops` table unless an explicit compatibility requirement is approved.
+4. Enable leaked-password protection for permanent email/password identities and verify organizer sign-in/recovery afterwards.
 
 These are staging hardening findings, not evidence of a current cross-user data path. No database change was made as part of this review.
 
-## 6. Not live-tested in Phase 2A
+### Staging live acceptance addendum — 22 September 2026
 
-Because production Supabase is inactive and production mutation is prohibited, this report does not claim live verification of migrations, RLS, RPC execution, Storage, Auth, CAPTCHA, Realtime, concurrent devices, shared NAT/load, admin allowlist, organizer analytics or production routes. The 11 skipped suites are explicit evidence of these gates, not passes. The embedded browser surface was unavailable during the local check, so the HTTP smoke is not presented as visual or physical-device QA.
+The existing `pilot-rc1-acceptance` harness passed against the isolated `here-staging` project (`orkkwgxuzudawiailyen`) using only its publishable key, Cloudflare's official repeatable Turnstile test token and ordinary test identities. No service-role/secret key was read, stored or used.
+
+The first live attempt exposed two staging/test issues before the successful run:
+
+- anonymous sign-ins were disabled in staging even though the guest architecture requires them; they were enabled only for `here-staging`;
+- three membership assertions used `.single()` after filtering only by Room, so a Room with multiple members could not be coerced to one row. The harness now also filters by the expected `user_id` and asserts the Rejoin read error explicitly.
+
+The successful run covered Room creation, four anonymous guest identities, join and late join, continuous Explore, Interest idempotency and rejection, reciprocal Match creation, notification/chat state, explicit Leave and Rejoin with session restoration, cross-profile RLS denial, organizer denial from platform-admin operations, Report creation, independent IRL feedback privacy, organizer aggregates and deprecated Drop RPC denial.
+
+## 6. Remaining live verification
+
+The original Phase 2A run did not include a hosted backend. The staging addenda above now provide live evidence for migrated Auth, core RLS/RPC paths, organizer analytics and the RC1 social/safety flow. They do not claim production verification, Storage upload coverage, Realtime subscription delivery, enforced CAPTCHA validation, concurrent physical devices, shared NAT/load, a populated platform-admin allowlist, production routes or physical iPhone Safari/Android Chrome QA. Production mutation remains prohibited without separate authorization.
 
 ## 7. Product/operator decisions still required
 
