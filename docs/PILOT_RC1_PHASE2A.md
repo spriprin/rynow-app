@@ -1,6 +1,7 @@
 # Pilot RC1 Phase 2A — implementation report
 
 Date: 16 September 2026
+Latest staging/status update: 23 September 2026
 Scope: product source, forward-only migrations, local automated tests and an isolated staging test harness.
 Explicitly out of scope: production database/configuration, deployment, hosting/DNS migration, Git remotes, destructive data cleanup, physical removal of historical Drop objects, Sprint 6.
 
@@ -8,7 +9,7 @@ Explicitly out of scope: production database/configuration, deployment, hosting/
 
 ### Active product no longer contains Drops
 
-Removed Drop UI, countdowns, “Your Drop”, organizer controls, analytics fields, demo/landing copy and all active frontend calls to Drop RPCs. Historical SQL migrations and data definitions remain intact. The prepared migration revokes client execution from deprecated functions and replaces shared discovery/safety helpers so RC1 runtime no longer depends on Drop rows.
+Removed Drop UI, countdowns, “Your Drop”, organizer controls, analytics fields, demo/landing copy and all active frontend calls to Drop RPCs. Historical SQL migrations and data definitions remain intact. The RC1 migration revokes client execution from deprecated functions and replaces shared discovery/safety helpers so RC1 runtime no longer depends on Drop rows.
 
 ### Continuous server-curated Explore
 
@@ -76,8 +77,8 @@ Product source:
 
 Database:
 
-- `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql` (new, unapplied)
-- `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql` (new, unapplied)
+- `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql` (applied to `here-staging`, not production)
+- `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql` (applied to `here-staging`, not production)
 
 Tests and release harness:
 
@@ -95,7 +96,7 @@ Documentation:
 - `docs/HERE_HANDOFF_RU.md`
 - `docs/PILOT_RC1_PHASE2A.md` (new)
 
-## 3. Migrations prepared
+## 3. Migrations prepared and applied to staging
 
 ### `20260914135346_pilot_rc1_continuous_explore.sql`
 
@@ -221,7 +222,7 @@ The original Phase 2A run did not include a hosted backend. The staging addenda 
 - Shared Match/chat and safety-evidence handling for data deletion.
 - Initial permanent platform-admin account(s).
 - Approval or adjustment of the default 20 Interests/60 seconds abuse threshold.
-- Approval for isolated staging and then separate production rollout.
+- Separate approval for production rollout after staging hardening and physical QA.
 
 ## 8. Migration, data and security risks
 
@@ -235,18 +236,19 @@ The original Phase 2A run did not include a hosted backend. The staging addenda 
 - Auth-user deletion is unsafe until shared/cascade behavior is finalized.
 - CAPTCHA and same-NAT Auth capacity require current isolated/live evidence before pilot approval.
 
-## 9. Required staging/live sequence
+## 9. Remaining staging/live sequence
 
-1. Restore/create isolated staging Supabase.
-2. Snapshot and apply the full migration chain.
-3. Inspect schema, function ownership/search paths, RLS, grants, Storage and Realtime publication.
-4. Add trusted organizer and separate platform-admin test identities.
-5. Run the RC1 staging suite and full release regression with no unexpected skips.
-6. Run concurrency, negative API/RLS and retention/deletion-request checks.
-7. Complete physical iPhone Safari and Android Chrome QA.
-8. Repeat Turnstile and shared-NAT/load gates at the approved capacity.
-9. Approve legal/retention/deletion decisions.
-10. Separately authorize coordinated production migration, frontend deploy and production smoke.
+Completed: isolated staging exists, the full migration chain is applied, core grants/RLS/functions were inspected, an organizer test identity was created, the RC1 staging suite passed and its negative cross-profile RLS check passed.
+
+1. Apply a new forward-only hardening migration for the inactive compatibility RPCs, inherited function search paths and deprecated Drops read path.
+2. Enable leaked-password protection and add a separate allowlisted platform-admin test identity.
+3. Repeat Security Advisor, the RC1 staging suite and the full local regression.
+4. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
+5. Complete physical iPhone Safari and Android Chrome QA.
+6. Repeat real Turnstile and shared-NAT/load gates at the approved capacity.
+7. Approve legal/retention/deletion/admin decisions and the pilot scale.
+8. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
+9. Separately authorize production migration, frontend deploy and production smoke.
 
 ## 10. Deployment statement
 

@@ -13,15 +13,15 @@ The product does not expose a full participant catalogue and does not rank peopl
 
 ## Current repository status
 
-This checkout contains the **local Pilot RC1 Phase 2A implementation candidate**.
+This checkout contains the **staging-validated Pilot RC1 candidate**.
 
 - Active guest, organizer, demo and landing flows contain no Drops.
 - Historical Drop migrations/tables are retained for safe forward migration. The new migration revokes their client RPC execution rather than deleting historical data.
-- Two new forward-only migrations are prepared under `supabase/migrations/`.
-- The migrations have **not** been applied to production or staging in this phase.
-- Nothing from Phase 2A has been deployed.
-- The production Supabase project was reported inactive, so live acceptance has not been claimed.
-- Local lint, TypeScript, unit/contract tests and a clean production build pass. Live-only suites remain gated and intentionally skipped without an isolated backend.
+- The full migration chain is applied to the isolated `here-staging` Supabase project, and the RC1 live acceptance suite passes there using only a publishable key and ordinary test identities.
+- Local lint, TypeScript, unit/contract tests and a clean production build pass.
+- Security Advisor reports no `ERROR` findings. Four defense-in-depth items remain before the pilot: retire three compatibility RPCs, harden nine inherited function search paths, remove the obsolete client-readable Drops path, and enable leaked-password protection for permanent accounts.
+- As of 23 September 2026, both `here-staging` and the production `Here MVP` Supabase projects report `ACTIVE_HEALTHY`; the production project, production frontend and DNS remain untouched.
+- Nothing from this candidate has been deployed to production.
 
 See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, and [docs/HERE_HANDOFF_RU.md](docs/HERE_HANDOFF_RU.md) for the Russian owner handoff.
 
@@ -121,7 +121,7 @@ The default test command keeps live suites disabled unless their explicit enviro
 
 ## Database rollout order
 
-After production/staging Supabase is available, use an isolated staging project first and apply all historical migrations in timestamp order. The Phase 2A additions are:
+The full historical chain, including the two Phase 2A additions below, has been applied and live-tested on isolated staging. Production rollout still requires a separate approval:
 
 1. `20260914135346_pilot_rc1_continuous_explore.sql`
 2. `20260914135348_pilot_rc1_connections_safety_operations.sql`
@@ -130,8 +130,8 @@ Then run the gated RC1 acceptance suite and the complete release regression. Do 
 
 ## Historical backend objects
 
-Old Drop tables and earlier migration definitions remain in the migration chain because editing migration history or deleting production data would be unsafe. They are deprecated compatibility/history objects only. No active RC1 frontend path references them, and the prepared migration revokes client execution on the old Drop RPCs.
+Old Drop tables and earlier migration definitions remain in the migration chain because editing migration history or deleting production data would be unsafe. They are deprecated compatibility/history objects only. No active RC1 frontend path references them, and the RC1 migration revokes client execution on the old Drop RPCs.
 
 ## Ownership
 
-This directory is a Git repository on branch `main`. At the time of Phase 2A it has no configured remote. No remote, hosting or DNS work is part of this phase. Add an owner-controlled remote and managed deployment only in the separately approved infrastructure phase.
+The validated candidate is committed on branch `codex/fix-rendered-html-env`; `main` remains clean and tracks the owner-controlled GitHub remote. No frontend deployment, production database mutation or DNS change is included. Production rollout remains a separately approved phase.

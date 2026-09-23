@@ -1,6 +1,6 @@
 # HERE Pilot RC1 architecture
 
-Status: local Phase 2A implementation candidate, 16 September 2026. The two RC1 migrations described here are prepared but unapplied. Production was not modified.
+Status: staging-validated Pilot RC1 candidate, 23 September 2026. The full migration chain is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
 
 ## 1. System shape
 
@@ -167,18 +167,24 @@ The new continuous-Explore migration copies previously viewed historical Drop-ca
 
 ## 12. Migration order and rollout
 
-Apply on an isolated staging Supabase project in timestamp order. The new files are:
+The full chain has been applied on the isolated `here-staging` Supabase project in timestamp order. The RC1 additions are:
 
 1. `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql`
 2. `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql`
 
-Before production rollout:
+Completed on staging:
+
+- the full migration chain was applied;
+- the live RC1 social/safety/analytics acceptance suite passed;
+- the negative cross-profile RLS check passed;
+- Security Advisor and live catalog grants/policies were reviewed;
+- local typecheck, lint, contract tests and production build passed.
+
+Still required before production rollout:
 
 - take a schema/data snapshot;
-- inspect migration SQL and run it in staging;
-- verify all functions, constraints, RLS policies, grants and private tables;
+- apply the four documented defense-in-depth hardening items through a new forward-only migration/config change and repeat the advisor/live regression;
 - seed a permanent organizer and separately allowlist a platform admin using a trusted database operator path;
-- run the gated RC1 acceptance and full historical regression;
 - run real iPhone Safari and Android Chrome QA;
 - verify production Auth/CAPTCHA/shared-NAT capacity separately;
 - deploy frontend only after database compatibility is confirmed.

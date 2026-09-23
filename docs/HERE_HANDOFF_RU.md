@@ -1,17 +1,45 @@
 # HERE — handoff владельцу продукта
 
-Актуально на 16 сентября 2026 года.
+Актуально на 23 сентября 2026 года.
 
 ## Главное
 
-В локальном Git-проекте подготовлен **Pilot RC1 Phase 2A candidate**. Это ещё не новая production-версия.
+**Pilot RC1 технически подтверждён на staging, но ещё не разрешён к production-запуску.**
 
-- Исходники изменены локально.
-- Созданы две новые forward-only миграции, но они никуда не применялись.
-- Production Supabase, hosting, DNS и production-конфигурация не менялись.
-- Ничего не опубликовано.
-- Production Supabase был отмечен как INACTIVE, поэтому никакие live-результаты в этой фазе не заявляются.
-- Локально проходят TypeScript, lint, автоматические unit/contract тесты, чистая production-сборка и HTTP smoke шести UI-маршрутов. Встроенный browser был недоступен, поэтому это не считается visual или physical-device QA.
+- Полная цепочка миграций применена к отдельному Supabase-проекту `here-staging`.
+- Сквозной RC1-тест в staging прошёл: Room, гости, Explore, Interest, Match, chat, Leave/Rejoin, Report, feedback, analytics и негативная RLS-проверка.
+- Локально проходят TypeScript, lint, 35 автоматических тестов без ошибок и production-сборка. Ещё 11 наборов намеренно запускаются только с отдельными live-флагами.
+- Security Advisor не нашёл ошибок уровня `ERROR`, но выявил четыре задачи усиления защиты, которые нужно закрыть до пилота.
+- На момент проверки `here-staging` и production-проект `Here MVP` имеют статус `ACTIVE_HEALTHY`.
+- Production Supabase, production frontend, hosting и DNS не менялись. Ничего не опубликовано для реальных пользователей.
+- Код зафиксирован в отдельной ветке `codex/fix-rendered-html-env`; основная ветка `main` остаётся чистой.
+
+## Статус для CEO за одну минуту
+
+| Область | Статус | Что это значит для бизнеса |
+| --- | --- | --- |
+| Основной продуктовый сценарий | Зелёный на staging | Ключевая механика знакомства работает на настоящем отдельном backend, а не только в макете |
+| Автоматические проверки | Зелёный | Локальные тесты, типы, lint и сборка проходят |
+| Безопасность | Жёлтый | Явной критической утечки не найдено, но четыре защитные задачи обязательны до пилота |
+| Реальные телефоны и сеть площадки | Не проверено | Нужны iPhone/Android и тест общей Wi-Fi/NAT-нагрузки |
+| Юридические и data-retention решения | Ожидают владельца | Terms/Privacy, сроки хранения и правила удаления ещё нельзя считать финальными |
+| Production | Не тронут | Реальные пользователи и текущая инфраструктура не подвергались риску |
+
+Текущая точка проекта: **не “готово к публичному запуску”, а “основная технология доказана, можно переходить к пред-пилотному усилению и физическому QA”**.
+
+## Что такое staging и зачем он нужен
+
+**Staging — это отдельная безопасная копия рабочей среды.** Она устроена почти как production: настоящий Supabase, настоящая база, Auth, RLS и RPC, но там нет реальных пользователей и production-данных.
+
+Простая аналогия:
+
+- локальная разработка — двигатель проверяют на стенде в мастерской;
+- staging — полностью собранную машину гоняют на закрытом полигоне;
+- production — машина выезжает на дорогу с пассажирами.
+
+Staging нужен, чтобы заранее поймать ошибки, которые невозможно честно увидеть только в исходниках: неправильные права доступа, поведение Auth, реальные SQL-миграции, несколько пользователей в одной Room, повторные запросы, Match/chat и агрегаты организатора. Ошибка в staging портит только тестовые данные. Такая же ошибка в production может затронуть реальных людей, сообщения, события и репутацию компании.
+
+Наш `here-staging` — именно такой полигон. На нём уже доказано, что основной RC1-сценарий работает. Это не означает автоматического разрешения на production: перед выездом остаются безопасность, мобильные устройства, нагрузка и решения владельца.
 
 ## Что теперь представляет собой Pilot RC1
 
@@ -28,9 +56,9 @@ QR события
 → post-event вопрос о фактической встрече
 ```
 
-Drops больше не являются частью продукта для гостя или организатора. Старые таблицы/исторические миграции физически не удалены: это сделано специально, чтобы не рисковать данными. Подготовленная миграция один раз копирует факты уже просмотренных карточек в закрытый служебный реестр, чтобы Explore не повторял этих людей, и отключает доступ клиента к старым Drop RPC. Активный frontend их больше не вызывает.
+Drops больше не являются частью продукта для гостя или организатора. Старые таблицы/исторические миграции физически не удалены: это сделано специально, чтобы не рисковать данными. RC1-миграция один раз копирует факты уже просмотренных карточек в закрытый служебный реестр, чтобы Explore не повторял этих людей, и отключает доступ клиента к старым Drop RPC. На staging она применена; активный frontend их больше не вызывает.
 
-## Что реализовано локально
+## Что реализовано и подтверждено
 
 ### Continuous Explore
 
@@ -110,34 +138,59 @@ Drops больше не являются частью продукта для г
 - Cleanup жёстко выключен; destructive job не создан.
 - В Settings есть Delete my data, но сейчас это создаёт заявку, а не выполняет опасный cascade delete.
 
-## Что НЕ проверено live
+## Что уже проверено live
 
-Из-за неактивного production backend и ограничений Phase 2A не проверялись:
+На отдельном `here-staging` подтверждены:
 
-- применение двух миграций на настоящем PostgreSQL;
-- фактические RLS/grant/RPC результаты в Supabase;
-- новый anonymous onboarding с CAPTCHA;
-- два/несколько реальных устройства в одной Room;
-- live continuous Explore/refill;
-- concurrent mutual Match;
-- notification triggers и chat polling/realtime;
-- IRL feedback privacy на двух реальных Auth identities;
-- `/admin` allowlist и moderation queue;
-- aggregate organizer analytics;
-- mobile Safari/Chrome;
-- production smoke, shared Wi‑Fi/NAT и нагрузка.
+- применение полной migration chain на настоящем PostgreSQL;
+- anonymous Auth и несколько одновременных тестовых гостей;
+- фактические RLS/RPC-границы, включая попытку изменить чужой профиль;
+- создание Room, join и появление позднего гостя;
+- continuous Explore/refill, Interest, rejection и idempotent retry;
+- взаимный ответ и ровно один Match;
+- notification/chat state;
+- явный Leave, восстановление сессии и Rejoin той же membership;
+- Report, приватность индивидуального IRL feedback и aggregate organizer analytics;
+- запрет organizer-аккаунту использовать platform-admin operations;
+- запрет устаревшего Drop RPC.
 
-Подготовлен отдельный staging acceptance test. Он специально отказывается работать с production project ref, secret/service-role ключом или неавторизованным CAPTCHA test setup.
+Тест использовал только publishable key и обычные тестовые identities. Secret/service-role ключи не использовались и не сохранялись.
+
+## Что ещё не проверено или требует завершения
+
+- реальный Turnstile enforcement, а не официальный repeatable test token;
+- физические iPhone Safari и Android Chrome;
+- несколько физических устройств через общую Wi-Fi/NAT площадки;
+- нагрузка минимум вдвое выше ожидаемого пилота;
+- доставка Realtime subscription как отдельный канал, хотя polling fallback работает;
+- полный Storage upload/replace/delete цикл аватаров на физических клиентах;
+- allowlisted platform-admin и реальная moderation queue;
+- production migration, production frontend и production smoke.
 
 ## Решения, которые ещё нужны от владельца
 
-1. Финальный юридический оператор, контакты, юрисдикция и тексты Terms/Privacy.
-2. Финальные retention-периоды вместо рабочих 30/90/180.
-3. Политика Delete My Data для shared Match/chat и safety evidence.
-4. Какие постоянные аккаунты внести в приватный platform-admin allowlist.
-5. Подтвердить или изменить anti-abuse threshold 20 Interests/60 секунд.
-6. Разрешить staging Supabase и применение миграций после code review.
-7. Разрешить production rollout отдельно после staging + physical mobile QA.
+Не нужно выбирать техническую реализацию построчно. От владельца нужны продуктовые и риск-решения:
+
+1. **Legal:** кто является юридическим оператором, какие контакты/юрисдикция и кто утверждает финальные Terms/Privacy.
+2. **Хранение данных:** принять или изменить рабочие сроки 30/90/180 дней.
+3. **Delete My Data:** решить, что происходит с общей историей Match/chat и safety evidence, когда один человек просит удалить данные.
+4. **Администраторы:** назвать постоянные аккаунты, которым действительно нужен platform-admin доступ.
+5. **Anti-abuse:** подтвердить или изменить порог 20 новых Interests за 60 секунд.
+6. **Масштаб пилота:** ожидаемое число людей, число одновременных событий, площадка и тип сети/Wi-Fi. Это задаёт тестовую нагрузку.
+7. **Физический QA:** предоставить или назначить минимум один актуальный iPhone и один Android и человека, который подтвердит сценарий на площадке.
+8. **Go/No-Go:** после закрытия безопасности и QA отдельно разрешить production migration и frontend deployment. Текущее разрешение на staging не является разрешением на production.
+
+### Что требуется от владельца прямо сейчас
+
+Минимальный следующий ответ может содержать пять вещей:
+
+- кто утверждает Terms/Privacy;
+- принимаются ли сроки 30/90/180;
+- email будущего platform admin;
+- ожидаемый максимум гостей на одном событии и число параллельных событий;
+- кто и на каких iPhone/Android проведёт физический тест.
+
+Если эти ответы пока не готовы, разработка всё равно может закрыть четыре технические security-задачи в staging. Но production запуск без решений выше не должен получать статус “готов”.
 
 ## Безопасная стратегия Delete My Data
 
@@ -155,27 +208,31 @@ Drops больше не являются частью продукта для г
 
 ## Риски миграции
 
-- Новые constraints нормализуют старые Report reason/status; сначала нужна staging-копия и проверка фактических значений.
+- Миграции успешно прошли на чистом staging, но production может содержать другой объём и старые значения. Перед production всё равно нужен snapshot и проверка фактических Report reason/status.
 - Revoke старых RPC изменит поведение старых опубликованных frontend bundle. База и новый frontend должны выпускаться согласованно; нужен короткий maintenance/rollback план.
 - Новые notification triggers начнут работать только для новых событий, исторического backfill нет.
 - `private.platform_admins` специально пустой: admin должен быть добавлен trusted database operator способом.
 - Retention пока не исполняется; сроки в интерфейсе остаются предложением.
 - Физическое удаление Auth user сегодня опасно из-за shared Matches/messages/Reports и существующих cascade FK.
-- SQL ещё не исполнялся на staging, поэтому статическая проверка не заменяет настоящий migration test.
+- До пилота нужно закрыть четыре hardening-задачи: отключить три неиспользуемых compatibility RPC, исправить `search_path` девяти старых функций, закрыть прямой клиентский read устаревшей таблицы `drops` и включить leaked-password protection.
 - Auth/Turnstile/shared-NAT capacity нужно повторно подтвердить в актуальном окружении перед пилотом.
 
 ## Что делать дальше перед Pilot RC1
 
-1. Поднять или создать изолированный staging Supabase.
-2. Сделать snapshot и применить всю migration chain по timestamp.
-3. Проверить таблицы, функции, grants, RLS и Storage.
-4. Создать permanent organizer test account и отдельного allowlisted platform admin.
-5. Запустить `pilot-rc1-acceptance` и полный release regression без skips.
-6. Провести concurrency и негативные RLS/API проверки.
-7. Пройти iPhone Safari и Android Chrome checklist на физических устройствах.
-8. Отдельно подтвердить Turnstile и 2× ожидаемую нагрузку/shared NAT.
-9. Утвердить legal/retention/deletion/admin решения.
-10. Только после этого согласовать production migration + frontend deployment + smoke.
+Уже выполнено: isolated staging создан, migration chain применена, основной RC1 live acceptance и негативная RLS-проверка прошли, Advisor разобран.
+
+Следующая последовательность:
+
+1. Сделать новую forward-only hardening migration для compatibility RPC, function `search_path` и устаревшего Drops read path.
+2. Включить leaked-password protection в staging Auth.
+3. Повторить Security Advisor, RC1 live acceptance и полный локальный regression.
+4. Создать отдельного allowlisted platform-admin и проверить moderation queue.
+5. Провести полный avatar Storage и Realtime delivery тест.
+6. Пройти iPhone Safari и Android Chrome checklist на физических устройствах.
+7. Подтвердить Turnstile и минимум 2× ожидаемую нагрузку через общую Wi-Fi/NAT.
+8. Зафиксировать решения владельца по legal, retention, deletion, admin и масштабу пилота.
+9. Подготовить production snapshot, совместимый порядок database/frontend выпуска и rollback plan.
+10. Получить отдельное письменное Go для production migration и frontend deployment, затем выполнить production smoke.
 
 ## Где смотреть код
 
@@ -190,4 +247,4 @@ Drops больше не являются частью продукта для г
 - Isolated live test: `tests/pilot-rc1-acceptance.test.mjs`
 - Полный отчёт: `docs/PILOT_RC1_PHASE2A.md`
 
-Phase 2A не начинал Sprint 6 и не менял production.
+Staging подтверждён, но production по-прежнему не менялся. Sprint 6 не начинался.
