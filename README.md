@@ -23,7 +23,7 @@ This checkout contains the **staging-validated Pilot RC1 candidate**.
 - As of 23 September 2026, both `here-staging` and the production `Here MVP` Supabase projects report `ACTIVE_HEALTHY`; the production project, production frontend and DNS remain untouched.
 - Nothing from this candidate has been deployed to production.
 
-See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, and [docs/HERE_HANDOFF_RU.md](docs/HERE_HANDOFF_RU.md) for the Russian owner handoff.
+See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/HERE_HANDOFF_RU.md](docs/HERE_HANDOFF_RU.md) for the Russian owner handoff, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
 
 ## Active routes
 

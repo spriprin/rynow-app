@@ -1,6 +1,6 @@
 # HERE Pilot RC1 architecture
 
-Status: staging-validated Pilot RC1 candidate, 23 September 2026. The full migration chain is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
+Status: staging-validated Pilot RC1 candidate, updated 26 September 2026. The full migration chain is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
 
 ## 1. System shape
 
@@ -136,28 +136,26 @@ Organizer analytics remain separate and aggregate-only. They never return indivi
 
 ## 10. Draft legal and retention infrastructure
 
-`/terms` and `/privacy` are explicitly labelled drafts and do not claim legal/GDPR compliance. The application records a version and server timestamp after the 18+ confirmation.
+`/terms` and `/privacy` are explicitly labelled drafts and do not claim legal/GDPR compliance. On 26 September 2026 the owner kept them intentionally minimal for controlled event testing, not as global public-service terms. A real attendee pilot still requires a named legal operator, contact details and jurisdiction-specific review. The application records a version and server timestamp after the 18+ confirmation.
 
-`private.pilot_settings` stores proposed retention values:
+The owner selected a uniform target retention period of 60 days for pilot product data. This is a product decision, not current runtime behavior. The applied staging configuration still stores the earlier proposal:
 
 - operational/unmatched event data: 30 days;
 - Connections/Matches/chat: 90 days;
 - safety Reports: 180 days.
 
-`cleanup_enabled` is constrained to `false`. No scheduled delete job or historical cleanup is introduced in Phase 2A.
+`cleanup_enabled` is constrained to `false`. No scheduled delete job or historical cleanup is introduced in Phase 2A. A new forward-only migration and a verified trusted cleanup worker are required before the product or Privacy page may promise automatic 60-day deletion.
 
-“Delete my data” creates/refreshes an identity-bound pending request. It does not blindly cascade shared or safety data. The proposed execution policy is:
+“Delete my data” creates/refreshes an identity-bound pending request. The owner stated an intent to delete the account and all related data, but the current foreign keys make that instruction ambiguous and destructive beyond the requesting user:
 
-1. freeze the request and create an auditable operator record;
-2. remove the current avatar object and profile-visible fields;
-3. deactivate/anonymize membership identity where aggregate integrity permits;
-4. remove unmatched Interests after the approved short retention period;
-5. preserve the other participant’s legitimate Connection/chat record through a reviewed anonymization model rather than blind cascading;
-6. retain safety evidence for the approved safety period with restricted access;
-7. retain only non-identifying aggregates longer;
-8. delete the Auth user only after all FK/shared-data consequences are approved and tested.
+1. deleting the Auth user cascades through profile, memberships, Interests, Blocks, notifications and other identity-owned rows;
+2. deleting either participant cascades through `matches`, deleting the shared chat and the other participant's Match/feedback view;
+3. Reports referencing the user also cascade, removing safety evidence;
+4. owned avatar objects must first be removed through the Storage API, not direct SQL;
+5. an organizer Auth user remains referenced by owned Rooms and needs a separate transfer/delete decision;
+6. issued JWT access tokens remain usable until expiry unless sensitive operations also validate the backing session.
 
-The final behavior is blocked on owner/legal decisions and must be implemented as a separate reviewed backend operation.
+The final worker is blocked on one explicit owner decision: whether “all data” intentionally includes the other participant's shared Match/chat state and related safety Reports. It must then be implemented as a separate reviewed backend operation with a forward-only migration, trusted server credentials, session handling and destructive staging tests. No cascade deletion is currently executed.
 
 ## 11. Historical Drop objects
 

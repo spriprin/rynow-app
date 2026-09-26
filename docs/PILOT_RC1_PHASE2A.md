@@ -1,7 +1,7 @@
 # Pilot RC1 Phase 2A — implementation report
 
 Date: 16 September 2026
-Latest staging/status update: 23 September 2026
+Latest staging/status update: 26 September 2026
 Scope: product source, forward-only migrations, local automated tests and an isolated staging test harness.
 Explicitly out of scope: production database/configuration, deployment, hosting/DNS migration, Git remotes, destructive data cleanup, physical removal of historical Drop objects, Sprint 6.
 
@@ -50,7 +50,7 @@ Normalized Report categories; added idempotent Report/Report & Block without his
 
 ### Legal, retention and deletion preparation
 
-Added draft `/privacy` and `/terms`; onboarding records the fixed draft document version and a server timestamp after 18+. Added private configurable 30/90/180-day retention proposal with cleanup disabled. “Delete my data” records an authenticated request but performs no destructive deletion.
+Added draft `/privacy` and `/terms`; onboarding records the fixed draft document version and a server timestamp after 18+. Added the original private configurable 30/90/180-day retention proposal with cleanup disabled; the owner later selected a uniform 60-day target that is not yet applied. “Delete my data” records an authenticated request but performs no destructive deletion.
 
 ### Organizer analytics
 
@@ -94,6 +94,7 @@ Documentation:
 - `README.md`
 - `docs/ARCHITECTURE.md`
 - `docs/HERE_HANDOFF_RU.md`
+- `docs/PHYSICAL_QA_RU.md`
 - `docs/PILOT_RC1_PHASE2A.md` (new)
 
 ## 3. Migrations prepared and applied to staging
@@ -215,14 +216,18 @@ The successful run covered Room creation, four anonymous guest identities, join 
 
 The original Phase 2A run did not include a hosted backend. The staging addenda above now provide live evidence for migrated Auth, core RLS/RPC paths, organizer analytics and the RC1 social/safety flow. They do not claim production verification, Storage upload coverage, Realtime subscription delivery, enforced CAPTCHA validation, concurrent physical devices, shared NAT/load, a populated platform-admin allowlist, production routes or physical iPhone Safari/Android Chrome QA. Production mutation remains prohibited without separate authorization.
 
-## 7. Product/operator decisions still required
+## 7. Product/operator decisions
 
-- Final legal operator and reviewed Terms/Privacy content/version.
-- Final 30/90/180 retention periods.
-- Shared Match/chat and safety-evidence handling for data deletion.
-- Initial permanent platform-admin account(s).
-- Approval or adjustment of the default 20 Interests/60 seconds abuse threshold.
-- Separate approval for production rollout after staging hardening and physical QA.
+Owner update, 26 September 2026:
+
+- Keep the current minimal Draft Terms/Privacy scope for controlled event testing, not as global public-service terms. A named legal operator/contact and jurisdiction-specific review are still required before a real attendee pilot.
+- Use a uniform 60-day target retention period. This is not yet implemented: staging still stores 30/90/180 and `cleanup_enabled=false`.
+- The intended Delete My Data outcome is full account/data erasure. Implementation remains blocked until the owner confirms whether that intentionally deletes the other participant's shared Match/chat state and related safety Reports through existing cascades.
+- The baseline event size is at least 20 guests and may vary. Use 40 simultaneous guests as the minimum 2× capacity gate, and resize the gate for larger planned events.
+- The owner will perform physical mobile QA using `docs/PHYSICAL_QA_RU.md`.
+- The initial permanent platform-admin email is still required after the role has been explained.
+- Approval or adjustment of the default 20 Interests/60 seconds abuse threshold is still required.
+- Production rollout still requires separate approval after staging hardening and physical QA.
 
 ## 8. Migration, data and security risks
 
@@ -232,8 +237,8 @@ The original Phase 2A run did not include a hosted backend. The staging addenda 
 - Revoking legacy RPCs can break an old frontend during a staggered rollout; database/frontend release order needs a planned compatibility window.
 - New notification triggers do not backfill historical activity.
 - The admin allowlist starts empty by design and must be populated through a trusted database operator path.
-- Retention is configuration only; no cleanup occurs.
-- Auth-user deletion is unsafe until shared/cascade behavior is finalized.
+- The owner selected a 60-day target, but retention remains configuration-only and no cleanup occurs until a new migration/worker is reviewed and tested.
+- Auth-user deletion is unsafe until shared/cascade behavior is finalized: current foreign keys can delete the other participant's shared Match/chat state and safety Reports, Storage objects must be removed first, and issued JWTs can outlive the deleted Auth row until expiry.
 - CAPTCHA and same-NAT Auth capacity require current isolated/live evidence before pilot approval.
 
 ## 9. Remaining staging/live sequence
@@ -245,8 +250,8 @@ Completed: isolated staging exists, the full migration chain is applied, core gr
 3. Repeat Security Advisor, the RC1 staging suite and the full local regression.
 4. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
 5. Complete physical iPhone Safari and Android Chrome QA.
-6. Repeat real Turnstile and shared-NAT/load gates at the approved capacity.
-7. Approve legal/retention/deletion/admin decisions and the pilot scale.
+6. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
+7. Close the remaining owner decisions: legal operator/contact, exact deletion cascade, platform-admin email and anti-abuse threshold.
 8. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
 9. Separately authorize production migration, frontend deploy and production smoke.
 
