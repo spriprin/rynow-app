@@ -146,16 +146,17 @@ The owner selected a uniform target retention period of 60 days for pilot produc
 
 `cleanup_enabled` is constrained to `false`. No scheduled delete job or historical cleanup is introduced in Phase 2A. A new forward-only migration and a verified trusted cleanup worker are required before the product or Privacy page may promise automatic 60-day deletion.
 
-“Delete my data” creates/refreshes an identity-bound pending request. The owner stated an intent to delete the account and all related data, but the current foreign keys make that instruction ambiguous and destructive beyond the requesting user:
+“Delete my data” creates/refreshes an identity-bound pending request. The owner clarified that account deletion must remove the requesting user's identity and access while preserving shared information needed by other users. The working product model is therefore deactivation plus pseudonymization, not an immediate hard delete of the Auth row:
 
-1. deleting the Auth user cascades through profile, memberships, Interests, Blocks, notifications and other identity-owned rows;
-2. deleting either participant cascades through `matches`, deleting the shared chat and the other participant's Match/feedback view;
-3. Reports referencing the user also cascade, removing safety evidence;
-4. owned avatar objects must first be removed through the Storage API, not direct SQL;
-5. an organizer Auth user remains referenced by owned Rooms and needs a separate transfer/delete decision;
-6. issued JWT access tokens remain usable until expiry unless sensitive operations also validate the backing session.
+1. disable further sign-in/use and revoke active sessions through a trusted backend operation;
+2. remove the owned avatar through the Storage API and clear any identifying profile fields;
+3. replace the public identity with a neutral “Deleted user” label and placeholder image;
+4. remove or disconnect private account-only data that is not needed by another user;
+5. preserve the shared Match/chat for the other participant, including message bodies, but show the former participant only as “Deleted user”;
+6. preserve safety Reports in pseudonymized form for the 60-day retention window;
+7. keep aggregate analytics only where they no longer identify the deleted person.
 
-The final worker is blocked on one explicit owner decision: whether “all data” intentionally includes the other participant's shared Match/chat state and related safety Reports. It must then be implemented as a separate reviewed backend operation with a forward-only migration, trusted server credentials, session handling and destructive staging tests. No cascade deletion is currently executed.
+The existing foreign keys do not implement that model safely: a direct Auth-user delete would still cascade through `matches`, shared chat, the other participant's feedback view and Reports. An organizer account also remains referenced by owned Rooms. The final workflow therefore requires a separate reviewed backend operation, a forward-only migration, explicit session handling, Storage deletion and destructive staging tests. The 60-day treatment of shared message bodies and pseudonymized Reports is the recommended working interpretation and must be reflected consistently in the final Privacy copy. No deletion or pseudonymization is currently executed.
 
 ## 11. Historical Drop objects
 

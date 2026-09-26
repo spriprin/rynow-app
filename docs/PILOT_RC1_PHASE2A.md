@@ -222,10 +222,10 @@ Owner update, 26 September 2026:
 
 - Keep the current minimal Draft Terms/Privacy scope for controlled event testing, not as global public-service terms. A named legal operator/contact and jurisdiction-specific review are still required before a real attendee pilot.
 - Use a uniform 60-day target retention period. This is not yet implemented: staging still stores 30/90/180 and `cleanup_enabled=false`.
-- The intended Delete My Data outcome is full account/data erasure. Implementation remains blocked until the owner confirms whether that intentionally deletes the other participant's shared Match/chat state and related safety Reports through existing cascades.
+- Delete My Data must remove the former user's name, avatar and access without destroying information shared with other users. The working model keeps Match/chat for the counterpart under a neutral “Deleted user” identity and retains pseudonymized safety Reports within the 60-day window. It is not implemented yet.
 - The baseline event size is at least 20 guests and may vary. Use 40 simultaneous guests as the minimum 2× capacity gate, and resize the gate for larger planned events.
 - The owner will perform physical mobile QA using `docs/PHYSICAL_QA_RU.md`.
-- The initial permanent platform-admin email is still required after the role has been explained.
+- The owner selected the initial permanent platform-admin email out of band. The address is intentionally not committed to source control; the staging Auth account and private allowlist entry do not exist yet.
 - Approval or adjustment of the default 20 Interests/60 seconds abuse threshold is still required.
 - Production rollout still requires separate approval after staging hardening and physical QA.
 
@@ -238,7 +238,7 @@ Owner update, 26 September 2026:
 - New notification triggers do not backfill historical activity.
 - The admin allowlist starts empty by design and must be populated through a trusted database operator path.
 - The owner selected a 60-day target, but retention remains configuration-only and no cleanup occurs until a new migration/worker is reviewed and tested.
-- Auth-user deletion is unsafe until shared/cascade behavior is finalized: current foreign keys can delete the other participant's shared Match/chat state and safety Reports, Storage objects must be removed first, and issued JWTs can outlive the deleted Auth row until expiry.
+- Direct Auth-user deletion is incompatible with the selected pseudonymization model: current foreign keys can delete the other participant's shared Match/chat state and safety Reports, Storage objects must be removed first, and issued JWTs can outlive the deleted Auth row until expiry. A forward-only schema change and trusted worker are required.
 - CAPTCHA and same-NAT Auth capacity require current isolated/live evidence before pilot approval.
 
 ## 9. Remaining staging/live sequence
@@ -251,7 +251,7 @@ Completed: isolated staging exists, the full migration chain is applied, core gr
 4. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
 5. Complete physical iPhone Safari and Android Chrome QA.
 6. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
-7. Close the remaining owner decisions: legal operator/contact, exact deletion cascade, platform-admin email and anti-abuse threshold.
+7. Close the remaining owner decisions: legal operator/contact, final Privacy wording for 60-day pseudonymized shared data and the anti-abuse threshold.
 8. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
 9. Separately authorize production migration, frontend deploy and production smoke.
 
