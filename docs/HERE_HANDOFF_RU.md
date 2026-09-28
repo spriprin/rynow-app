@@ -1,18 +1,17 @@
 # HERE — handoff владельцу продукта
 
-Актуально на 26 сентября 2026 года.
+Актуально на 28 сентября 2026 года.
 
 ## Главное
 
 **Pilot RC1 технически подтверждён на staging, но ещё не разрешён к production-запуску.**
 
-- Полная цепочка миграций применена к отдельному Supabase-проекту `here-staging`.
+- Полная цепочка миграций, включая отдельную security-hardening migration, применена только к Supabase-проекту `here-staging`.
 - Сквозной RC1-тест в staging прошёл: Room, гости, Explore, Interest, Match, chat, Leave/Rejoin, Report, feedback, analytics и негативная RLS-проверка.
-- Локально проходят TypeScript, lint, 35 автоматических тестов без ошибок и production-сборка. Ещё 11 наборов намеренно запускаются только с отдельными live-флагами.
-- Security Advisor не нашёл ошибок уровня `ERROR`, но выявил четыре задачи усиления защиты, которые нужно закрыть до пилота.
-- На момент проверки `here-staging` и production-проект `Here MVP` имеют статус `ACTIVE_HEALTHY`.
+- Локально проходят TypeScript, lint, production-сборка и 48 автоматических тестов: 36 выполнены без ошибок, 12 live-наборов по умолчанию намеренно пропущены.
+- Security Advisor не нашёл ошибок уровня `ERROR`. Три database-задачи hardening закрыты и подтверждены live smoke; leaked-password protection остаётся отдельным pre-pilot контролем, недоступным на текущем Free-плане Supabase.
 - Production Supabase, production frontend, hosting и DNS не менялись. Ничего не опубликовано для реальных пользователей.
-- Код зафиксирован в отдельной ветке `codex/fix-rendered-html-env`; основная ветка `main` остаётся чистой.
+- PR #1 объединён с GitHub `main`. Новый hardening зафиксирован отдельно в ветке `codex/staging-security-hardening` до ревью.
 
 ## Статус для CEO за одну минуту
 
@@ -20,7 +19,7 @@
 | --- | --- | --- |
 | Основной продуктовый сценарий | Зелёный на staging | Ключевая механика знакомства работает на настоящем отдельном backend, а не только в макете |
 | Автоматические проверки | Зелёный | Локальные тесты, типы, lint и сборка проходят |
-| Безопасность | Жёлтый | Явной критической утечки не найдено, но четыре защитные задачи обязательны до пилота |
+| Безопасность | Жёлто-зелёный на staging | Три database-задачи закрыты; осталось решить вопрос платного leaked-password protection и выполнить физический/нагрузочный QA |
 | Реальные телефоны и сеть площадки | Не проверено | Нужны iPhone/Android и тест общей Wi-Fi/NAT-нагрузки |
 | Юридические и data-retention решения | Частично определены | Выбраны 60 дней и модель обезличивания; реализация и финальный юридический текст ещё не готовы |
 | Production | Не тронут | Реальные пользователи и текущая инфраструктура не подвергались риску |
@@ -152,7 +151,8 @@ Drops больше не являются частью продукта для г
 - явный Leave, восстановление сессии и Rejoin той же membership;
 - Report, приватность индивидуального IRL feedback и aggregate organizer analytics;
 - запрет organizer-аккаунту использовать platform-admin operations;
-- запрет устаревшего Drop RPC.
+- запрет устаревшего Drop RPC;
+- запрет трёх неиспользуемых compatibility RPC и прямого чтения исторической таблицы `drops` после hardening.
 
 Тест использовал только publishable key и обычные тестовые identities. Secret/service-role ключи не использовались и не сохранялись.
 
@@ -183,10 +183,11 @@ Drops больше не являются частью продукта для г
 
 ### Что требуется от владельца прямо сейчас
 
-1. Когда появится staging frontend, один раз войти постоянным platform-admin email и подтвердить аккаунт. После этого его `user_id` можно будет добавить в приватный allowlist и проверить `/admin`.
-2. Подтвердить финальную формулировку удаления: тексты сообщений остаются у второго участника 60 дней под автором «Удалённый пользователь», а Reports хранятся обезличенно 60 дней. Это рекомендуемый вариант, уже принятый как рабочая трактовка.
-3. Подтвердить или изменить anti-abuse порог 20 Interests/60 секунд.
-4. До участия реальных посетителей указать юридического оператора и контакт для Draft Terms/Privacy. Без этого документы годятся для технического/контролируемого теста, но не считаются юридическим разрешением для любого публичного события.
+1. Решить, готов ли проект перейти с Supabase Free на платный Pro ради leaked-password protection. Без отдельного согласия стоимость не принимается и тариф не меняется.
+2. Когда появится staging frontend, один раз войти постоянным platform-admin email и подтвердить аккаунт. После этого его `user_id` можно будет добавить в приватный allowlist и проверить `/admin`.
+3. Подтвердить финальную формулировку удаления: тексты сообщений остаются у второго участника 60 дней под автором «Удалённый пользователь», а Reports хранятся обезличенно 60 дней. Это рекомендуемый вариант, уже принятый как рабочая трактовка.
+4. Подтвердить или изменить anti-abuse порог 20 Interests/60 секунд.
+5. До участия реальных посетителей указать юридического оператора и контакт для Draft Terms/Privacy. Без этого документы годятся для технического/контролируемого теста, но не считаются юридическим разрешением для любого публичного события.
 
 ## Delete My Data: согласованная рабочая модель
 
@@ -210,25 +211,23 @@ Drops больше не являются частью продукта для г
 - `private.platform_admins` специально пустой: первый email выбран владельцем, но постоянный staging Auth-аккаунт ещё должен быть подтверждён и добавлен trusted database operator способом.
 - Владелец выбрал единый срок 60 дней, но retention пока не исполняется; staging-конфигурация и Draft Privacy ещё не обновлены и не должны обещать автоматическое удаление до готовности worker.
 - Физическое удаление Auth user сегодня опасно из-за shared Matches/messages/Reports и существующих cascade FK; целевая модель — сначала обезличивание без разрушения общей истории.
-- До пилота нужно закрыть четыре hardening-задачи: отключить три неиспользуемых compatibility RPC, исправить `search_path` девяти старых функций, закрыть прямой клиентский read устаревшей таблицы `drops` и включить leaked-password protection.
+- На staging закрыты три database hardening-задачи: отключены три неиспользуемых compatibility RPC, девять старых функций переведены на пустой `search_path`, прямой клиентский read таблицы `drops` закрыт. Leaked-password protection остаётся предупреждением Advisor: Supabase предоставляет его только на Pro и выше, а текущая организация находится на Free; автоматическое платное повышение тарифа не выполнялось.
 - Auth/Turnstile/shared-NAT capacity нужно повторно подтвердить в актуальном окружении перед пилотом.
 
 ## Что делать дальше перед Pilot RC1
 
-Уже выполнено: isolated staging создан, migration chain применена, основной RC1 live acceptance и негативная RLS-проверка прошли, Advisor разобран.
+Уже выполнено: isolated staging создан, migration chain и `20260928180331_staging_security_hardening.sql` применены, основной RC1 live acceptance, негативная RLS-проверка и отдельный post-hardening security smoke прошли, Advisor повторно проверен, локальные typecheck/lint/tests/build зелёные.
 
 Следующая последовательность:
 
-1. Сделать новую forward-only hardening migration для compatibility RPC, function `search_path` и устаревшего Drops read path.
-2. Включить leaked-password protection в staging Auth.
-3. Повторить Security Advisor, RC1 live acceptance и полный локальный regression.
-4. Создать отдельного allowlisted platform-admin и проверить moderation queue.
-5. Провести полный avatar Storage и Realtime delivery тест.
-6. Пройти iPhone Safari и Android Chrome checklist на физических устройствах.
-7. Подтвердить Turnstile и базовый gate в 40 одновременных гостей через общую Wi-Fi/NAT; пересчитать его перед событием, если ожидается больше 20 гостей.
-8. Закрыть оставшиеся решения владельца: финальный текст про 60-дневное хранение обезличенных chats/Reports, anti-abuse порог и юридический оператор/контакт.
-9. Подготовить production snapshot, совместимый порядок database/frontend выпуска и rollback plan.
-10. Получить отдельное письменное Go для production migration и frontend deployment, затем выполнить production smoke.
+1. Решить, повышать ли Supabase до Pro ради leaked-password protection; без одобрения стоимости тариф не менять.
+2. Создать и подтвердить отдельного allowlisted platform-admin, затем проверить moderation queue.
+3. Провести полный avatar Storage и Realtime delivery тест.
+4. Пройти iPhone Safari и Android Chrome checklist на физических устройствах.
+5. Подтвердить Turnstile и базовый gate в 40 одновременных гостей через общую Wi-Fi/NAT; пересчитать его перед событием, если ожидается больше 20 гостей.
+6. Закрыть оставшиеся решения владельца: финальный текст про 60-дневное хранение обезличенных chats/Reports, anti-abuse порог и юридический оператор/контакт.
+7. Подготовить production snapshot, совместимый порядок database/frontend выпуска и rollback plan.
+8. Получить отдельное письменное Go для production migration и frontend deployment, затем выполнить production smoke.
 
 ## Где смотреть код
 
@@ -238,7 +237,7 @@ Drops больше не являются частью продукта для г
 - Aggregate analytics: `app/components/OrganizerAnalytics.tsx`
 - Platform operations: `app/components/AdminOperations.tsx`
 - RC1 state helpers: `lib/rc1-state.ts`
-- Database migrations: `supabase/migrations/20260914135346_*` и `20260914135348_*`
+- Database migrations: `supabase/migrations/20260914135346_*`, `20260914135348_*` и `20260928180331_staging_security_hardening.sql`
 - Local contracts: `tests/pilot-rc1-state.test.mjs`, `tests/pilot-rc1-contract.test.mjs`
 - Isolated live test: `tests/pilot-rc1-acceptance.test.mjs`
 - Полный отчёт: `docs/PILOT_RC1_PHASE2A.md`

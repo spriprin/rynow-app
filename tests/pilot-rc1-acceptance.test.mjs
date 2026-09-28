@@ -4,12 +4,27 @@ import { createClient } from "@supabase/supabase-js";
 import { assertIsolatedPublishableKey, assertIsolatedTurnstileTestEnvironment, assertRepeatableTurnstileTestEnvironment } from "./live-auth-helpers.mjs";
 
 const enabled = process.env.HERE_TEST_PILOT_RC1 === "true";
+const securityEnabled = process.env.HERE_TEST_PILOT_RC1_SECURITY === "true";
 const url = process.env.HERE_TEST_SUPABASE_URL || "";
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY || "";
 const captchaToken = process.env.HERE_TEST_TURNSTILE_TOKEN || "";
 const options = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } };
 const client = () => createClient(url, key, options);
 const one = (value) => Array.isArray(value) ? value[0] : value;
+
+async function assertHardenedClientSurface(api, roomId = crypto.randomUUID(), matchId = crypto.randomUUID()) {
+  for (const [rpc, args] of [
+    ["explore_state", { p_room_id: roomId }],
+    ["sent_interests", { p_room_id: roomId }],
+    ["send_match_message", { p_match_id: matchId, p_body: "legacy path" }],
+  ]) {
+    const retired = await api.rpc(rpc, args);
+    assert.ok(retired.error, `${rpc} must not be client-executable`);
+  }
+
+  const historicalDrops = await api.from("drops").select("id").limit(1);
+  assert.ok(historicalDrops.error, "historical Drops must not be client-readable");
+}
 
 async function guest(name, gender) {
   const api = client();
@@ -167,4 +182,18 @@ test("Pilot RC1 staging acceptance — identity, continuous Explore, social loop
 
   const legacy = await restored.rpc("room_drop_state", { p_room_id: room.id });
   assert.ok(legacy.error, "deprecated discovery RPC must not be client-executable");
+
+  await assertHardenedClientSurface(restored, room.id, match.match_id);
+});
+
+test("Pilot RC1 staging hardening — retired RPCs and historical Drops are closed", { skip: !securityEnabled && "Set HERE_TEST_PILOT_RC1_SECURITY=true for an isolated migrated Supabase project" }, async () => {
+  assertIsolatedTurnstileTestEnvironment(url);
+  assertRepeatableTurnstileTestEnvironment(url);
+  assertIsolatedPublishableKey(key);
+  assert.ok(captchaToken, "A configured isolated CAPTCHA proof is required");
+
+  const api = client();
+  const signed = await api.auth.signInAnonymously({ options: { captchaToken } });
+  assert.ifError(signed.error);
+  await assertHardenedClientSurface(api);
 });

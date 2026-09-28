@@ -17,10 +17,10 @@ This checkout contains the **staging-validated Pilot RC1 candidate**.
 
 - Active guest, organizer, demo and landing flows contain no Drops.
 - Historical Drop migrations/tables are retained for safe forward migration. The new migration revokes their client RPC execution rather than deleting historical data.
-- The full migration chain is applied to the isolated `here-staging` Supabase project, and the RC1 live acceptance suite passes there using only a publishable key and ordinary test identities.
+- The full migration chain, including `20260928180331_staging_security_hardening.sql`, is applied only to the isolated `here-staging` Supabase project. The RC1 flow and the post-hardening live security smoke pass there using only a publishable key and ordinary test identities.
 - Local lint, TypeScript, unit/contract tests and a clean production build pass.
-- Security Advisor reports no `ERROR` findings. Four defense-in-depth items remain before the pilot: retire three compatibility RPCs, harden nine inherited function search paths, remove the obsolete client-readable Drops path, and enable leaked-password protection for permanent accounts.
-- As of 23 September 2026, both `here-staging` and the production `Here MVP` Supabase projects report `ACTIVE_HEALTHY`; the production project, production frontend and DNS remain untouched.
+- Security Advisor reports no `ERROR` findings. Staging now retires three compatibility RPCs, gives nine inherited functions an empty `search_path`, and closes direct client reads of historical Drops. Leaked-password protection remains a real pre-pilot item but requires a paid Supabase plan; the current organization is on Free and was not upgraded automatically.
+- As of 28 September 2026, the production project, production frontend and DNS remain untouched.
 - Nothing from this candidate has been deployed to production.
 
 See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/HERE_HANDOFF_RU.md](docs/HERE_HANDOFF_RU.md) for the Russian owner handoff, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
@@ -121,17 +121,18 @@ The default test command keeps live suites disabled unless their explicit enviro
 
 ## Database rollout order
 
-The full historical chain, including the two Phase 2A additions below, has been applied and live-tested on isolated staging. Production rollout still requires a separate approval:
+The full historical chain, including the Phase 2A and staging-hardening additions below, has been applied and live-tested on isolated staging. Production rollout still requires a separate approval:
 
 1. `20260914135346_pilot_rc1_continuous_explore.sql`
 2. `20260914135348_pilot_rc1_connections_safety_operations.sql`
+3. `20260928180331_staging_security_hardening.sql`
 
 Then run the gated RC1 acceptance suite and the complete release regression. Do not apply retention cleanup: the candidate only stores proposed durations and keeps `cleanup_enabled = false`.
 
 ## Historical backend objects
 
-Old Drop tables and earlier migration definitions remain in the migration chain because editing migration history or deleting production data would be unsafe. They are deprecated compatibility/history objects only. No active RC1 frontend path references them, and the RC1 migration revokes client execution on the old Drop RPCs.
+Old Drop tables and earlier migration definitions remain in the migration chain because editing migration history or deleting production data would be unsafe. They are deprecated compatibility/history objects only. No active RC1 frontend path references them; client execution on old Drop RPCs and direct client reads of `public.drops` are revoked on staging.
 
 ## Ownership
 
-The validated candidate is committed on branch `codex/fix-rendered-html-env`; `main` remains clean and tracks the owner-controlled GitHub remote. No frontend deployment, production database mutation or DNS change is included. Production rollout remains a separately approved phase.
+PR #1 was squash-merged to the owner-controlled GitHub `main`. Staging hardening is developed separately on `codex/staging-security-hardening`. No frontend deployment, production database mutation or DNS change is included. Production rollout remains a separately approved phase.

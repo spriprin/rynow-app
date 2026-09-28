@@ -1,7 +1,7 @@
 # Pilot RC1 Phase 2A — implementation report
 
 Date: 16 September 2026
-Latest staging/status update: 26 September 2026
+Latest staging/status update: 28 September 2026
 Scope: product source, forward-only migrations, local automated tests and an isolated staging test harness.
 Explicitly out of scope: production database/configuration, deployment, hosting/DNS migration, Git remotes, destructive data cleanup, physical removal of historical Drop objects, Sprint 6.
 
@@ -79,6 +79,7 @@ Database:
 
 - `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql` (applied to `here-staging`, not production)
 - `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql` (applied to `here-staging`, not production)
+- `supabase/migrations/20260928180331_staging_security_hardening.sql` (applied to `here-staging`, not production)
 
 Tests and release harness:
 
@@ -122,6 +123,13 @@ Documentation:
 - Extends aggregate-only organizer analytics.
 - Optionally adds notification events to the existing Realtime publication; polling remains the fallback.
 
+### `20260928180331_staging_security_hardening.sql`
+
+- Revokes `public`/`anon`/`authenticated` execution of the inactive `explore_state`, `sent_interests` and non-idempotent `send_match_message` compatibility RPCs.
+- Sets `search_path=''` on nine reviewed inherited `SECURITY DEFINER` functions; their relation/function references were already schema-qualified.
+- Drops the obsolete authenticated `drops` read policy and revokes direct `anon`/`authenticated` `SELECT` while preserving the historical table and rows.
+- Does not drop/truncate a table or delete historical data.
+
 ## 4. Automated coverage
 
 Local tests verify:
@@ -160,6 +168,7 @@ The isolated staging suite prepares an end-to-end check for:
 - independent IRL feedback and answer privacy;
 - organizer aggregate-only output;
 - deprecated Drop RPC denial.
+- post-hardening denial of the three inactive compatibility RPCs and direct historical `drops` reads.
 
 The live test refuses the known production project, refuses secret/service-role keys, and requires an explicitly marked isolated hosted project with Cloudflare’s official repeatable test token.
 
@@ -171,7 +180,7 @@ Local results for this candidate:
 | --- | --- |
 | `pnpm typecheck` | PASS |
 | `pnpm lint` | PASS |
-| `pnpm test` | PASS: 35, FAIL: 0, intentionally gated live-only SKIP: 11 |
+| `pnpm test` | PASS: 36, FAIL: 0, intentionally gated live-only SKIP: 12 |
 | Clean `pnpm build` | PASS; `/`, `/admin`, `/demo`, `/organizer`, `/privacy`, `/r/:slug`, `/terms` generated |
 | Local HTTP smoke | PASS: `/`, `/demo`, `/privacy`, `/terms`, `/admin`, `/organizer` returned 200 |
 | Credential-pattern scan | PASS: no service-role/secret Supabase key, database credential URL or Turnstile secret assignment in source or generated bundle |
@@ -180,26 +189,25 @@ Local results for this candidate:
 
 The first build attempt encountered an old generated `dist/.openai/drizzle` directory (`EEXIST`). Only the verified local generated `dist` directory was removed; the clean rebuild then passed. No source or production data was removed.
 
-### Staging Security Advisor addendum — 22 September 2026
+### Staging Security Advisor addendum — updated 28 September 2026
 
 The full migration chain is now applied to the isolated `here-staging` project (`orkkwgxuzudawiailyen`). Production Supabase, production frontend and DNS remain unchanged.
 
-`supabase db advisors --linked --project-ref orkkwgxuzudawiailyen --type security --level info` reported no `ERROR` findings:
+The post-migration Security Advisor run reported no `ERROR` findings:
 
-- Eight `rls_enabled_no_policy` `INFO` findings are expected deny-by-default controls. The affected private/RPC-only tables have no direct `anon` or `authenticated` table grants in the live staging catalog.
+- Nine `rls_enabled_no_policy` `INFO` findings are expected deny-by-default controls. The count increased by one because historical `public.drops` now also has no client read policy or grant.
 - The single anonymous `SECURITY DEFINER` warning for `get_room_by_join_code` is expected: it is the deliberately narrow pre-Auth QR lookup and returns only Room entry metadata for a high-entropy join code.
-- Forty authenticated `SECURITY DEFINER` warnings cover 32 active client RPCs, five identity-bound RLS/Storage helpers and three inactive compatibility RPCs. The active identity-bound functions derive the caller from `auth.uid()`; the admin functions instead call the private platform-admin allowlist guard.
-- Enabling the architecture's required anonymous Auth flow adds twelve `auth_allow_anonymous_sign_ins` warnings. Eleven are expected for guest-facing, identity/member-bound policies on profiles, Rooms, memberships, blocks, Matches/messages, Reports/feedback/deletion requests, Realtime chat and avatar objects. Their live definitions bind access to `auth.uid()` or the reviewed membership/Match helpers, and the RC1 negative cross-profile test passed. The twelfth is the obsolete `public.drops` read path and should not remain client-readable for the new product.
-- `auth_leaked_password_protection` is a genuine Auth hardening warning for permanent organizer/admin accounts; it is not mitigated by the anonymous guest model.
+- Authenticated `SECURITY DEFINER` warnings fell from 40 to 37 because the three inactive compatibility RPC grants were removed. The remaining functions are active identity/membership/ownership-bound operations; admin functions additionally call the private platform-admin allowlist guard.
+- Eleven `auth_allow_anonymous_sign_ins` warnings remain expected for the guest architecture. The obsolete `public.drops` warning is gone; active guest-facing policies remain bound to `auth.uid()` or reviewed membership/Match helpers.
+- `auth_leaked_password_protection` remains a genuine Auth hardening warning for permanent organizer/admin accounts. Supabase makes this control available on Pro and above; the organization is currently on Free, so no unapproved paid upgrade was performed.
 
-Four defense-in-depth items must be resolved before the pilot:
+Three database defense-in-depth items are now completed on staging:
 
-1. Revoke client execution from the inactive `explore_state`, `sent_interests` and non-idempotent `send_match_message` RPCs unless an explicit compatibility requirement is approved.
-2. Change the nine inherited functions still configured with `search_path=public` (`can_access_match`, `get_room_by_join_code`, `interested_in_you`, `is_pair_blocked`, `mark_match_messages_read`, `room_joined_count`, `room_matches`, `send_match_message`, `sent_interests`) to the documented empty `search_path`, schema-qualifying any remaining references. Re-run the advisor and live regression after that migration.
-3. Remove the remaining `authenticated` `SELECT` grant/policy exposure from the deprecated `public.drops` table unless an explicit compatibility requirement is approved.
-4. Enable leaked-password protection for permanent email/password identities and verify organizer sign-in/recovery afterwards.
+1. Client execution is revoked from `explore_state`, `sent_interests` and `send_match_message`.
+2. The nine inherited functions use the documented empty `search_path`.
+3. Direct client `SELECT` access to deprecated `public.drops` is removed.
 
-These are staging hardening findings, not evidence of a current cross-user data path. No database change was made as part of this review.
+The remaining pre-pilot decision is whether to approve a paid plan and enable leaked-password protection, followed by organizer sign-in/recovery verification. The retained Advisor warnings are architecture-aware review items, not evidence of a current cross-user data path.
 
 ### Staging live acceptance addendum — 22 September 2026
 
@@ -211,6 +219,8 @@ The first live attempt exposed two staging/test issues before the successful run
 - three membership assertions used `.single()` after filtering only by Room, so a Room with multiple members could not be coerced to one row. The harness now also filters by the expected `user_id` and asserts the Rejoin read error explicitly.
 
 The successful run covered Room creation, four anonymous guest identities, join and late join, continuous Explore, Interest idempotency and rejection, reciprocal Match creation, notification/chat state, explicit Leave and Rejoin with session restoration, cross-profile RLS denial, organizer denial from platform-admin operations, Report creation, independent IRL feedback privacy, organizer aggregates and deprecated Drop RPC denial.
+
+After the hardening migration, a separate publishable-key-only live security smoke passed on 28 September 2026. It used an ordinary anonymous staging identity and verified that the three compatibility RPCs and direct `drops` reads are denied. No service-role/secret key was used. A newly created email organizer did not receive an immediate session because staging now requires email confirmation; the test did not weaken that setting or bypass it with elevated credentials.
 
 ## 6. Remaining live verification
 
@@ -243,18 +253,17 @@ Owner update, 26 September 2026:
 
 ## 9. Remaining staging/live sequence
 
-Completed: isolated staging exists, the full migration chain is applied, core grants/RLS/functions were inspected, an organizer test identity was created, the RC1 staging suite passed and its negative cross-profile RLS check passed.
+Completed: isolated staging exists, the full migration chain and hardening migration are applied, core grants/RLS/functions were inspected, the RC1 staging suite and negative cross-profile RLS check passed, the post-hardening security smoke passed, Security Advisor was repeated, and the local regression is green.
 
-1. Apply a new forward-only hardening migration for the inactive compatibility RPCs, inherited function search paths and deprecated Drops read path.
-2. Enable leaked-password protection and add a separate allowlisted platform-admin test identity.
-3. Repeat Security Advisor, the RC1 staging suite and the full local regression.
-4. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
-5. Complete physical iPhone Safari and Android Chrome QA.
-6. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
-7. Close the remaining owner decisions: legal operator/contact, final Privacy wording for 60-day pseudonymized shared data and the anti-abuse threshold.
-8. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
-9. Separately authorize production migration, frontend deploy and production smoke.
+1. Decide whether to approve the Supabase Pro cost, then enable leaked-password protection if approved.
+2. Add a separate confirmed allowlisted platform-admin test identity and verify moderation.
+3. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
+4. Complete physical iPhone Safari and Android Chrome QA.
+5. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
+6. Close the remaining owner decisions: legal operator/contact, final Privacy wording for 60-day pseudonymized shared data and the anti-abuse threshold.
+7. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
+8. Separately authorize production migration, frontend deploy and production smoke.
 
 ## 10. Deployment statement
 
-Nothing was deployed. No production database, Supabase configuration, hosting, DNS, Git remote or production source was modified. Sprint 6 was not started.
+Only the forward-only hardening migration was applied to isolated `here-staging`. No production database, production Supabase configuration, frontend hosting or DNS was modified or deployed. Sprint 6 was not started.

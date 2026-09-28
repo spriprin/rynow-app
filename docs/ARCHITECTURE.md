@@ -1,6 +1,6 @@
 # HERE Pilot RC1 architecture
 
-Status: staging-validated Pilot RC1 candidate, updated 26 September 2026. The full migration chain is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
+Status: staging-validated Pilot RC1 candidate, updated 28 September 2026. The full migration chain, including the staging security-hardening migration, is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
 
 ## 1. System shape
 
@@ -162,7 +162,7 @@ The existing foreign keys do not implement that model safely: a direct Auth-user
 
 Historical migration files, Drop tables and rows remain untouched. Phase 2A does not rewrite history, truncate tables or drop definitions.
 
-The new continuous-Explore migration copies previously viewed historical Drop-card identities once into a private, RLS-protected seen ledger. Active helpers then use that ledger rather than reading Drop tables, so those people do not repeat within a Room. It removes all frontend calls/UI/copy and revokes client execution from legacy Drop RPCs. Historical cleanup can happen only in a later dedicated migration after backup, dependency inspection and owner approval.
+The continuous-Explore migration copies previously viewed historical Drop-card identities once into a private, RLS-protected seen ledger. Active helpers then use that ledger rather than reading Drop tables, so those people do not repeat within a Room. It removes all frontend calls/UI/copy and revokes client execution from legacy Drop RPCs. The staging hardening migration also removes the obsolete direct client `SELECT` path from `public.drops`; the historical table and rows remain intact. Historical cleanup can happen only in a later dedicated migration after backup, dependency inspection and owner approval.
 
 ## 12. Migration order and rollout
 
@@ -170,19 +170,22 @@ The full chain has been applied on the isolated `here-staging` Supabase project 
 
 1. `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql`
 2. `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql`
+3. `supabase/migrations/20260928180331_staging_security_hardening.sql`
 
 Completed on staging:
 
 - the full migration chain was applied;
 - the live RC1 social/safety/analytics acceptance suite passed;
 - the negative cross-profile RLS check passed;
-- Security Advisor and live catalog grants/policies were reviewed;
+- the hardening migration revoked three inactive compatibility RPCs, set an empty `search_path` on nine inherited functions, and closed the direct `public.drops` read path;
+- the publishable-key-only post-hardening live security smoke passed;
+- Security Advisor and live catalog grants/policies were re-reviewed with no `ERROR` findings;
 - local typecheck, lint, contract tests and production build passed.
 
 Still required before production rollout:
 
 - take a schema/data snapshot;
-- apply the four documented defense-in-depth hardening items through a new forward-only migration/config change and repeat the advisor/live regression;
+- decide whether to upgrade Supabase from Free and enable leaked-password protection for permanent organizer/admin identities; this control is unavailable on the current plan;
 - seed a permanent organizer and separately allowlist a platform admin using a trusted database operator path;
 - run real iPhone Safari and Android Chrome QA;
 - verify production Auth/CAPTCHA/shared-NAT capacity separately;
