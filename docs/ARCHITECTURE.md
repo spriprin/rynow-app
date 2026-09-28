@@ -1,6 +1,6 @@
 # HERE Pilot RC1 architecture
 
-Status: local Phase 2A implementation candidate, 16 September 2026. The two RC1 migrations described here are prepared but unapplied. Production was not modified.
+Status: staging-validated Pilot RC1 candidate, updated 26 September 2026. The full migration chain is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
 
 ## 1. System shape
 
@@ -136,28 +136,27 @@ Organizer analytics remain separate and aggregate-only. They never return indivi
 
 ## 10. Draft legal and retention infrastructure
 
-`/terms` and `/privacy` are explicitly labelled drafts and do not claim legal/GDPR compliance. The application records a version and server timestamp after the 18+ confirmation.
+`/terms` and `/privacy` are explicitly labelled drafts and do not claim legal/GDPR compliance. On 26 September 2026 the owner kept them intentionally minimal for controlled event testing, not as global public-service terms. A real attendee pilot still requires a named legal operator, contact details and jurisdiction-specific review. The application records a version and server timestamp after the 18+ confirmation.
 
-`private.pilot_settings` stores proposed retention values:
+The owner selected a uniform target retention period of 60 days for pilot product data. This is a product decision, not current runtime behavior. The applied staging configuration still stores the earlier proposal:
 
 - operational/unmatched event data: 30 days;
 - Connections/Matches/chat: 90 days;
 - safety Reports: 180 days.
 
-`cleanup_enabled` is constrained to `false`. No scheduled delete job or historical cleanup is introduced in Phase 2A.
+`cleanup_enabled` is constrained to `false`. No scheduled delete job or historical cleanup is introduced in Phase 2A. A new forward-only migration and a verified trusted cleanup worker are required before the product or Privacy page may promise automatic 60-day deletion.
 
-“Delete my data” creates/refreshes an identity-bound pending request. It does not blindly cascade shared or safety data. The proposed execution policy is:
+“Delete my data” creates/refreshes an identity-bound pending request. The owner clarified that account deletion must remove the requesting user's identity and access while preserving shared information needed by other users. The working product model is therefore deactivation plus pseudonymization, not an immediate hard delete of the Auth row:
 
-1. freeze the request and create an auditable operator record;
-2. remove the current avatar object and profile-visible fields;
-3. deactivate/anonymize membership identity where aggregate integrity permits;
-4. remove unmatched Interests after the approved short retention period;
-5. preserve the other participant’s legitimate Connection/chat record through a reviewed anonymization model rather than blind cascading;
-6. retain safety evidence for the approved safety period with restricted access;
-7. retain only non-identifying aggregates longer;
-8. delete the Auth user only after all FK/shared-data consequences are approved and tested.
+1. disable further sign-in/use and revoke active sessions through a trusted backend operation;
+2. remove the owned avatar through the Storage API and clear any identifying profile fields;
+3. replace the public identity with a neutral “Deleted user” label and placeholder image;
+4. remove or disconnect private account-only data that is not needed by another user;
+5. preserve the shared Match/chat for the other participant, including message bodies, but show the former participant only as “Deleted user”;
+6. preserve safety Reports in pseudonymized form for the 60-day retention window;
+7. keep aggregate analytics only where they no longer identify the deleted person.
 
-The final behavior is blocked on owner/legal decisions and must be implemented as a separate reviewed backend operation.
+The existing foreign keys do not implement that model safely: a direct Auth-user delete would still cascade through `matches`, shared chat, the other participant's feedback view and Reports. An organizer account also remains referenced by owned Rooms. The final workflow therefore requires a separate reviewed backend operation, a forward-only migration, explicit session handling, Storage deletion and destructive staging tests. The 60-day treatment of shared message bodies and pseudonymized Reports is the recommended working interpretation and must be reflected consistently in the final Privacy copy. No deletion or pseudonymization is currently executed.
 
 ## 11. Historical Drop objects
 
@@ -167,18 +166,24 @@ The new continuous-Explore migration copies previously viewed historical Drop-ca
 
 ## 12. Migration order and rollout
 
-Apply on an isolated staging Supabase project in timestamp order. The new files are:
+The full chain has been applied on the isolated `here-staging` Supabase project in timestamp order. The RC1 additions are:
 
 1. `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql`
 2. `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql`
 
-Before production rollout:
+Completed on staging:
+
+- the full migration chain was applied;
+- the live RC1 social/safety/analytics acceptance suite passed;
+- the negative cross-profile RLS check passed;
+- Security Advisor and live catalog grants/policies were reviewed;
+- local typecheck, lint, contract tests and production build passed.
+
+Still required before production rollout:
 
 - take a schema/data snapshot;
-- inspect migration SQL and run it in staging;
-- verify all functions, constraints, RLS policies, grants and private tables;
+- apply the four documented defense-in-depth hardening items through a new forward-only migration/config change and repeat the advisor/live regression;
 - seed a permanent organizer and separately allowlist a platform admin using a trusted database operator path;
-- run the gated RC1 acceptance and full historical regression;
 - run real iPhone Safari and Android Chrome QA;
 - verify production Auth/CAPTCHA/shared-NAT capacity separately;
 - deploy frontend only after database compatibility is confirmed.

@@ -26,7 +26,7 @@ test("GP-A–I — gender and viewer-side preferences stay server-bound and priv
   assert.match(roomSource, /label="Show me"/);
   assert.match(roomSource, /openProfileEditor\("room"\)/);
 
-  const completion = roomSource.match(/async function finishProfileCompletion\(\) \{[\s\S]*?\n {2}\}\n\n {2}function openProfileEditor/)?.[0] || "";
+  const completion = roomSource.match(/async function finishProfileCompletion\(\) \{[\s\S]*?\r?\n {2}\}\r?\n\r?\n {2}function openProfileEditor/)?.[0] || "";
   assert.match(completion, /getUser\(\)/);
   assert.match(completion, /update\(\{ gender, discovery_preference: preference \}\)/);
   assert.doesNotMatch(completion, /display_name:|avatar_path:|room_members|matches|messages|blocks|reports/);
