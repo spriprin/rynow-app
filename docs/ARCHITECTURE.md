@@ -1,6 +1,6 @@
 # HERE Pilot RC1 architecture
 
-Status: staging-validated Pilot RC1 candidate, updated 28 September 2026. The full migration chain, including the staging security-hardening migration, is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
+Status: staging-validated Pilot RC1 candidate, updated 29 September 2026. The full migration chain, including the staging security-hardening migration, is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
 
 ## 1. System shape
 
@@ -185,7 +185,7 @@ Completed on staging:
 Still required before production rollout:
 
 - take a schema/data snapshot;
-- decide whether to upgrade Supabase from Free and enable leaked-password protection for permanent organizer/admin identities; this control is unavailable on the current plan;
+- keep Supabase Free per the owner's decision, treat disabled leaked-password protection as an accepted plan limitation, and protect permanent organizer/admin identities with unique credentials plus a reviewed MFA path before real admin access;
 - seed a permanent organizer and separately allowlist a platform admin using a trusted database operator path;
 - run real iPhone Safari and Android Chrome QA;
 - verify production Auth/CAPTCHA/shared-NAT capacity separately;

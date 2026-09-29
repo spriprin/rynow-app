@@ -7,7 +7,7 @@ export const viewport: Viewport = {
 };
 
 export function generateMetadata(): Metadata {
-  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "https://here-social-room.spriprin.chatgpt.site").origin;
+  const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
 
   return {
     metadataBase: new URL(origin),

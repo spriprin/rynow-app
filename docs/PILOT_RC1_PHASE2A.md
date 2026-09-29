@@ -1,7 +1,7 @@
 # Pilot RC1 Phase 2A — implementation report
 
 Date: 16 September 2026
-Latest staging/status update: 28 September 2026
+Latest staging/status update: 29 September 2026
 Scope: product source, forward-only migrations, local automated tests and an isolated staging test harness.
 Explicitly out of scope: production database/configuration, deployment, hosting/DNS migration, Git remotes, destructive data cleanup, physical removal of historical Drop objects, Sprint 6.
 
@@ -207,7 +207,7 @@ Three database defense-in-depth items are now completed on staging:
 2. The nine inherited functions use the documented empty `search_path`.
 3. Direct client `SELECT` access to deprecated `public.drops` is removed.
 
-The remaining pre-pilot decision is whether to approve a paid plan and enable leaked-password protection, followed by organizer sign-in/recovery verification. The retained Advisor warnings are architecture-aware review items, not evidence of a current cross-user data path.
+On 29 September 2026 the owner chose to remain on Supabase Free. Leaked-password protection therefore remains an accepted plan limitation rather than an open upgrade decision. Permanent organizer/admin accounts require unique password-manager credentials and a reviewed MFA path before real admin access. The retained Advisor warnings are architecture-aware review items, not evidence of a current cross-user data path.
 
 ### Staging live acceptance addendum — 22 September 2026
 
@@ -255,14 +255,13 @@ Owner update, 26 September 2026:
 
 Completed: isolated staging exists, the full migration chain and hardening migration are applied, core grants/RLS/functions were inspected, the RC1 staging suite and negative cross-profile RLS check passed, the post-hardening security smoke passed, Security Advisor was repeated, and the local regression is green.
 
-1. Decide whether to approve the Supabase Pro cost, then enable leaked-password protection if approved.
-2. Add a separate confirmed allowlisted platform-admin test identity and verify moderation.
-3. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
-4. Complete physical iPhone Safari and Android Chrome QA.
-5. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
-6. Close the remaining owner decisions: legal operator/contact, final Privacy wording for 60-day pseudonymized shared data and the anti-abuse threshold.
-7. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
-8. Separately authorize production migration, frontend deploy and production smoke.
+1. Add a separate confirmed allowlisted platform-admin test identity and verify moderation; Supabase remains on Free by owner decision.
+2. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
+3. Complete physical iPhone Safari and Android Chrome QA.
+4. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
+5. Close the remaining owner decisions: legal operator/contact, final Privacy wording for 60-day pseudonymized shared data and the anti-abuse threshold.
+6. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
+7. Separately authorize production migration, frontend deploy and production smoke.
 
 ## 10. Deployment statement
 

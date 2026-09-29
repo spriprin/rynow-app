@@ -23,7 +23,7 @@ This checkout contains the **staging-validated Pilot RC1 candidate**.
 - As of 28 September 2026, the production project, production frontend and DNS remain untouched.
 - Nothing from this candidate has been deployed to production.
 
-See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/HERE_HANDOFF_RU.md](docs/HERE_HANDOFF_RU.md) for the Russian owner handoff, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
+See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/HERE_HANDOFF_RU.md](docs/HERE_HANDOFF_RU.md) for the Russian owner handoff, [docs/OWNER_RUNBOOK_RU.md](docs/OWNER_RUNBOOK_RU.md) for independent local/domain operation, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
 
 ## Active routes
 
@@ -135,4 +135,4 @@ Old Drop tables and earlier migration definitions remain in the migration chain 
 
 ## Ownership
 
-PR #1 was squash-merged to the owner-controlled GitHub `main`. Staging hardening is developed separately on `codex/staging-security-hardening`. No frontend deployment, production database mutation or DNS change is included. Production rollout remains a separately approved phase.
+PR #1 and staging-hardening PR #2 were squash-merged to the owner-controlled GitHub `main`. Independent local/domain operation is documented in `docs/OWNER_RUNBOOK_RU.md`. No frontend deployment, production database mutation or DNS change is included. Production rollout remains a separately approved phase.
