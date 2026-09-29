@@ -7,6 +7,7 @@ const url = process.env.HERE_TEST_SUPABASE_URL;
 const key = process.env.HERE_TEST_SUPABASE_PUBLISHABLE_KEY;
 const fallbackEmail = process.env.HERE_TEST_ORGANIZER_EMAIL;
 const fallbackPassword = process.env.HERE_TEST_ORGANIZER_PASSWORD;
+const applicationUrl = process.env.HERE_TEST_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 const enabled = Boolean(url && key);
 
 function client() {
@@ -56,10 +57,10 @@ test("Organizer self-service Auth live acceptance", { skip: enabled ? false : "S
     assert.ok(first.session === null || first.session.user.id === first.user.id);
   });
 
-  await t.test("password recovery request accepts only the fixed production organizer redirect", async () => {
+  await t.test("password recovery request accepts the configured application redirect", async () => {
     const recoveryProbeEmail = `here.sprint4.recovery+${crypto.randomUUID()}@gmail.com`;
     const { error } = await first.client.auth.resetPasswordForEmail(recoveryProbeEmail, withAuthCaptchaOptions({
-      redirectTo: "https://here-social-room.spriprin.chatgpt.site/organizer?recovery=1",
+      redirectTo: new URL("/organizer?recovery=1", applicationUrl).toString(),
     }));
     assert.ifError(error);
   });

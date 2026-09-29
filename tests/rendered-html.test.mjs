@@ -63,10 +63,11 @@ test("keeps real QR and organizer routes separate from demo data", async () => {
 });
 
 test("organizer self-service Auth keeps permanent and anonymous sessions separate", async () => {
-  const [organizer, organizerClient, landing] = await Promise.all([
+  const [organizer, organizerClient, landing, layout] = await Promise.all([
     readFile(new URL("../app/components/OrganizerFoundationApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/supabase/organizer-client.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/components/ProductLanding.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
   ]);
   assert.match(organizer, /signUp\(/);
   assert.match(organizer, /Create organizer account/);
@@ -84,7 +85,9 @@ test("organizer self-service Auth keeps permanent and anonymous sessions separat
   assert.match(organizerClient, /ORGANIZER_AUTH_COOKIE = "here-organizer-auth"/);
   assert.match(organizerClient, /isSingleton: false/);
   assert.match(organizerClient, /localhost|127\.0\.0\.1/);
-  assert.match(organizerClient, /PRODUCTION_ORIGIN/);
+  assert.match(organizerClient, /LOCAL_FALLBACK_ORIGIN/);
+  assert.doesNotMatch(organizerClient, /chatgpt\.site/);
+  assert.doesNotMatch(layout, /chatgpt\.site/);
   assert.doesNotMatch(organizerClient, /service[_-]?role/i);
   assert.match(landing, /href="\/organizer\?mode=signup"/);
   assert.match(landing, /href="\/organizer\?mode=signin"/);
