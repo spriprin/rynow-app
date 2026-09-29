@@ -42,6 +42,44 @@ test("RC1 Explore is server-curated, fair, continuously refilled and abuse prote
   assert.doesNotMatch(migration, /^\s*(drop table|truncate)\b/im);
 });
 
+test("staging hardening retires compatibility RPCs and the direct Drops path", async () => {
+  const migration = await read("../supabase/migrations/20260928180331_staging_security_hardening.sql");
+
+  assert.match(
+    migration,
+    /revoke all on function public\.explore_state\(uuid\) from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke all on function public\.sent_interests\(uuid\) from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke all on function public\.send_match_message\(uuid, text\) from public, anon, authenticated/i,
+  );
+
+  for (const signature of [
+    "can_access_match\\(uuid, uuid\\)",
+    "get_room_by_join_code\\(text\\)",
+    "interested_in_you\\(uuid\\)",
+    "is_pair_blocked\\(uuid, uuid\\)",
+    "mark_match_messages_read\\(uuid\\)",
+    "room_joined_count\\(uuid\\)",
+    "room_matches\\(uuid\\)",
+    "send_match_message\\(uuid, text\\)",
+    "sent_interests\\(uuid\\)",
+  ]) {
+    assert.match(
+      migration,
+      new RegExp(`alter function public\\.${signature} set search_path = ''`, "i"),
+    );
+  }
+
+  assert.match(migration, /drop policy if exists "drops_read_owner_or_member" on public\.drops/i);
+  assert.match(migration, /revoke select on table public\.drops from anon, authenticated/i);
+  assert.doesNotMatch(migration, /drop table|truncate|delete from/i);
+});
+
 test("RC1 social, notification, outcome and safety access is identity-bound", async () => {
   const [migration, exploreMigration] = await Promise.all([
     read("../supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql"),
