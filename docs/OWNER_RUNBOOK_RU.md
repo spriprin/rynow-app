@@ -1,6 +1,6 @@
 # HERE — самостоятельный запуск и владение проектом
 
-Обновлено 7 октября 2026 года.
+Обновлено 8 октября 2026 года.
 
 ## Короткий ответ
 
@@ -85,6 +85,8 @@ pnpm test
 pnpm build
 ```
 
+Папки `.vinext`, `.wrangler` и `dist` создаются инструментами сборки. Они исключены из проверки `pnpm lint`: проверять нужно исходный код, а не автоматически созданные файлы.
+
 Обычный цикл обновления кода:
 
 ```powershell
@@ -111,13 +113,13 @@ pnpm dev
 
 Локальное редактирование само по себе меняет только файлы на компьютере. Рабочая цепочка: разработчик или ИИ меняет код → изменения попадают в GitHub Pull Request → владелец проверяет и объединяет его с `main` → Cloudflare Workers Builds собирает `main` и публикует новую версию. После подключения GitHub к Worker новые изменения в `main` могут публиковаться автоматически; статус сборки виден в Cloudflare. Для production разумно оставить отдельный выпуск после проверки staging, чтобы экспериментальный код не попадал к гостям сразу.
 
-Для Workers Builds понадобятся собственный Cloudflare-аккаунт владельца, подключение GitHub-репозитория `spriprin/rynow-app`, команда сборки `pnpm build`, команда deploy из следующего раздела и четыре публичных `NEXT_PUBLIC_*` значения как **build variables**. Укажите адрес этого Worker в `NEXT_PUBLIC_APP_URL`; `localhost` в опубликованной сборке использовать нельзя. Название Worker должно совпадать с `name` в сгенерированном Wrangler-конфиге (`here-social-room-mvp` для текущей сборки). Первое реальное развёртывание и автоматическую сборку ещё нужно проверить на отдельном staging Worker: локальный `--dry-run` доказывает упаковку, но не работу сайта в интернете.
+Для Workers Builds понадобятся собственный Cloudflare-аккаунт владельца, подключение GitHub-репозитория `spriprin/rynow-app`, команда сборки `pnpm build`, команда deploy из следующего раздела и четыре публичных `NEXT_PUBLIC_*` значения как **build variables**. Укажите адрес этого Worker в `NEXT_PUBLIC_APP_URL`; `localhost` в опубликованной сборке использовать нельзя. Название Worker должно совпадать с именем, используемым при deploy. Staging Worker `here-staging-web` уже опубликован вручную; автоматическую сборку из GitHub пока не подключали. Простое изменение файлов на компьютере или в GitHub пока не обновляет опубликованный сайт.
 
 ## Перед пилотом с реальными гостями
 
-На 7 октября 2026 года `here-staging` активен, а прежний Supabase-проект `Here MVP` неактивен. Пилотный frontend ещё не опубликован в Cloudflare-аккаунте владельца. Не выдавайте QR реальным гостям, пока не пройдены следующие проверки:
+На 8 октября 2026 года `here-staging` активен, а прежний Supabase-проект `Here MVP` неактивен. Тестовый frontend опубликован на [staging.rynowqr.com](https://staging.rynowqr.com) и подключён только к `here-staging`. Основной `rynowqr.com` пока не подключён к Worker; это не готовый пилот. HTTPS и основные страницы staging ответили HTTP 200. Не выдавайте QR реальным гостям, пока не пройдены следующие проверки:
 
-1. Опубликовать отдельный staging Worker на `*.workers.dev`, подключить его только к `here-staging`, добавить его адрес в Supabase Auth Redirect URLs и в разрешённые hostnames Turnstile. Проверить реальную пару Turnstile site/secret key через вход нового гостя и организатора; автоматические тестовые ключи Cloudflare для реальных гостей не подходят.
+1. Добавить `https://staging.rynowqr.com` в Supabase Auth URL Configuration и `staging.rynowqr.com` в разрешённые hostnames Turnstile. Проверить реальную пару Turnstile site/secret key через вход нового гостя и организатора, подтверждение email и восстановление пароля. Автоматический тест с фиктивным CAPTCHA-токеном теперь ожидаемо отклоняется Supabase; HTTP 200 страниц не доказывает работу входа.
 2. Реализовать и проверить выбранные владельцем 60 дней хранения и `Delete My Data`: удалить имя, фото и доступ бывшего пользователя, сохранить общую историю собеседника под нейтральной подписью. Сейчас cleanup выключен, а кнопка удаления только создаёт заявку.
 3. Указать юридического оператора и контакт в Terms/Privacy, проверить формулировки для конкретного места проведения и аудитории пилота. Текущие страницы помечены `DRAFT`.
 4. Создать подтверждённый постоянный platform-admin аккаунт, добавить его в приватный allowlist и проверить очередь жалоб. Проверить полный цикл фото в Storage, Realtime, модерацию и восстановление после ошибок.
@@ -161,6 +163,8 @@ pnpm exec wrangler deploy dist/server/index.js --config dist/server/wrangler.jso
 
 ## 7. Подключить свой домен
 
+Текущее состояние: Cloudflare Worker `here-staging-web` уже привязан к `staging.rynowqr.com`; Cloudflare создал DNS-запись и HTTPS работает. Корневой `rynowqr.com` не привязан к приложению. Не направляйте его на staging-базу как на готовый пилот.
+
 Рекомендуется отдельный адрес вроде `app.your-domain.com`.
 
 1. Добавьте домен в свой Cloudflare-аккаунт и переключите его nameservers у регистратора.
@@ -185,6 +189,13 @@ NEXT_PUBLIC_APP_URL=https://app.your-domain.com
 
 В **Authentication → URL Configuration**:
 
+- Для текущего `here-staging` установите Site URL `https://staging.rynowqr.com` и добавьте точные Redirect URLs:
+  - `https://staging.rynowqr.com/organizer?auth=confirmed`
+  - `https://staging.rynowqr.com/organizer?recovery=1`
+- Не меняйте настройки отдельного production-проекта ради проверки staging.
+
+При будущем выпуске production:
+
 - Site URL: `https://app.your-domain.com`
 - Redirect URLs:
   - `https://app.your-domain.com/organizer?auth=confirmed`
@@ -195,7 +206,7 @@ NEXT_PUBLIC_APP_URL=https://app.your-domain.com
 
 ### В Cloudflare Turnstile
 
-Откройте Turnstile widget → Settings и добавьте `app.your-domain.com` в разрешённые hostnames. Public site key остаётся во frontend env. Secret остаётся только в настройках Supabase Auth CAPTCHA.
+Откройте Turnstile widget → Settings и добавьте `staging.rynowqr.com` в разрешённые hostnames текущего staging-виджета. При будущем production-выпуске добавьте также его hostname. Public site key остаётся во frontend env. Secret остаётся только в настройках Supabase Auth CAPTCHA.
 
 ### После переключения
 
