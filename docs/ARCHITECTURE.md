@@ -138,13 +138,7 @@ Organizer analytics remain separate and aggregate-only. They never return indivi
 
 `/terms` and `/privacy` are explicitly labelled drafts and do not claim legal/GDPR compliance. On 26 September 2026 the owner kept them intentionally minimal for controlled event testing, not as global public-service terms. A real attendee pilot still requires a named legal operator, contact details and jurisdiction-specific review. The application records a version and server timestamp after the 18+ confirmation.
 
-The owner selected a uniform target retention period of 60 days for pilot product data. This is a product decision, not current runtime behavior. The applied staging configuration still stores the earlier proposal:
-
-- operational/unmatched event data: 30 days;
-- Connections/Matches/chat: 90 days;
-- safety Reports: 180 days.
-
-`cleanup_enabled` is constrained to `false`. No scheduled delete job or historical cleanup is introduced in Phase 2A. A new forward-only migration and a verified trusted cleanup worker are required before the product or Privacy page may promise automatic 60-day deletion.
+The owner selected a uniform 60-day period. As of 8 October 2026, the separate staging project has the forward-only `20261008161930_retention_60_days.sql` migration, a daily cron dispatcher, a Vault-held invocation token and a server-only Edge Function. Its configuration and cleanup switch are active only on staging. Event-scoped records expire 60 days after Room end; an inactive anonymous identity is removed only after its Room/shared references have expired, with avatar files removed through the Storage API first. Permanent organizer/admin identities are excluded. See `docs/RETENTION_60_DAY_RUNBOOK_RU.md` for the exact gates and evidence. The anonymous-account-plus-avatar destructive path has not yet been exercised end-to-end because staging CAPTCHA rejected the repeatable dummy token. Production has no 60-day cleanup.
 
 “Delete my data” creates/refreshes an identity-bound pending request. The owner clarified that account deletion must remove the requesting user's identity and access while preserving shared information needed by other users. The working product model is therefore deactivation plus pseudonymization, not an immediate hard delete of the Auth row:
 
@@ -156,7 +150,7 @@ The owner selected a uniform target retention period of 60 days for pilot produc
 6. preserve safety Reports in pseudonymized form for the 60-day retention window;
 7. keep aggregate analytics only where they no longer identify the deleted person.
 
-The existing foreign keys do not implement that model safely: a direct Auth-user delete would still cascade through `matches`, shared chat, the other participant's feedback view and Reports. An organizer account also remains referenced by owned Rooms. The final workflow therefore requires a separate reviewed backend operation, a forward-only migration, explicit session handling, Storage deletion and destructive staging tests. The 60-day treatment of shared message bodies and pseudonymized Reports is the recommended working interpretation and must be reflected consistently in the final Privacy copy. No deletion or pseudonymization is currently executed.
+The existing foreign keys do not implement **on-demand deletion** safely: a direct Auth-user delete would still cascade through `matches`, shared chat, the other participant's feedback view and Reports. An organizer account also remains referenced by owned Rooms. The scheduled retention worker deletes an anonymous identity only after all such references are gone; it is **not** a replacement for the separate reviewed Delete My Data workflow. That workflow still needs explicit session handling, pseudonymization, Storage deletion and destructive staging tests. No on-demand deletion or pseudonymization is currently executed.
 
 ## 11. Historical Drop objects
 

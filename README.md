@@ -23,6 +23,7 @@ This checkout contains the **staging-validated Pilot RC1 candidate**.
 - As of 28 September 2026, the production project, production frontend and DNS remain untouched.
 - Nothing from this candidate has been deployed to production.
 - As of 8 October 2026, the RYNOW-branded frontend is live only on `https://staging.rynowqr.com` through Cloudflare Worker `rynow-staging-web`. The root domain and production Supabase remain untouched. Supabase project display labels still require a dashboard rename; their immutable project refs do not change.
+- On staging only, a daily 60-day retention worker is active for event data and eligible inactive anonymous guests. Its room deletion and authorization gates passed staging checks; end-to-end avatar/Auth deletion still needs a real CAPTCHA-enabled test guest before production. The updated Draft Privacy/Terms frontend is in this branch, not yet published. See [docs/RETENTION_60_DAY_RUNBOOK_RU.md](docs/RETENTION_60_DAY_RUNBOOK_RU.md).
 
 See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/RYNOW_HANDOFF_RU.md](docs/RYNOW_HANDOFF_RU.md) for the Russian owner handoff, [docs/OWNER_RUNBOOK_RU.md](docs/OWNER_RUNBOOK_RU.md) for independent local/domain operation, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
 
@@ -128,7 +129,7 @@ The full historical chain, including the Phase 2A and staging-hardening addition
 2. `20260914135348_pilot_rc1_connections_safety_operations.sql`
 3. `20260928180331_staging_security_hardening.sql`
 
-Then run the gated RC1 acceptance suite and the complete release regression. Do not apply retention cleanup: the candidate only stores proposed durations and keeps `cleanup_enabled = false`.
+Staging additionally has `20261008161930_retention_60_days.sql` applied and its retention worker enabled. The draft-policy compatibility migration `20261008162822_draft_policy_60_days.sql` is also applied to staging, but the revised frontend copy is only in this branch and has not been published. Production needs a separate approved snapshot, migration plan, frontend release and smoke test; do not infer approval from staging.
 
 ## Historical backend objects
 
