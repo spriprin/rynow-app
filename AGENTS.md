@@ -1,6 +1,6 @@
-# HERE project working agreement
+# RYNOW project working agreement
 
-- Read `README.md`, `docs/ARCHITECTURE.md` and `docs/HERE_HANDOFF_RU.md` before changing product behavior or the database.
+- Read `README.md`, `docs/ARCHITECTURE.md` and `docs/RYNOW_HANDOFF_RU.md` before changing product behavior or the database.
 - Update the relevant documentation in the same commit as every code, schema, configuration or release change.
 - Use the connected Supabase integration for live schema inspection, migrations, advisors, logs and verification.
 - Never edit an already applied migration. Create a new additive migration and keep local SQL aligned with the migration applied remotely.

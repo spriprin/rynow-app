@@ -18,7 +18,7 @@ async function signInOrganizer(prefix) {
   const organizer = client();
   const credentials = organizerEmail && organizerPassword && prefix === "owner"
     ? { email: organizerEmail, password: organizerPassword, existing: true }
-    : { email: `here-sprint4-${prefix}-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!`, existing: false };
+    : { email: `rynow-sprint4-${prefix}-${crypto.randomUUID()}@example.com`, password: `Rynow-${crypto.randomUUID()}-Aa1!`, existing: false };
   const { data, error } = await retryAuthRateLimit(() => credentials.existing
     ? organizer.auth.signInWithPassword(withAuthCaptcha(credentials))
     : organizer.auth.signUp(withAuthCaptcha(credentials)));
@@ -32,8 +32,8 @@ async function createGuest(name, joinCode) {
   let { data: auth, error: authError } = await guest.auth.signInAnonymously(anonymousSignInCredentials());
   if (authError && /rate limit/i.test(authError.message) && allowPermanentGuestFallback()) {
     const fallback = await retryAuthRateLimit(() => guest.auth.signUp(withAuthCaptcha({
-      email: `here-sprint4-guest-${crypto.randomUUID()}@example.com`,
-      password: `Here-${crypto.randomUUID()}-Aa1!`,
+      email: `rynow-sprint4-guest-${crypto.randomUUID()}@example.com`,
+      password: `Rynow-${crypto.randomUUID()}-Aa1!`,
     })));
     auth = fallback.data;
     authError = fallback.error;
@@ -52,7 +52,7 @@ async function createRoom(organizer, organizerId, name) {
   const { data, error } = await organizer.from("rooms").insert({
     organizer_id: organizerId,
     name,
-    venue_name: "HERE Analytics Lab",
+    venue_name: "RYNOW Analytics Lab",
     city: "Riga",
     starts_at: new Date(Date.now() - 60_000).toISOString(),
     ends_at: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
@@ -108,14 +108,14 @@ test("Sprint 4 live acceptance — S4-A through S4-P", { skip: enabled ? false :
     if (foreignRoom) assert.ifError((await foreignOrganizer.client.from("rooms").update({ status: "closed" }).eq("id", foreignRoom.id)).error);
   });
 
-  const room = await createRoom(owner.client, owner.user.id, "HERE Sprint 4 Analytics");
+  const room = await createRoom(owner.client, owner.user.id, "RYNOW Sprint 4 Analytics");
   roomsToClose.push(room.id);
   const alice = await createGuest("S4 Alice", room.join_code);
   const bob = await createGuest("S4 Bob", room.join_code);
   const cara = await createGuest("S4 Cara", room.join_code);
   const dan = await createGuest("S4 Dan", room.join_code);
 
-  foreignRoom = await createRoom(foreignOrganizer.client, foreignOrganizer.user.id, "HERE Sprint 4 Foreign");
+  foreignRoom = await createRoom(foreignOrganizer.client, foreignOrganizer.user.id, "RYNOW Sprint 4 Foreign");
   const outsider = await createGuest("S4 Outsider", foreignRoom.join_code);
 
   const formingDrop = await createDrop(owner.client, room.id, { size: 4, unlock: 4 });

@@ -1,7 +1,7 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const ORGANIZER_AUTH_COOKIE = "here-organizer-auth";
+export const ORGANIZER_AUTH_COOKIE = "rynow-organizer-auth";
 const LOCAL_FALLBACK_ORIGIN = "http://localhost:3000";
 
 let organizerClient: SupabaseClient | null | undefined;

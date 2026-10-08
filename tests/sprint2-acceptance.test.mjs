@@ -19,8 +19,8 @@ async function createGuest(name, joinCode) {
   let { data: auth, error: authError } = await guest.auth.signInAnonymously(anonymousSignInCredentials());
   if (authError?.message?.match(/rate limit/i) && allowPermanentGuestFallback()) {
     const passwordAuth = await retryAuthRateLimit(() => guest.auth.signUp(withAuthCaptcha({
-      email: `here-guest-${crypto.randomUUID()}@example.com`,
-      password: `Here-${crypto.randomUUID()}-Aa1!`,
+      email: `rynow-guest-${crypto.randomUUID()}@example.com`,
+      password: `Rynow-${crypto.randomUUID()}-Aa1!`,
     })));
     auth = passwordAuth.data;
     authError = passwordAuth.error;
@@ -79,8 +79,8 @@ async function markAndPass(guest, item) {
 
 test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false : "Set live Supabase test variables" }, async (t) => {
   const organizer = client();
-  const generatedEmail = `here-sprint2-${crypto.randomUUID()}@example.com`;
-  const generatedPassword = `Here-${crypto.randomUUID()}-Aa1!`;
+  const generatedEmail = `rynow-sprint2-${crypto.randomUUID()}@example.com`;
+  const generatedPassword = `Rynow-${crypto.randomUUID()}-Aa1!`;
   const { data: organizerAuth, error: organizerError } = await retryAuthRateLimit(() => organizerEmail && organizerPassword
     ? organizer.auth.signInWithPassword(withAuthCaptcha({ email: organizerEmail, password: organizerPassword }))
     : organizer.auth.signUp(withAuthCaptcha({ email: generatedEmail, password: generatedPassword })));
@@ -93,7 +93,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     const { error } = await organizer.from("rooms").update({ status: "closed" }).in("id", roomsToClose);
     assert.ifError(error);
   });
-  const primaryRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Sprint 2 Acceptance");
+  const primaryRoom = await createRoom(organizer, organizerAuth.user.id, "RYNOW Sprint 2 Acceptance");
   roomsToClose.push(primaryRoom.id);
   const viewer = await createGuest("Pavel", primaryRoom.join_code);
   const primaryCandidates = [];
@@ -186,7 +186,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.equal(Number(state[0].interests_used), adaptiveBudget);
   });
 
-  const otherRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Cross-room Isolation");
+  const otherRoom = await createRoom(organizer, organizerAuth.user.id, "RYNOW Cross-room Isolation");
   roomsToClose.push(otherRoom.id);
   const otherRoomGuest = await createGuest("Other Room Guest", otherRoom.join_code);
   const otherRoomDrop = await createDrop(organizer, otherRoom.id, futureTimes[0], { size: 2, unlock: 1, budget: 1 });
@@ -262,7 +262,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.equal(Number(state[0].active_candidate_count), 11);
   });
 
-  const smallRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Low Density");
+  const smallRoom = await createRoom(organizer, organizerAuth.user.id, "RYNOW Low Density");
   roomsToClose.push(smallRoom.id);
   const smallViewer = await joinExistingGuest(viewer, smallRoom.join_code);
   await joinExistingGuest(primaryCandidates[0], smallRoom.join_code);
@@ -281,7 +281,7 @@ test("Sprint 2 live acceptance — S2-A through S2-O", { skip: enabled ? false :
     assert.equal(unlocked.length, 2);
   });
 
-  const fairRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Fair Exposure");
+  const fairRoom = await createRoom(organizer, organizerAuth.user.id, "RYNOW Fair Exposure");
   roomsToClose.push(fairRoom.id);
   const fairGuests = primaryCandidates.slice(0, 10);
   for (const fairGuest of fairGuests) await joinExistingGuest(fairGuest, fairRoom.join_code);

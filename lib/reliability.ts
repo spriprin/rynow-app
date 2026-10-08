@@ -54,7 +54,7 @@ export function userFacingError(reason: unknown, fallback: string, rateLimitMess
 
 export function logDiagnostic(operation: string, reason: unknown, context: DiagnosticContext = {}) {
   const value = errorLike(reason);
-  console.error("[HERE operation failed]", {
+  console.error("[RYNOW operation failed]", {
     operation,
     code: value.code || value.name || "unknown",
     status: value.status || null,

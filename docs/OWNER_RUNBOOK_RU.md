@@ -1,4 +1,4 @@
-# HERE — самостоятельный запуск и владение проектом
+# RYNOW — самостоятельный запуск и владение проектом
 
 Обновлено 8 октября 2026 года.
 
@@ -9,10 +9,16 @@
 - исходный код находится в GitHub-репозитории `spriprin/rynow-app`;
 - база, Auth и Storage находятся в Supabase-проектах владельца;
 - локальная копия может запускаться на любом компьютере с Node.js и Git;
-- текущий адрес `*.chatgpt.site` — только один вариант размещения frontend, а не часть базы и не обязательная зависимость приложения;
-- новый frontend можно разместить в собственном Cloudflare-аккаунте и подключить собственный домен.
+- прежний адрес `*.chatgpt.site` был лишь вариантом размещения frontend, а не частью базы;
+- текущий тестовый frontend размещён в собственном Cloudflare-аккаунте владельца на `staging.rynowqr.com`.
 
 ChatGPT/Codex удобен для разработки, но не нужен ни для локального запуска, ни для работы уже размещённого сайта.
+
+### Статус переименования
+
+В интерфейсе, метаданных, изображении предпросмотра, package name и Cloudflare Worker теперь используется RYNOW. Два отображаемых имени проектов в Supabase Dashboard ещё требуется вручную переименовать через **Project Settings → General**: project ref `orkkwgxuzudawiailyen` — в `RYNOW staging`, ref `xwycdnyxuluuhylcnnjh` — в `RYNOW production`. Не создавайте новые проекты и не меняйте refs, URL, ключи или схему ради названия. Подключённый инструмент Supabase может читать проекты, но не изменяет их display name.
+
+Новый browser cookie организатора называется `rynow-organizer-auth`; после смены имени ранее вошедшему организатору может понадобиться войти заново. Данные Rooms и пользователей при этом не удаляются. Старые имена в уже применённых SQL-миграциях и переменных тестового harness сохранены как техническая история/совместимость.
 
 ## 1. Что установить на Windows
 
@@ -87,6 +93,8 @@ pnpm build
 
 Папки `.vinext`, `.wrangler` и `dist` создаются инструментами сборки. Они исключены из проверки `pnpm lint`: проверять нужно исходный код, а не автоматически созданные файлы.
 
+`pnpm-workspace.yaml` разрешает установочные build scripts только трём используемым инструментам — `esbuild`, `sharp` и `workerd`; общего разрешения на scripts других зависимостей нет.
+
 Обычный цикл обновления кода:
 
 ```powershell
@@ -113,11 +121,11 @@ pnpm dev
 
 Локальное редактирование само по себе меняет только файлы на компьютере. Рабочая цепочка: разработчик или ИИ меняет код → изменения попадают в GitHub Pull Request → владелец проверяет и объединяет его с `main` → Cloudflare Workers Builds собирает `main` и публикует новую версию. После подключения GitHub к Worker новые изменения в `main` могут публиковаться автоматически; статус сборки виден в Cloudflare. Для production разумно оставить отдельный выпуск после проверки staging, чтобы экспериментальный код не попадал к гостям сразу.
 
-Для Workers Builds понадобятся собственный Cloudflare-аккаунт владельца, подключение GitHub-репозитория `spriprin/rynow-app`, команда сборки `pnpm build`, команда deploy из следующего раздела и четыре публичных `NEXT_PUBLIC_*` значения как **build variables**. Укажите адрес этого Worker в `NEXT_PUBLIC_APP_URL`; `localhost` в опубликованной сборке использовать нельзя. Название Worker должно совпадать с именем, используемым при deploy. Staging Worker `here-staging-web` уже опубликован вручную; автоматическую сборку из GitHub пока не подключали. Простое изменение файлов на компьютере или в GitHub пока не обновляет опубликованный сайт.
+Для Workers Builds понадобятся собственный Cloudflare-аккаунт владельца, подключение GitHub-репозитория `spriprin/rynow-app`, команда сборки `pnpm build`, команда deploy из следующего раздела и четыре публичных `NEXT_PUBLIC_*` значения как **build variables**. Укажите адрес этого Worker в `NEXT_PUBLIC_APP_URL`; `localhost` в опубликованной сборке использовать нельзя. Название Worker должно совпадать с именем, используемым при deploy. Staging Worker `rynow-staging-web` уже опубликован вручную; автоматическую сборку из GitHub пока не подключали. Простое изменение файлов на компьютере или в GitHub пока не обновляет опубликованный сайт.
 
 ## Перед пилотом с реальными гостями
 
-На 8 октября 2026 года `here-staging` активен, а прежний Supabase-проект `Here MVP` неактивен. Тестовый frontend опубликован на [staging.rynowqr.com](https://staging.rynowqr.com) и подключён только к `here-staging`; в метаданных страниц запрещена поисковая индексация. Основной `rynowqr.com` пока не подключён к Worker; это не готовый пилот. HTTPS и основные страницы staging ответили HTTP 200. Не выдавайте QR реальным гостям, пока не пройдены следующие проверки:
+На 8 октября 2026 года `RYNOW staging` активен, а прежний Supabase-проект `RYNOW production` неактивен. Тестовый frontend опубликован на [staging.rynowqr.com](https://staging.rynowqr.com) и подключён только к `RYNOW staging`; в метаданных страниц запрещена поисковая индексация. Основной `rynowqr.com` пока не подключён к Worker; это не готовый пилот. HTTPS и основные страницы staging ответили HTTP 200. Не выдавайте QR реальным гостям, пока не пройдены следующие проверки:
 
 1. Добавить `https://staging.rynowqr.com` в Supabase Auth URL Configuration и `staging.rynowqr.com` в разрешённые hostnames Turnstile. Проверить реальную пару Turnstile site/secret key через вход нового гостя и организатора, подтверждение email и восстановление пароля. Автоматический тест с фиктивным CAPTCHA-токеном теперь ожидаемо отклоняется Supabase; HTTP 200 страниц не доказывает работу входа.
 2. Реализовать и проверить выбранные владельцем 60 дней хранения и `Delete My Data`: удалить имя, фото и доступ бывшего пользователя, сохранить общую историю собеседника под нейтральной подписью. Сейчас cleanup выключен, а кнопка удаления только создаёт заявку.
@@ -163,7 +171,7 @@ pnpm exec wrangler deploy dist/server/index.js --config dist/server/wrangler.jso
 
 ## 7. Подключить свой домен
 
-Текущее состояние: Cloudflare Worker `here-staging-web` уже привязан к `staging.rynowqr.com`; Cloudflare создал DNS-запись и HTTPS работает. Корневой `rynowqr.com` не привязан к приложению. Не направляйте его на staging-базу как на готовый пилот.
+Текущее состояние: Cloudflare Worker `rynow-staging-web` уже привязан к `staging.rynowqr.com`; Cloudflare создал DNS-запись и HTTPS работает. Корневой `rynowqr.com` не привязан к приложению. Не направляйте его на staging-базу как на готовый пилот.
 
 Рекомендуется отдельный адрес вроде `app.your-domain.com`.
 
@@ -189,7 +197,7 @@ NEXT_PUBLIC_APP_URL=https://app.your-domain.com
 
 В **Authentication → URL Configuration**:
 
-- Для текущего `here-staging` установите Site URL `https://staging.rynowqr.com` и добавьте точные Redirect URLs:
+- Для текущего `RYNOW staging` установите Site URL `https://staging.rynowqr.com` и добавьте точные Redirect URLs:
   - `https://staging.rynowqr.com/organizer?auth=confirmed`
   - `https://staging.rynowqr.com/organizer?recovery=1`
 - Не меняйте настройки отдельного production-проекта ради проверки staging.

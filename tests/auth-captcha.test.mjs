@@ -40,7 +40,7 @@ test("PP-R — Supabase Auth CAPTCHA provider verification", {
     assertIsolatedPublishableKey(key);
   }
   if (phase === "production-negative") {
-    assert.equal(new URL(url).host, productionProjectHost, "production-negative must target the HERE production project");
+    assert.equal(new URL(url).host, productionProjectHost, "production-negative must target the RYNOW production project");
     assert.equal(validToken, undefined, "production-negative must not receive a reusable test token");
   }
 

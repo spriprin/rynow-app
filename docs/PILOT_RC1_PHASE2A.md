@@ -77,9 +77,9 @@ Product source:
 
 Database:
 
-- `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql` (applied to `here-staging`, not production)
-- `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql` (applied to `here-staging`, not production)
-- `supabase/migrations/20260928180331_staging_security_hardening.sql` (applied to `here-staging`, not production)
+- `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql` (applied to `RYNOW staging`, not production)
+- `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql` (applied to `RYNOW staging`, not production)
+- `supabase/migrations/20260928180331_staging_security_hardening.sql` (applied to `RYNOW staging`, not production)
 
 Tests and release harness:
 
@@ -94,7 +94,7 @@ Documentation:
 
 - `README.md`
 - `docs/ARCHITECTURE.md`
-- `docs/HERE_HANDOFF_RU.md`
+- `docs/RYNOW_HANDOFF_RU.md`
 - `docs/PHYSICAL_QA_RU.md`
 - `docs/PILOT_RC1_PHASE2A.md` (new)
 
@@ -191,7 +191,7 @@ The first build attempt encountered an old generated `dist/.openai/drizzle` dire
 
 ### Staging Security Advisor addendum — updated 28 September 2026
 
-The full migration chain is now applied to the isolated `here-staging` project (`orkkwgxuzudawiailyen`). Production Supabase, production frontend and DNS remain unchanged.
+The full migration chain is now applied to the isolated `RYNOW staging` project (`orkkwgxuzudawiailyen`). Production Supabase, production frontend and DNS remain unchanged.
 
 The post-migration Security Advisor run reported no `ERROR` findings:
 
@@ -211,11 +211,11 @@ On 29 September 2026 the owner chose to remain on Supabase Free. Leaked-password
 
 ### Staging live acceptance addendum — 22 September 2026
 
-The existing `pilot-rc1-acceptance` harness passed against the isolated `here-staging` project (`orkkwgxuzudawiailyen`) using only its publishable key, Cloudflare's official repeatable Turnstile test token and ordinary test identities. No service-role/secret key was read, stored or used.
+The existing `pilot-rc1-acceptance` harness passed against the isolated `RYNOW staging` project (`orkkwgxuzudawiailyen`) using only its publishable key, Cloudflare's official repeatable Turnstile test token and ordinary test identities. No service-role/secret key was read, stored or used.
 
 The first live attempt exposed two staging/test issues before the successful run:
 
-- anonymous sign-ins were disabled in staging even though the guest architecture requires them; they were enabled only for `here-staging`;
+- anonymous sign-ins were disabled in staging even though the guest architecture requires them; they were enabled only for `RYNOW staging`;
 - three membership assertions used `.single()` after filtering only by Room, so a Room with multiple members could not be coerced to one row. The harness now also filters by the expected `user_id` and asserts the Rejoin read error explicitly.
 
 The successful run covered Room creation, four anonymous guest identities, join and late join, continuous Explore, Interest idempotency and rejection, reciprocal Match creation, notification/chat state, explicit Leave and Rejoin with session restoration, cross-profile RLS denial, organizer denial from platform-admin operations, Report creation, independent IRL feedback privacy, organizer aggregates and deprecated Drop RPC denial.
@@ -265,4 +265,4 @@ Completed: isolated staging exists, the full migration chain and hardening migra
 
 ## 10. Deployment statement
 
-Only the forward-only hardening migration was applied to isolated `here-staging`. No production database, production Supabase configuration, frontend hosting or DNS was modified or deployed. Sprint 6 was not started.
+Only the forward-only hardening migration was applied to isolated `RYNOW staging`. No production database, production Supabase configuration, frontend hosting or DNS was modified or deployed. Sprint 6 was not started.

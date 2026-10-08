@@ -21,8 +21,8 @@ async function createGuest(name, joinCode) {
   const guest = client();
   let { data: auth, error: authError } = await guest.auth.signInAnonymously(anonymousSignInCredentials());
   if (authError && /rate limit/i.test(authError.message) && allowPermanentGuestFallback()) {
-    const email = `here-actor-${crypto.randomUUID()}@example.com`;
-    const password = `Here-${crypto.randomUUID()}-Aa1!`;
+    const email = `rynow-actor-${crypto.randomUUID()}@example.com`;
+    const password = `Rynow-${crypto.randomUUID()}-Aa1!`;
     const permanent = await retryAuthRateLimit(() => guest.auth.signUp(withAuthCaptcha({ email, password })));
     auth = permanent.data;
     authError = permanent.error;
@@ -43,7 +43,7 @@ async function createRoom(organizer, organizerId, name) {
   const { data, error } = await organizer.from("rooms").insert({
     organizer_id: organizerId,
     name,
-    venue_name: "HERE Safety Lab",
+    venue_name: "RYNOW Safety Lab",
     city: "Riga",
     starts_at: new Date(Date.now() - 60_000).toISOString(),
     ends_at: new Date(Date.now() + 6 * 60 * 60_000).toISOString(),
@@ -113,8 +113,8 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
     }
   });
   const organizer = client();
-  const generatedEmail = `here-sprint3-${crypto.randomUUID()}@example.com`;
-  const generatedPassword = `Here-${crypto.randomUUID()}-Aa1!`;
+  const generatedEmail = `rynow-sprint3-${crypto.randomUUID()}@example.com`;
+  const generatedPassword = `Rynow-${crypto.randomUUID()}-Aa1!`;
   const { data: organizerAuth, error: organizerError } = await retryAuthRateLimit(() => organizerEmail && organizerPassword
     ? organizer.auth.signInWithPassword(withAuthCaptcha({ email: organizerEmail, password: organizerPassword }))
     : organizer.auth.signUp(withAuthCaptcha({ email: generatedEmail, password: generatedPassword })));
@@ -122,7 +122,7 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
   assert.ok(organizerAuth.user && !organizerAuth.user.is_anonymous);
   const roomsToClose = [];
 
-  const room = await createRoom(organizer, organizerAuth.user.id, "HERE Sprint 3 Social Loop");
+  const room = await createRoom(organizer, organizerAuth.user.id, "RYNOW Sprint 3 Social Loop");
   roomsToClose.push(room.id);
   const pavel = await createGuest("Pavel", room.join_code);
   const anna = await createGuest("Anna", room.join_code);
@@ -246,7 +246,7 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
     assert.match((await pavel.client.rpc("send_match_message", { p_match_id: matchId, p_body: "blocked" })).error?.message || "", /unavailable/i);
   });
 
-  const safetyRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Block Eligibility");
+  const safetyRoom = await createRoom(organizer, organizerAuth.user.id, "RYNOW Block Eligibility");
   roomsToClose.push(safetyRoom.id);
   const blocker = await createGuest("Blocker", safetyRoom.join_code);
   const blocked = await createGuest("Blocked", safetyRoom.join_code);
@@ -292,7 +292,7 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
     assert.equal((await mark.client.from("reports").select("id").eq("id", reportId)).data.length, 1);
   });
 
-  const closedRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Closed Match");
+  const closedRoom = await createRoom(organizer, organizerAuth.user.id, "RYNOW Closed Match");
   roomsToClose.push(closedRoom.id);
   const carol = await createGuest("Carol", closedRoom.join_code);
   const dan = await createGuest("Dan", closedRoom.join_code);
@@ -313,7 +313,7 @@ test("Sprint 3 live acceptance — S3-A through S3-N", { skip: enabled ? false :
     assert.match((await carol.client.rpc("send_interest", { p_drop_item_id: eliItem.id })).error?.message || "", /Room has ended/i);
   });
 
-  const popularityRoom = await createRoom(organizer, organizerAuth.user.id, "HERE Match Popularity Isolation");
+  const popularityRoom = await createRoom(organizer, organizerAuth.user.id, "RYNOW Match Popularity Isolation");
   roomsToClose.push(popularityRoom.id);
   const popularityGuests = [];
   for (let index = 1; index <= 6; index += 1) popularityGuests.push(await createGuest(`Popularity ${index}`, popularityRoom.join_code));

@@ -1,6 +1,6 @@
-# HERE Pilot RC1 architecture
+# RYNOW Pilot RC1 architecture
 
-Status: staging-validated Pilot RC1 candidate, updated 29 September 2026. The full migration chain, including the staging security-hardening migration, is applied and live-tested on isolated `here-staging`. Production Supabase, the production frontend and DNS were not modified.
+Status: staging-validated Pilot RC1 candidate, updated 29 September 2026. The full migration chain, including the staging security-hardening migration, is applied and live-tested on isolated `RYNOW staging`. Production Supabase, the production frontend and DNS were not modified.
 
 ## 1. System shape
 
@@ -166,7 +166,7 @@ The continuous-Explore migration copies previously viewed historical Drop-card i
 
 ## 12. Migration order and rollout
 
-The full chain has been applied on the isolated `here-staging` Supabase project in timestamp order. The RC1 additions are:
+The full chain has been applied on the isolated `RYNOW staging` Supabase project in timestamp order. The RC1 additions are:
 
 1. `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql`
 2. `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql`

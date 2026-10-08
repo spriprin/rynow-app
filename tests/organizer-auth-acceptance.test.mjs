@@ -16,8 +16,8 @@ function client() {
 
 async function registerPermanent(label) {
   const authClient = client();
-  const email = `here-organizer-${label}-${crypto.randomUUID()}@example.com`;
-  const password = `Here-${crypto.randomUUID()}-Aa1!`;
+  const email = `rynow-organizer-${label}-${crypto.randomUUID()}@example.com`;
+  const password = `Rynow-${crypto.randomUUID()}-Aa1!`;
   const { data, error } = await retryAuthRateLimit(() => authClient.auth.signUp(withAuthCaptcha({ email, password })));
   assert.ifError(error);
   assert.ok(data.user);
@@ -37,7 +37,7 @@ async function fallbackOrganizer() {
 async function createRoom(organizer, userId, label) {
   const { data, error } = await organizer.from("rooms").insert({
     organizer_id: userId,
-    name: `HERE Organizer Signup ${label}`,
+    name: `RYNOW Organizer Signup ${label}`,
     venue_name: "Release Lab",
     city: "Riga",
     starts_at: new Date(Date.now() - 60_000).toISOString(),
@@ -58,7 +58,7 @@ test("Organizer self-service Auth live acceptance", { skip: enabled ? false : "S
   });
 
   await t.test("password recovery request accepts the configured application redirect", async () => {
-    const recoveryProbeEmail = `here.sprint4.recovery+${crypto.randomUUID()}@gmail.com`;
+    const recoveryProbeEmail = `rynow.sprint4.recovery+${crypto.randomUUID()}@gmail.com`;
     const { error } = await first.client.auth.resetPasswordForEmail(recoveryProbeEmail, withAuthCaptchaOptions({
       redirectTo: new URL("/organizer?recovery=1", applicationUrl).toString(),
     }));

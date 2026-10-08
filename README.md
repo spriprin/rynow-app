@@ -1,6 +1,6 @@
-# HERE — Pilot RC1
+# RYNOW — Pilot RC1
 
-HERE is a mobile-first web application for meeting people who are attending the same physical event.
+RYNOW is a mobile-first web application for meeting people who are attending the same physical event.
 
 The Pilot RC1 product flow is:
 
@@ -17,13 +17,14 @@ This checkout contains the **staging-validated Pilot RC1 candidate**.
 
 - Active guest, organizer, demo and landing flows contain no Drops.
 - Historical Drop migrations/tables are retained for safe forward migration. The new migration revokes their client RPC execution rather than deleting historical data.
-- The full migration chain, including `20260928180331_staging_security_hardening.sql`, is applied only to the isolated `here-staging` Supabase project. The RC1 flow and the post-hardening live security smoke pass there using only a publishable key and ordinary test identities.
+- The full migration chain, including `20260928180331_staging_security_hardening.sql`, is applied only to the isolated `RYNOW staging` Supabase project. The RC1 flow and the post-hardening live security smoke pass there using only a publishable key and ordinary test identities.
 - Local lint, TypeScript, unit/contract tests and a clean production build pass.
 - Security Advisor reports no `ERROR` findings. Staging now retires three compatibility RPCs, gives nine inherited functions an empty `search_path`, and closes direct client reads of historical Drops. Leaked-password protection remains a real pre-pilot item but requires a paid Supabase plan; the current organization is on Free and was not upgraded automatically.
 - As of 28 September 2026, the production project, production frontend and DNS remain untouched.
 - Nothing from this candidate has been deployed to production.
+- As of 8 October 2026, the RYNOW-branded frontend is live only on `https://staging.rynowqr.com` through Cloudflare Worker `rynow-staging-web`. The root domain and production Supabase remain untouched. Supabase project display labels still require a dashboard rename; their immutable project refs do not change.
 
-See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/HERE_HANDOFF_RU.md](docs/HERE_HANDOFF_RU.md) for the Russian owner handoff, [docs/OWNER_RUNBOOK_RU.md](docs/OWNER_RUNBOOK_RU.md) for independent local/domain operation, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
+See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/RYNOW_HANDOFF_RU.md](docs/RYNOW_HANDOFF_RU.md) for the Russian owner handoff, [docs/OWNER_RUNBOOK_RU.md](docs/OWNER_RUNBOOK_RU.md) for independent local/domain operation, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
 
 ## Active routes
 

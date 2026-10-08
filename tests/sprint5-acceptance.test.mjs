@@ -26,7 +26,7 @@ async function organizer() {
   const value = client();
   const credentials = organizerEmail && organizerPassword
     ? { email: organizerEmail, password: organizerPassword }
-    : { email: `here-sprint5-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!` };
+    : { email: `rynow-sprint5-${crypto.randomUUID()}@example.com`, password: `Rynow-${crypto.randomUUID()}-Aa1!` };
   let result;
   for (let attempt = 1; attempt <= 5; attempt += 1) {
     result = organizerEmail && organizerPassword
@@ -45,7 +45,7 @@ async function createRoom(owner, ownerId, name) {
   const { data, error } = await owner.from("rooms").insert({
     organizer_id: ownerId,
     name,
-    venue_name: "HERE Reliability Lab",
+    venue_name: "RYNOW Reliability Lab",
     city: "Riga",
     starts_at: new Date(Date.now() - 60_000).toISOString(),
     ends_at: new Date(Date.now() + 8 * 60 * 60_000).toISOString(),
@@ -59,7 +59,7 @@ async function actor(name, joinCode, { deferJoin = false } = {}) {
   const value = client();
   let { data: auth, error: authError } = await value.auth.signInAnonymously(anonymousSignInCredentials());
   if ((authError?.status === 429 || /rate limit/i.test(authError?.message || "")) && allowPermanentGuestFallback()) {
-    const credentials = { email: `here-sprint5-actor-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!` };
+    const credentials = { email: `rynow-sprint5-actor-${crypto.randomUUID()}@example.com`, password: `Rynow-${crypto.randomUUID()}-Aa1!` };
     let fallback;
     for (let attempt = 1; attempt <= 5; attempt += 1) {
       fallback = await value.auth.signUp(withAuthCaptcha(credentials));
@@ -140,8 +140,8 @@ test("Sprint 5 live acceptance — S5-A through S5-R", { skip: enabled ? false :
     }
   });
 
-  const room = await createRoom(owner.client, owner.user.id, "HERE Sprint 5 Concurrent Pilot");
-  const isolatedRoom = await createRoom(owner.client, owner.user.id, "HERE Sprint 5 Isolation");
+  const room = await createRoom(owner.client, owner.user.id, "RYNOW Sprint 5 Concurrent Pilot");
+  const isolatedRoom = await createRoom(owner.client, owner.user.id, "RYNOW Sprint 5 Isolation");
   roomsToClose.push(room.id, isolatedRoom.id);
 
   const actors = [];

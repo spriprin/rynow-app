@@ -82,7 +82,7 @@ test("organizer self-service Auth keeps permanent and anonymous sessions separat
   assert.match(organizer, /scope: "local"/);
   assert.doesNotMatch(organizer, /ORGANIZER DEVELOPMENT ACCESS|pre-created permanent/i);
   assert.doesNotMatch(organizer, /user_metadata|isAdmin|service[_-]?role/i);
-  assert.match(organizerClient, /ORGANIZER_AUTH_COOKIE = "here-organizer-auth"/);
+  assert.match(organizerClient, /ORGANIZER_AUTH_COOKIE = "rynow-organizer-auth"/);
   assert.match(organizerClient, /isSingleton: false/);
   assert.match(organizerClient, /localhost|127\.0\.0\.1/);
   assert.match(organizerClient, /LOCAL_FALLBACK_ORIGIN/);
@@ -241,7 +241,7 @@ test("Auth release gates are isolated, complete and skip-intolerant", async () =
     "../tests/auth-captcha.test.mjs",
     "../scripts/run-live-acceptance.mjs",
   ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
-  assert.match(helpers, /Cloudflare test proof must never be used against the HERE production Supabase project/);
+  assert.match(helpers, /Cloudflare test proof must never be used against the RYNOW production Supabase project/);
   assert.match(helpers, /HERE_TEST_ISOLATED_PROJECT_REF/);
   assert.match(helpers, /OFFICIAL_TURNSTILE_ALWAYS_PASS_TOKEN/);
   assert.match(helpers, /HERE_TEST_DELETE_ISOLATED_PROJECT_AFTER_RUN/);
@@ -391,7 +391,7 @@ test("Sprint 5 hardens presence, retries, Realtime and duplicate mutations", asy
   assert.match(roomSource, /submit_report_rc1/);
   assert.match(reliabilitySource, /value\.status === 429/);
   assert.match(reliabilitySource, /Too many people are joining at once/);
-  assert.match(reliabilitySource, /\[HERE operation failed\]/);
+  assert.match(reliabilitySource, /\[RYNOW operation failed\]/);
   assert.doesNotMatch(reliabilitySource, /body|details|display_name|avatar_path/);
   assert.match(organizerSource, /joined ·.*recent/i);
 });
