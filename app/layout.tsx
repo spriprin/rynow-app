@@ -8,9 +8,11 @@ export const viewport: Viewport = {
 
 export function generateMetadata(): Metadata {
   const origin = new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").origin;
+  const isStaging = new URL(origin).hostname === "staging.rynowqr.com";
 
   return {
     metadataBase: new URL(origin),
+    robots: isStaging ? { index: false, follow: false } : undefined,
     title: "HERE — Real people. Same place. Right now.",
     description: "Turn your event into a place where meeting someone new is easier. Guests join by QR, discover people at the same event, match and meet in real life — no app download required.",
     openGraph: {
