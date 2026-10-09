@@ -1078,10 +1078,10 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
           <button className="button button--lime button--wide" disabled={!gender} onClick={() => setStep(4)}>Continue <ArrowRight size={18} /></button>
         </>}
         {step === 4 && <>
-          <button className="back-link" onClick={() => setStep(3)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 4 OF 4</span><h1>One last check.</h1><p>HERE is currently available only to adults.</p>
+          <button className="back-link" onClick={() => setStep(3)}><ArrowLeft size={17} />Back</button><span className="eyebrow">STEP 4 OF 4</span><h1>One last check.</h1><p>RYNOW is currently available only to adults.</p>
           <label className="foundation-age-check"><input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} /><span><Check size={18} /></span><strong>I am 18 or older</strong></label>
           <label className="foundation-age-check"><input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} /><span><Check size={18} /></span><strong>I accept the <a href="/terms" target="_blank" rel="noreferrer">Draft Terms</a> and acknowledge the <a href="/privacy" target="_blank" rel="noreferrer">Draft Privacy Policy</a>.</strong></label>
-          {error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!ageConfirmed || !legalAccepted || busy} onClick={finishOnboarding}>{busy ? "Joining…" : "Enter the Room"}<ArrowRight size={18} /></button><small className="foundation-privacy"><ShieldCheck size={14} />Your profile is saved for your next HERE event.</small>
+          {error && <p className="form-error">{error}</p>}<button className="button button--lime button--wide" disabled={!ageConfirmed || !legalAccepted || busy} onClick={finishOnboarding}>{busy ? "Joining…" : "Enter the Room"}<ArrowRight size={18} /></button><small className="foundation-privacy"><ShieldCheck size={14} />Your profile is saved for your next RYNOW event.</small>
         </>}
       </section>
     </main>;
@@ -1141,7 +1141,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
     return (
       <main className="foundation-room-screen">
         <header>
-          <span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span>
+          <span className="brand"><span className="brand-mark"><Radio size={17} /></span>RYNOW<span className="brand-dot">.</span></span>
           <div className="foundation-room-actions">
             {profile && <UserArea userId={profile.id} roomId={room.id} onEditProfile={() => openProfileEditor("room")} onOpenConnection={(connection) => { setMatches((current) => current.some((item) => item.id === connection.id) ? current : [...current, connection]); openConversation(connection); }} />}
             <span className={`foundation-live ${room.status === "closed" ? "foundation-live--ended" : ""}`}><i />{room.status === "closed" ? "ROOM ENDED" : "ROOM OPEN"}</span>
@@ -1155,7 +1155,7 @@ export function RoomJoinApp({ joinCode, initialRoom }: { joinCode: string; initi
 
         {room.status === "closed" ? <section className="closed-connections-intro"><LockKeyhole /><span className="eyebrow">ROOM ENDED</span><h1>Your connections stay with you.</h1><p>Discovery is closed, but existing Matches and conversations remain available.</p></section> : <>
         <section className="foundation-room-heading">
-          <span className="eyebrow">HERE TONIGHT</span>
+          <span className="eyebrow">AT THIS EVENT</span>
           <h1>{joinedCount} people here</h1>
           <p>{room.name} · {room.venue_name || room.city || "Tonight"}</p>
         </section>
@@ -1276,11 +1276,11 @@ function ProfileChoices<T extends string>({ name, label, value, options, onChang
 }
 
 function FoundationRoomHeader({ room }: { room: FoundationRoom }) {
-  return <section className="foundation-room-summary"><header><span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span><span className="foundation-live"><i />ROOM OPEN</span></header><div><span className="eyebrow">TONIGHT AT</span><h2>{room.venue_name || room.name}</h2><p><MapPin size={15} />{room.city || "Event location"}<b>·</b><CalendarDays size={15} />{roomDate(room.starts_at)}</p></div></section>;
+  return <section className="foundation-room-summary"><header><span className="brand"><span className="brand-mark"><Radio size={17} /></span>RYNOW<span className="brand-dot">.</span></span><span className="foundation-live"><i />ROOM OPEN</span></header><div><span className="eyebrow">TONIGHT AT</span><h2>{room.venue_name || room.name}</h2><p><MapPin size={15} />{room.city || "Event location"}<b>·</b><CalendarDays size={15} />{roomDate(room.starts_at)}</p></div></section>;
 }
 
 function RoomState({ icon, eyebrow, title, copy, actionLabel, onAction }: { icon: React.ReactNode; eyebrow?: string; title: string; copy: string; actionLabel?: string; onAction?: () => void }) {
-  return <main className="foundation-state"><span className="brand"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></span><div className="foundation-state__icon">{icon}</div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1><p>{copy}</p>{actionLabel && onAction && <button className="button button--dark" onClick={onAction}>{actionLabel}</button>}</main>;
+  return <main className="foundation-state"><span className="brand"><span className="brand-mark"><Radio size={17} /></span>RYNOW<span className="brand-dot">.</span></span><div className="foundation-state__icon">{icon}</div>{eyebrow && <span className="eyebrow">{eyebrow}</span>}<h1>{title}</h1><p>{copy}</p>{actionLabel && onAction && <button className="button button--dark" onClick={onAction}>{actionLabel}</button>}</main>;
 }
 
 function ConnectionBanner({ state, onRetry }: { state: ConnectionState; onRetry: () => void }) {

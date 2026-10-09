@@ -257,7 +257,7 @@ export function CurrentProductDemo() {
           </div>
           {person ? <><article className="demo-profile-card">
             <img src={person.image} alt={person.name + ", sample profile"} />
-            <div className="demo-profile-card__copy"><span>HERE TONIGHT</span><h2>{person.name}, {person.age}</h2><p>{person.bio}</p></div>
+            <div className="demo-profile-card__copy"><span>AT THIS EVENT</span><h2>{person.name}, {person.age}</h2><p>{person.bio}</p></div>
             <div className="demo-profile-card__actions">
               <button className="button button--ghost" onClick={nextProfile}>Next</button>
               <button className="button button--lime" onClick={sendInterest}><Heart size={17} />Interested</button>
@@ -274,7 +274,7 @@ export function CurrentProductDemo() {
           <div className="demo-section-title"><span>INTERESTED IN YOU</span><h1>Sofia wants to meet.</h1><p>The sender is visible. This is your decision — no guessing.</p></div>
           <article className="demo-incoming-card">
             <img src={explorePeople[0].image} alt="Sofia, sample incoming Interest" />
-            <div><span>HERE TONIGHT</span><h2>Sofia, 26</h2><p>{explorePeople[0].bio}</p><div><button className="button button--ghost" onClick={() => { setView("room"); flash("Not for me — no Match created"); }}><X size={17} />Not for me</button><button className="button button--lime" onClick={() => { setHasMatch(true); setView("match"); }}><Heart size={17} />Interested Too</button></div></div>
+            <div><span>AT THIS EVENT</span><h2>Sofia, 26</h2><p>{explorePeople[0].bio}</p><div><button className="button button--ghost" onClick={() => { setView("room"); flash("Not for me — no Match created"); }}><X size={17} />Not for me</button><button className="button button--lime" onClick={() => { setHasMatch(true); setView("match"); }}><Heart size={17} />Interested Too</button></div></div>
           </article>
         </section>
       )}
@@ -314,7 +314,7 @@ export function CurrentProductDemo() {
 function DemoHeader({ name, avatar, onProfile, onRoom }: { name?: string; avatar?: string; onProfile?: () => void; onRoom?: () => void }) {
   return (
     <header className="product-demo__header">
-      {onRoom ? <button className="brand brand--button" onClick={onRoom}><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></button> : <Link className="brand" href="/"><span className="brand-mark"><Radio size={17} /></span>HERE<span className="brand-dot">.</span></Link>}
+      {onRoom ? <button className="brand brand--button" onClick={onRoom}><span className="brand-mark"><Radio size={17} /></span>RYNOW<span className="brand-dot">.</span></button> : <Link className="brand" href="/"><span className="brand-mark"><Radio size={17} /></span>RYNOW<span className="brand-dot">.</span></Link>}
       <div><i className="live-pulse" /><span>FRIDAY SOCIAL · DEMO</span></div>
       {onProfile && avatar ? <button className="demo-profile-trigger" onClick={onProfile} aria-label="Edit demo profile"><img src={avatar} alt="" /><span>{name}</span><UserRound size={15} /></button> : <Link href="/">Back to website <ArrowRight size={15} /></Link>}
     </header>
@@ -388,7 +388,7 @@ function DemoRegistration({ step, setStep, displayName, setDisplayName, avatar, 
 
         {step === 4 && <>
           <DemoBack onClick={() => setStep(3)} label="Back" />
-          <span className="eyebrow">STEP 4 OF 4</span><h2>One last check.</h2><p>HERE is currently available only to adults.</p>
+          <span className="eyebrow">STEP 4 OF 4</span><h2>One last check.</h2><p>RYNOW is currently available only to adults.</p>
           <label className="foundation-age-check"><input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} /><span><Check size={18} /></span><strong>I am 18 or older</strong></label>
           <label className="foundation-age-check"><input type="checkbox" checked={legalAccepted} onChange={(event) => setLegalAccepted(event.target.checked)} /><span><Check size={18} /></span><strong>I accept the <Link href="/terms" target="_blank">Draft Terms</Link> and acknowledge the <Link href="/privacy" target="_blank">Draft Privacy Policy</Link>.</strong></label>
           <button className="button button--lime button--wide" disabled={!ageConfirmed || !legalAccepted} onClick={finishRegistration}>Enter the demo Room <ArrowRight size={18} /></button>
@@ -427,7 +427,7 @@ function DemoBack({ onClick, label }: { onClick: () => void; label: string }) {
 function RoomWall({ name, avatar, onProfile, onExplore, onIncoming, hasMatch, onMatch }: { name: string; avatar: string; onProfile: () => void; onExplore: () => void; onIncoming: () => void; hasMatch: boolean; onMatch: () => void }) {
   return (
     <section className="demo-room">
-      <div className="demo-room__heading"><span>HERE TONIGHT</span><h1>Friday Social</h1><p>Lumen Club · Riga</p></div>
+      <div className="demo-room__heading"><span>AT THIS EVENT</span><h1>Friday Social</h1><p>Lumen Club · Riga</p></div>
       <button className="demo-own-profile" onClick={onProfile}><img src={avatar} alt="" /><span><small>YOU’RE IN</small><strong>{name}</strong></span><span>Edit profile <ArrowRight size={15} /></span></button>
       <section className="demo-room-wall">
         <header><div><span>ROOM WALL</span><h2>75 people here</h2></div><Users /></header>

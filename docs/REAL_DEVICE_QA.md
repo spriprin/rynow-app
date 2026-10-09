@@ -1,4 +1,4 @@
-# HERE — 10–20 device QA checklist
+# RYNOW — 10–20 device QA checklist
 
 This checklist is for the stage after an explicitly approved production deployment. Browser emulation is not a substitute for these results.
 

@@ -1,16 +1,18 @@
-# HERE — физический QA Pilot RC1
+# RYNOW — физический QA Pilot RC1
 
 Актуально на 26 сентября 2026 года.
 
-Цель: вручную проверить основной HERE-сценарий на настоящих iPhone Safari и Android Chrome до любого production-запуска.
+Цель: вручную проверить основной RYNOW-сценарий на настоящих iPhone Safari и Android Chrome до любого production-запуска.
 
 ## Важно перед началом
 
-Физический QA проводится только против `here-staging` (`orkkwgxuzudawiailyen`). Production-проект `Here MVP` (`xwycdnyxuluuhylcnnjh`) использовать нельзя.
+Физический QA проводится только против `RYNOW staging` (`orkkwgxuzudawiailyen`). Production-проект `RYNOW production` (`xwycdnyxuluuhylcnnjh`) использовать нельзя.
 
-Сейчас frontend в staging не опубликован. Для начала проверки нужен один из вариантов:
+Тестовый frontend теперь доступен на `https://staging.rynowqr.com` и подключён только к Supabase project ref `orkkwgxuzudawiailyen`. До физического QA необходимо подтвердить разрешённый hostname Turnstile и Auth redirects; открытие страницы само по себе не подтверждает работу входа.
 
-- отдельно разрешённый staging frontend URL, настроенный только на `here-staging`;
+Для проверки используй один из вариантов:
+
+- `https://staging.rynowqr.com` после проверки Auth/Turnstile;
 - временный локальный preview, доступный телефонам в одной сети.
 
 Не начинай тест, если непонятно, к какому Supabase-проекту подключён frontend.

@@ -1,7 +1,7 @@
 # Pilot RC1 Phase 2A — implementation report
 
 Date: 16 September 2026
-Latest staging/status update: 28 September 2026
+Latest staging/status update: 29 September 2026
 Scope: product source, forward-only migrations, local automated tests and an isolated staging test harness.
 Explicitly out of scope: production database/configuration, deployment, hosting/DNS migration, Git remotes, destructive data cleanup, physical removal of historical Drop objects, Sprint 6.
 
@@ -77,9 +77,9 @@ Product source:
 
 Database:
 
-- `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql` (applied to `here-staging`, not production)
-- `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql` (applied to `here-staging`, not production)
-- `supabase/migrations/20260928180331_staging_security_hardening.sql` (applied to `here-staging`, not production)
+- `supabase/migrations/20260914135346_pilot_rc1_continuous_explore.sql` (applied to `RYNOW staging`, not production)
+- `supabase/migrations/20260914135348_pilot_rc1_connections_safety_operations.sql` (applied to `RYNOW staging`, not production)
+- `supabase/migrations/20260928180331_staging_security_hardening.sql` (applied to `RYNOW staging`, not production)
 
 Tests and release harness:
 
@@ -94,7 +94,7 @@ Documentation:
 
 - `README.md`
 - `docs/ARCHITECTURE.md`
-- `docs/HERE_HANDOFF_RU.md`
+- `docs/RYNOW_HANDOFF_RU.md`
 - `docs/PHYSICAL_QA_RU.md`
 - `docs/PILOT_RC1_PHASE2A.md` (new)
 
@@ -191,7 +191,7 @@ The first build attempt encountered an old generated `dist/.openai/drizzle` dire
 
 ### Staging Security Advisor addendum — updated 28 September 2026
 
-The full migration chain is now applied to the isolated `here-staging` project (`orkkwgxuzudawiailyen`). Production Supabase, production frontend and DNS remain unchanged.
+The full migration chain is now applied to the isolated `RYNOW staging` project (`orkkwgxuzudawiailyen`). Production Supabase, production frontend and DNS remain unchanged.
 
 The post-migration Security Advisor run reported no `ERROR` findings:
 
@@ -207,15 +207,15 @@ Three database defense-in-depth items are now completed on staging:
 2. The nine inherited functions use the documented empty `search_path`.
 3. Direct client `SELECT` access to deprecated `public.drops` is removed.
 
-The remaining pre-pilot decision is whether to approve a paid plan and enable leaked-password protection, followed by organizer sign-in/recovery verification. The retained Advisor warnings are architecture-aware review items, not evidence of a current cross-user data path.
+On 29 September 2026 the owner chose to remain on Supabase Free. Leaked-password protection therefore remains an accepted plan limitation rather than an open upgrade decision. Permanent organizer/admin accounts require unique password-manager credentials and a reviewed MFA path before real admin access. The retained Advisor warnings are architecture-aware review items, not evidence of a current cross-user data path.
 
 ### Staging live acceptance addendum — 22 September 2026
 
-The existing `pilot-rc1-acceptance` harness passed against the isolated `here-staging` project (`orkkwgxuzudawiailyen`) using only its publishable key, Cloudflare's official repeatable Turnstile test token and ordinary test identities. No service-role/secret key was read, stored or used.
+The existing `pilot-rc1-acceptance` harness passed against the isolated `RYNOW staging` project (`orkkwgxuzudawiailyen`) using only its publishable key, Cloudflare's official repeatable Turnstile test token and ordinary test identities. No service-role/secret key was read, stored or used.
 
 The first live attempt exposed two staging/test issues before the successful run:
 
-- anonymous sign-ins were disabled in staging even though the guest architecture requires them; they were enabled only for `here-staging`;
+- anonymous sign-ins were disabled in staging even though the guest architecture requires them; they were enabled only for `RYNOW staging`;
 - three membership assertions used `.single()` after filtering only by Room, so a Room with multiple members could not be coerced to one row. The harness now also filters by the expected `user_id` and asserts the Rejoin read error explicitly.
 
 The successful run covered Room creation, four anonymous guest identities, join and late join, continuous Explore, Interest idempotency and rejection, reciprocal Match creation, notification/chat state, explicit Leave and Rejoin with session restoration, cross-profile RLS denial, organizer denial from platform-admin operations, Report creation, independent IRL feedback privacy, organizer aggregates and deprecated Drop RPC denial.
@@ -231,11 +231,11 @@ The original Phase 2A run did not include a hosted backend. The staging addenda 
 Owner update, 26 September 2026:
 
 - Keep the current minimal Draft Terms/Privacy scope for controlled event testing, not as global public-service terms. A named legal operator/contact and jurisdiction-specific review are still required before a real attendee pilot.
-- Use a uniform 60-day target retention period. This is not yet implemented: staging still stores 30/90/180 and `cleanup_enabled=false`.
+- Use a uniform 60-day target retention period. This was pending during Phase 2A; the separate 8 October staging addendum below records the later implementation.
 - Delete My Data must remove the former user's name, avatar and access without destroying information shared with other users. The working model keeps Match/chat for the counterpart under a neutral “Deleted user” identity and retains pseudonymized safety Reports within the 60-day window. It is not implemented yet.
 - The baseline event size is at least 20 guests and may vary. Use 40 simultaneous guests as the minimum 2× capacity gate, and resize the gate for larger planned events.
 - The owner will perform physical mobile QA using `docs/PHYSICAL_QA_RU.md`.
-- The owner selected the initial permanent platform-admin email out of band. The address is intentionally not committed to source control; the staging Auth account and private allowlist entry do not exist yet.
+- The owner selected the initial permanent platform-admin email out of band. The staging Auth/allowlist grant was completed later, on 8 October; production remains separate.
 - Approval or adjustment of the default 20 Interests/60 seconds abuse threshold is still required.
 - Production rollout still requires separate approval after staging hardening and physical QA.
 
@@ -246,8 +246,8 @@ Owner update, 26 September 2026:
 - The historical viewed-card backfill may take time on a larger database and must be measured in staging; it does not delete original rows.
 - Revoking legacy RPCs can break an old frontend during a staggered rollout; database/frontend release order needs a planned compatibility window.
 - New notification triggers do not backfill historical activity.
-- The admin allowlist starts empty by design and must be populated through a trusted database operator path.
-- The owner selected a 60-day target, but retention remains configuration-only and no cleanup occurs until a new migration/worker is reviewed and tested.
+- The admin allowlist started empty by design; its staging owner entry was added on 8 October through a trusted database operator path.
+- The 60-day retention target was configuration-only in Phase 2A; the 8 October staging migration/worker is documented separately below.
 - Direct Auth-user deletion is incompatible with the selected pseudonymization model: current foreign keys can delete the other participant's shared Match/chat state and safety Reports, Storage objects must be removed first, and issued JWTs can outlive the deleted Auth row until expiry. A forward-only schema change and trusted worker are required.
 - CAPTCHA and same-NAT Auth capacity require current isolated/live evidence before pilot approval.
 
@@ -255,15 +255,20 @@ Owner update, 26 September 2026:
 
 Completed: isolated staging exists, the full migration chain and hardening migration are applied, core grants/RLS/functions were inspected, the RC1 staging suite and negative cross-profile RLS check passed, the post-hardening security smoke passed, Security Advisor was repeated, and the local regression is green.
 
-1. Decide whether to approve the Supabase Pro cost, then enable leaked-password protection if approved.
-2. Add a separate confirmed allowlisted platform-admin test identity and verify moderation.
-3. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
-4. Complete physical iPhone Safari and Android Chrome QA.
-5. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
-6. Close the remaining owner decisions: legal operator/contact, final Privacy wording for 60-day pseudonymized shared data and the anti-abuse threshold.
-7. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
-8. Separately authorize production migration, frontend deploy and production smoke.
+1. Verify the owner's now-allowlisted staging platform-admin login and moderation screen; Supabase remains on Free by owner decision.
+2. Run the remaining Realtime, Storage, concurrency, retention/deletion-request and moderation checks.
+3. Complete physical iPhone Safari and Android Chrome QA.
+4. Repeat real Turnstile and the baseline 40-guest shared-NAT/load gate; resize it for any event expected above 20 guests.
+5. Close the remaining owner decisions: legal operator/contact, final Privacy wording for 60-day pseudonymized shared data and the anti-abuse threshold.
+6. Prepare a production snapshot, coordinated database/frontend order and rollback plan.
+7. Separately authorize production migration, frontend deploy and production smoke.
 
-## 10. Deployment statement
+## 10. Later staging addendum — 8 October 2026
 
-Only the forward-only hardening migration was applied to isolated `here-staging`. No production database, production Supabase configuration, frontend hosting or DNS was modified or deployed. Sprint 6 was not started.
+This document's earlier 30/90/180-day and empty-admin statements describe the historical Phase 2A snapshot, not the current staging state. The separate staging migration `20261008161930_retention_60_days.sql` now sets all three periods to 60 days; cron, Vault token and server-side Edge cleanup are active. The owner’s permanent organizer account is also in the staging platform-admin allowlist. The updated Draft Privacy/Terms frontend is prepared in the branch but has **not** been published. No production migration, frontend deployment or DNS change occurred.
+
+The scheduled worker passed an unauthorized-request check, a no-op authenticated invocation, and a rolled-back expired-Room fixture including Report, Block and notification cleanup. A real anonymous-account/avatar deletion has not yet been tested because staging CAPTCHA rejected the dummy token. The owner must still check `/admin`, provide a public operator/contact for the invite-only pilot, and complete physical/mobile QA. `docs/RETENTION_60_DAY_RUNBOOK_RU.md` has the operational details.
+
+## 11. Original Phase 2A deployment statement (historical)
+
+At that phase, only the forward-only hardening migration was applied to isolated `RYNOW staging`; subsequent staging work is recorded above. No production database, production Supabase configuration, production frontend hosting or root DNS was modified or deployed. Sprint 6 was not started.

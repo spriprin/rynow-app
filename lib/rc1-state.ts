@@ -1,4 +1,4 @@
-export const LEGAL_VERSION = "pilot-rc1-draft-2026-09-14";
+export const LEGAL_VERSION = "pilot-rc1-draft-2026-10-09";
 export const CAUGHT_UP_COPY = "You’ve seen everyone available right now. New people will appear here as they join the event.";
 export const REPORT_CATEGORIES = [
   "Harassment / inappropriate behaviour", "Spam", "Fake profile / impersonation",

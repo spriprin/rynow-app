@@ -43,7 +43,7 @@ const isolatedEnvironment = {
   HERE_TEST_TURNSTILE_TOKEN: OFFICIAL_TURNSTILE_ALWAYS_PASS_TOKEN,
 };
 
-test("isolated Auth harness rejects the HERE production project even when it is mislabeled", async () => {
+test("isolated Auth harness rejects the RYNOW production project even when it is mislabeled", async () => {
   await withEnvironment({
     ...isolatedEnvironment,
     HERE_TEST_ISOLATED_PROJECT_REF: HERE_PRODUCTION_PROJECT_REF,

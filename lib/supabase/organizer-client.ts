@@ -1,8 +1,8 @@
 import { createBrowserClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export const ORGANIZER_AUTH_COOKIE = "here-organizer-auth";
-const PRODUCTION_ORIGIN = "https://here-social-room.spriprin.chatgpt.site";
+export const ORGANIZER_AUTH_COOKIE = "rynow-organizer-auth";
+const LOCAL_FALLBACK_ORIGIN = "http://localhost:3000";
 
 let organizerClient: SupabaseClient | null | undefined;
 
@@ -27,25 +27,18 @@ export function getSupabaseOrganizerClient(): SupabaseClient | null {
 }
 
 export function getTrustedApplicationOrigin(browserOrigin?: string) {
-  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
-  if (configured) {
+  for (const candidate of [process.env.NEXT_PUBLIC_APP_URL?.trim(), browserOrigin]) {
+    if (!candidate) continue;
     try {
-      return new URL(configured).origin;
+      const parsed = new URL(candidate);
+      const isLocalHttp = parsed.protocol === "http:"
+        && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1");
+      if (parsed.protocol === "https:" || isLocalHttp) return parsed.origin;
     } catch {
-      return PRODUCTION_ORIGIN;
+      // Try the next explicitly available origin.
     }
   }
-
-  if (browserOrigin) {
-    try {
-      const parsed = new URL(browserOrigin);
-      if (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1") return parsed.origin;
-    } catch {
-      // Fall through to the fixed production origin.
-    }
-  }
-
-  return PRODUCTION_ORIGIN;
+  return LOCAL_FALLBACK_ORIGIN;
 }
 
 export function organizerAuthRedirect(path: "/organizer?auth=confirmed" | "/organizer?recovery=1", browserOrigin?: string) {

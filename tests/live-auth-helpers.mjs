@@ -16,7 +16,7 @@ function isolatedProjectRef() {
     throw new Error("HERE_TEST_ISOLATED_PROJECT_REF must be an exact hosted Supabase project ref");
   }
   if (projectRef === HERE_PRODUCTION_PROJECT_REF) {
-    throw new Error("The HERE production project can never be marked as an isolated Auth test project");
+    throw new Error("The RYNOW production project can never be marked as an isolated Auth test project");
   }
   return projectRef;
 }
@@ -37,7 +37,7 @@ export function assertIsolatedTurnstileTestEnvironment(url) {
     throw new Error("HERE_TEST_SUPABASE_URL must be a valid URL");
   }
   if (parsed.hostname === PRODUCTION_PROJECT_HOST) {
-    throw new Error("Cloudflare test proof must never be used against the HERE production Supabase project");
+    throw new Error("Cloudflare test proof must never be used against the RYNOW production Supabase project");
   }
   const expectedOrigin = `https://${projectRef}.supabase.co`;
   if (parsed.origin !== expectedOrigin || parsed.pathname !== "/" || parsed.search || parsed.hash) {

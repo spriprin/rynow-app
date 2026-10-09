@@ -35,7 +35,7 @@ async function organizer() {
   const value = client();
   const credentials = organizerEmail && organizerPassword
     ? { email: organizerEmail, password: organizerPassword }
-    : { email: `here-pp-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!` };
+    : { email: `rynow-pp-${crypto.randomUUID()}@example.com`, password: `Rynow-${crypto.randomUUID()}-Aa1!` };
   const { data, error } = await withAuthRetry(() => organizerEmail && organizerPassword
     ? value.auth.signInWithPassword(withAuthCaptcha(credentials))
     : value.auth.signUp(withAuthCaptcha(credentials)));
@@ -48,7 +48,7 @@ async function actor(name) {
   const value = client();
   let result = await withAuthRetry(() => value.auth.signInAnonymously(anonymousSignInCredentials()), 3);
   if (result.error && allowPermanentGuestFallback()) {
-    const credentials = { email: `here-pp-guest-${crypto.randomUUID()}@example.com`, password: `Here-${crypto.randomUUID()}-Aa1!` };
+    const credentials = { email: `rynow-pp-guest-${crypto.randomUUID()}@example.com`, password: `Rynow-${crypto.randomUUID()}-Aa1!` };
     result = await withAuthRetry(() => value.auth.signUp(withAuthCaptcha(credentials)));
   }
   assert.ifError(result.error);
@@ -63,7 +63,7 @@ async function createRoom(owner, ownerId, name) {
   const { data, error } = await owner.from("rooms").insert({
     organizer_id: ownerId,
     name,
-    venue_name: "HERE Pre-Pilot Lab",
+    venue_name: "RYNOW Pre-Pilot Lab",
     city: "Riga",
     starts_at: new Date(Date.now() - 60_000).toISOString(),
     ends_at: new Date(Date.now() + 8 * 60 * 60_000).toISOString(),
@@ -102,7 +102,7 @@ test("Pre-pilot live acceptance — PP-A through PP-T", { skip: enabled ? false 
 
   const actors = [];
   for (let offset = 0; offset < 13; offset += 1) actors.push(await actor(`PP Guest ${offset + 1}`));
-  const room = await createRoom(owner.client, owner.user.id, "HERE Pre-Pilot Explore");
+  const room = await createRoom(owner.client, owner.user.id, "RYNOW Pre-Pilot Explore");
   roomsToClose.push(room.id);
   await Promise.all(actors.map(({ client: value }) => join(value, room.join_code)));
 

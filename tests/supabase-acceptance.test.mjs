@@ -20,8 +20,8 @@ async function createGuest(name) {
   let { data: auth, error: authError } = await guest.auth.signInAnonymously(anonymousSignInCredentials());
   if (authError?.message?.match(/rate limit/i) && allowPermanentGuestFallback()) {
     const passwordAuth = await retryAuthRateLimit(() => guest.auth.signUp(withAuthCaptcha({
-      email: `here-sprint1-guest-${crypto.randomUUID()}@example.com`,
-      password: `Here-${crypto.randomUUID()}-Aa1!`,
+      email: `rynow-sprint1-guest-${crypto.randomUUID()}@example.com`,
+      password: `Rynow-${crypto.randomUUID()}-Aa1!`,
     })));
     auth = passwordAuth.data;
     authError = passwordAuth.error;
@@ -39,8 +39,8 @@ async function createGuest(name) {
 
 test("Acceptance A–G against a configured Supabase project", { skip: enabled ? false : "Set HERE_TEST_SUPABASE_URL, HERE_TEST_SUPABASE_PUBLISHABLE_KEY and organizer credentials" }, async (t) => {
   const organizer = client();
-  const generatedEmail = `here-sprint1-${crypto.randomUUID()}@example.com`;
-  const generatedPassword = `Here-${crypto.randomUUID()}-Aa1!`;
+  const generatedEmail = `rynow-sprint1-${crypto.randomUUID()}@example.com`;
+  const generatedPassword = `Rynow-${crypto.randomUUID()}-Aa1!`;
   const { data: organizerAuth, error: organizerError } = await retryAuthRateLimit(() => organizerEmail && organizerPassword
     ? organizer.auth.signInWithPassword(withAuthCaptcha({ email: organizerEmail, password: organizerPassword }))
     : organizer.auth.signUp(withAuthCaptcha({ email: generatedEmail, password: generatedPassword })));
@@ -57,7 +57,7 @@ test("Acceptance A–G against a configured Supabase project", { skip: enabled ?
   const suffix = crypto.randomUUID().slice(0, 8);
   const start = new Date(Date.now() - 60_000).toISOString();
   const end = new Date(Date.now() + 3_600_000).toISOString();
-  const { data: room, error: roomError } = await organizer.from("rooms").insert({ organizer_id: organizerAuth.user.id, name: "HERE Test Party", venue_name: "Acceptance Venue", city: "Riga", starts_at: start, ends_at: end, status: "open" }).select().single();
+  const { data: room, error: roomError } = await organizer.from("rooms").insert({ organizer_id: organizerAuth.user.id, name: "RYNOW Test Party", venue_name: "Acceptance Venue", city: "Riga", starts_at: start, ends_at: end, status: "open" }).select().single();
   assert.ifError(roomError);
   roomsToClose.push(room.id);
   assert.match(room.join_code, /^[a-f0-9]{24}$/);

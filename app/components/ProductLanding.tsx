@@ -4,15 +4,15 @@ import { ArrowRight, BarChart3, Heart, MessageCircle, Radio, ScanLine, ShieldChe
 
 const organizerBenefits = [
   [Heart, "Make the first move easier", "Guests can find out whether interest is mutual before approaching someone."],
-  [ScanLine, "Works inside your existing event", "One QR. No app installation. HERE adds a social layer without replacing the event itself."],
+  [ScanLine, "Works inside your existing event", "One QR. No app installation. RYNOW adds a social layer without replacing the event itself."],
   [Sparkles, "Keep discovery moving", "A small, curated Explore stream refreshes as eligible guests join or return during the event."],
   [BarChart3, "Understand engagement", "See aggregate participation, interest, match and conversation metrics — never private interests or messages."],
 ] as const;
 
 const steps = [
-  ["01", "Put the HERE QR at your event", "Create a Room and place the QR on screens, posters, tables or event materials."],
-  ["02", "Guests join in seconds", "They open HERE in their browser, add a photo and first name, confirm they are 18+ and enter the Room. No download or email/password signup required."],
-  ["03", "They discover people at the same event", "HERE shows small selections of real participants instead of a full attendee catalogue."],
+  ["01", "Put the RYNOW QR at your event", "Create a Room and place the QR on screens, posters, tables or event materials."],
+  ["02", "Guests join in seconds", "They open RYNOW in their browser, add a photo and first name, confirm they are 18+ and enter the Room. No download or email/password signup required."],
+  ["03", "They discover people at the same event", "RYNOW shows small selections of real participants instead of a full attendee catalogue."],
   ["04", "Someone catches their attention", "They can privately show interest."],
   ["05", "Mutual interest creates a Match", "The other person can respond. If both are interested, they can message each other."],
   ["06", "They are already in the same place", "The point is to move from a Match to a real conversation at the event."],
@@ -23,7 +23,7 @@ const privacyPoints = [
   "An interest is visible only to the person who receives it.",
   "Organizers cannot see private interests or chat messages.",
   "Guests can block and report other participants.",
-  "HERE uses the event Room — not GPS tracking — to establish who is at the event.",
+  "RYNOW uses the event Room — not GPS tracking — to establish who is at the event.",
 ] as const;
 
 const analyticsMetrics = [
@@ -39,11 +39,11 @@ export function ProductLanding() {
   return (
     <main className="current-landing">
       <nav className="current-landing__nav" aria-label="Main navigation">
-        <a className="brand" href="#top" aria-label="HERE home">
-          <span className="brand-mark"><Radio size={18} /></span>HERE<span className="brand-dot">.</span>
+        <a className="brand" href="#top" aria-label="RYNOW home">
+          <span className="brand-mark"><Radio size={18} /></span>RYNOW<span className="brand-dot">.</span>
         </a>
         <div className="current-landing__nav-links">
-          <a href="#why">Why HERE</a>
+          <a href="#why">Why RYNOW</a>
           <a href="#how">How it works</a>
           <a href="#privacy">Privacy</a>
         </div>
@@ -66,7 +66,7 @@ export function ProductLanding() {
           <small><ScanLine size={16} /> Demo starts with guest check-in · Browser-based · No GPS tracking</small>
         </div>
 
-        <div className="current-hero__product" aria-label="HERE product flow preview">
+        <div className="current-hero__product" aria-label="RYNOW product flow preview">
           <div className="current-hero__wall">
             <div><span>AT THIS EVENT</span><strong>74 people joined</strong></div>
             <div className="current-avatar-row" aria-hidden="true">
@@ -93,12 +93,12 @@ export function ProductLanding() {
         <header><span>SEE IT IN ACTION</span><h2>See the product, then make it real.</h2></header>
         <div>
           <article>
-            <span>PRODUCT DEMO</span><h3>See how HERE feels as a guest.</h3>
+            <span>PRODUCT DEMO</span><h3>See how RYNOW feels as a guest.</h3>
             <p>Create a local demo profile, enter a sample Room and try Explore, Interests, Match, chat and safety controls. Nothing is saved to the real event system.</p>
             <a className="button button--dark" href="/demo">Start guest walkthrough <ArrowRight size={17} /></a>
           </article>
           <article>
-            <span>FOR ORGANIZERS</span><h3>Create HERE for your event.</h3>
+            <span>FOR ORGANIZERS</span><h3>Create RYNOW for your event.</h3>
             <p>Create your event Room, get a QR code and invite real guests to join.</p>
             <div className="button-row">
               <a className="button button--lime" href="/organizer?mode=signup">Create a Room</a>
@@ -110,7 +110,7 @@ export function ProductLanding() {
 
       <section className="current-value" id="why">
         <header>
-          <span>WHY ORGANIZERS USE HERE</span>
+          <span>WHY ORGANIZERS USE RYNOW</span>
           <h2>Give people another reason to connect at your event.</h2>
         </header>
         <div className="current-value__grid">
@@ -121,7 +121,7 @@ export function ProductLanding() {
       </section>
 
       <section className="current-how" id="how">
-        <header><span>HOW HERE WORKS</span><h2>From one QR to a real conversation.</h2></header>
+        <header><span>HOW RYNOW WORKS</span><h2>From one QR to a real conversation.</h2></header>
         <div className="current-steps">
           {steps.map(([number, title, copy]) => (
             <article key={number}><span>{number}</span><h3>{title}</h3><p>{copy}</p></article>
@@ -134,7 +134,7 @@ export function ProductLanding() {
           <span>PRIVACY &amp; CONTROL</span>
           <ShieldCheck size={34} />
           <h2>Private by design.</h2>
-          <p>HERE helps people connect without turning your event into a public attendee directory.</p>
+          <p>RYNOW helps people connect without turning your event into a public attendee directory.</p>
         </div>
         <ul>
           {privacyPoints.map((point) => <li key={point}><span>✓</span>{point}</li>)}
@@ -153,7 +153,7 @@ export function ProductLanding() {
         <p className="current-analytics__privacy"><ShieldCheck size={18} /> You see engagement, not private conversations or who liked whom.</p>
       </section>
 
-      <footer><span className="brand">HERE<span className="brand-dot">.</span></span><p>A social layer for real-life events.</p></footer>
+      <footer><span className="brand">RYNOW<span className="brand-dot">.</span></span><p>A social layer for real-life events.</p></footer>
     </main>
   );
 }

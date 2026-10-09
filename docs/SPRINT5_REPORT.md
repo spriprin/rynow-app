@@ -1,4 +1,4 @@
-# HERE — Sprint 5 verification report
+# RYNOW — Sprint 5 verification report
 
 Original Sprint 5 run: 22 August 2026. Final pre-pilot gate addendum: 29 August
 2026. Sites version 10 successfully deployed the verified application commit
