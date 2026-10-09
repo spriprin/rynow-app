@@ -20,10 +20,10 @@ This checkout contains the **staging-validated Pilot RC1 candidate**.
 - The full migration chain, including `20260928180331_staging_security_hardening.sql`, is applied only to the isolated `RYNOW staging` Supabase project. The RC1 flow and the post-hardening live security smoke pass there using only a publishable key and ordinary test identities.
 - Local lint, TypeScript, unit/contract tests and a clean production build pass.
 - Security Advisor reports no `ERROR` findings. Staging now retires three compatibility RPCs, gives nine inherited functions an empty `search_path`, and closes direct client reads of historical Drops. Leaked-password protection remains a real pre-pilot item but requires a paid Supabase plan; the current organization is on Free and was not upgraded automatically.
-- As of 28 September 2026, the production project, production frontend and DNS remain untouched.
+- As of 9 October 2026, the production project, production frontend and DNS remain untouched.
 - Nothing from this candidate has been deployed to production.
 - As of 8 October 2026, the RYNOW-branded frontend is live only on `https://staging.rynowqr.com` through Cloudflare Worker `rynow-staging-web`. The root domain and production Supabase remain untouched. Supabase project display labels still require a dashboard rename; their immutable project refs do not change.
-- On staging only, a daily 60-day retention worker is active for event data and eligible inactive anonymous guests. Its room deletion and authorization gates passed staging checks; end-to-end avatar/Auth deletion still needs a real CAPTCHA-enabled test guest before production. The updated Draft Privacy/Terms frontend is in this branch, not yet published. See [docs/RETENTION_60_DAY_RUNBOOK_RU.md](docs/RETENTION_60_DAY_RUNBOOK_RU.md).
+- On staging only, a daily 60-day retention worker is active for event data and eligible inactive anonymous guests. Its room deletion and authorization gates passed staging checks; end-to-end avatar/Auth deletion still needs a real CAPTCHA-enabled test guest before production. The 9 October Draft Privacy/Terms frontend, naming Pavel Yerchak and spriprin@gmail.com, is published on staging only. See [docs/RETENTION_60_DAY_RUNBOOK_RU.md](docs/RETENTION_60_DAY_RUNBOOK_RU.md).
 
 See [docs/PILOT_RC1_PHASE2A.md](docs/PILOT_RC1_PHASE2A.md) for the implementation and test report, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for system boundaries, [docs/RYNOW_HANDOFF_RU.md](docs/RYNOW_HANDOFF_RU.md) for the Russian owner handoff, [docs/OWNER_RUNBOOK_RU.md](docs/OWNER_RUNBOOK_RU.md) for independent local/domain operation, and [docs/PHYSICAL_QA_RU.md](docs/PHYSICAL_QA_RU.md) for the owner-run iPhone/Android checklist.
 
@@ -129,7 +129,7 @@ The full historical chain, including the Phase 2A and staging-hardening addition
 2. `20260914135348_pilot_rc1_connections_safety_operations.sql`
 3. `20260928180331_staging_security_hardening.sql`
 
-Staging additionally has `20261008161930_retention_60_days.sql` applied and its retention worker enabled. The draft-policy compatibility migration `20261008162822_draft_policy_60_days.sql` is also applied to staging, but the revised frontend copy is only in this branch and has not been published. Production needs a separate approved snapshot, migration plan, frontend release and smoke test; do not infer approval from staging.
+Staging additionally has `20261008161930_retention_60_days.sql` applied and its retention worker enabled. Draft-policy migrations `20261008162822_draft_policy_60_days.sql` and `20261009113050_pilot_operator_contact.sql` are applied there; the corresponding frontend is published only on staging. Production needs a separate approved snapshot, migration plan, frontend release and smoke test; do not infer approval from staging.
 
 ## Historical backend objects
 

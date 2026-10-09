@@ -11,7 +11,12 @@ const worker = readFileSync(
   "utf8",
 );
 const policy = readFileSync(new URL("../app/privacy/page.tsx", import.meta.url), "utf8");
+const terms = readFileSync(new URL("../app/terms/page.tsx", import.meta.url), "utf8");
 const version = readFileSync(new URL("../lib/rc1-state.ts", import.meta.url), "utf8");
+const operatorMigration = readFileSync(
+  new URL("../supabase/migrations/20261009113050_pilot_operator_contact.sql", import.meta.url),
+  "utf8",
+);
 
 test("60-day retention is guarded, server-only and removes Storage before Auth", () => {
   assert.match(migration, /operational_retention_days = 60[\s\S]*connection_retention_days = 60[\s\S]*safety_retention_days = 60/);
@@ -26,5 +31,11 @@ test("60-day retention is guarded, server-only and removes Storage before Auth",
   assert.match(worker, /storage\.from\("avatars"\)\.remove\(paths\)/);
   assert.ok(worker.indexOf('storage.from("avatars").remove(paths)') < worker.indexOf("auth.admin.deleteUser"));
   assert.match(policy, /once 60 days have passed since the event ended/);
-  assert.match(version, /pilot-rc1-draft-2026-10-08/);
+  assert.match(version, /pilot-rc1-draft-2026-10-09/);
+  for (const document of [policy, terms]) {
+    assert.match(document, /Pavel Yerchak/);
+    assert.match(document, /spriprin@gmail\.com/);
+    assert.match(document, /pilot-rc1-draft-2026-10-09/);
+  }
+  assert.match(operatorMigration, /pilot-rc1-draft-2026-10-09/);
 });
